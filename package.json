@@ -8,7 +8,8 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "cdk": "cdk",
+    "ci": "npm run build && npm test && npm run cdk -- synth"
   },
   "devDependencies": {
     "@types/jest": "^30",
