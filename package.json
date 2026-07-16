@@ -9,7 +9,7 @@
     "watch": "tsc -w",
     "test": "jest",
     "cdk": "cdk",
-    "ci": "npm run build && npm test && npm run cdk -- synth"
+    "ci": "npm run build && npm test && npm run cdk -- synth -c allowedIngressCidr=203.0.113.10/32"
   },
   "devDependencies": {
     "@types/jest": "^30",
