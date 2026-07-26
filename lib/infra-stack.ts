@@ -10,10 +10,12 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 import { readDockerfileIgnorePatterns } from './assets/docker-build-context';
+import { readPackageVersion } from './assets/package-metadata';
 import type { PlatformConfig } from './config/platform-config';
 
 const APP_CONTAINER_PORT = 3000;
 const APP_DOCKERFILE = 'movie-reservation-service/Dockerfile';
+const XRAY_WRITE_ACTIONS = ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'];
 
 /** Input required to synthesize the current demo infrastructure stack. */
 export interface GoldenPathDemoStackProps extends cdk.StackProps {
@@ -32,15 +34,15 @@ export interface GoldenPathDemoStackProps extends cdk.StackProps {
  * - a two-AZ VPC without a NAT gateway
  * - public subnets for a CIDR-restricted Application Load Balancer
  * - one selected isolated workload subnet for the Fargate service
- * - the S3, ECR, and CloudWatch Logs endpoints required by private tasks
+ * - the S3, ECR, CloudWatch Logs, and X-Ray endpoints required by private tasks
  * - an optional SSM Messages endpoint and task permissions for ECS Exec
- * - the service image asset, log group, task definition, ECS service, and ALB
+ * - the service and ADOT image assets, log groups, task definition, ECS service, and ALB
  * - common resource tags and the ALB DNS name as a stack output
  *
- * The backend currently uses the in-memory demo composition and has application
- * observability disabled. Later waves can split networking, workloads, and
- * observability into separate constructs or stacks when those ownership and
- * lifecycle boundaries become useful.
+ * The backend uses the in-memory demo composition and exports OTLP/HTTP traces
+ * through a nonessential ADOT sidecar to X-Ray. Later waves can split
+ * networking, workloads, and observability into separate constructs or stacks
+ * when those ownership and lifecycle boundaries become useful.
  */
 export class GoldenPathDemoStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GoldenPathDemoStackProps) {
@@ -142,6 +144,17 @@ export class GoldenPathDemoStack extends cdk.Stack {
       ...interfaceEndpointProps,
       service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
     });
+    const xrayEndpoint = vpc.addInterfaceEndpoint('XRayEndpoint', {
+      ...interfaceEndpointProps,
+      service: ec2.InterfaceVpcEndpointAwsService.XRAY,
+    });
+    xrayEndpoint.addToPolicy(
+      new iam.PolicyStatement({
+        principals: [new iam.AnyPrincipal()],
+        actions: XRAY_WRITE_ACTIONS,
+        resources: ['*'],
+      }),
+    );
 
     if (platformConfig.enableEcsExec) {
       vpc.addInterfaceEndpoint('SsmMessagesEndpoint', {
@@ -163,6 +176,10 @@ export class GoldenPathDemoStack extends cdk.Stack {
       exclude: readDockerfileIgnorePatterns(repositoryRoot, APP_DOCKERFILE),
       ignoreMode: cdk.IgnoreMode.DOCKER,
     });
+    const adotImage = new ecrAssets.DockerImageAsset(this, 'AdotImage', {
+      directory: path.join(repositoryRoot, 'ecs-infra', 'adot-collector'),
+    });
+    const serviceVersion = readPackageVersion(path.join(repositoryRoot, 'movie-reservation-service', 'package.json'));
 
     const appLogGroup = new logs.LogGroup(this, 'AppLogGroup', {
       logGroupName: `/golden-path/${platformConfig.environmentName}/${platformConfig.serviceName}/app`,
@@ -170,13 +187,28 @@ export class GoldenPathDemoStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
     tagServiceResource(appLogGroup);
+    const adotLogGroup = new logs.LogGroup(this, 'AdotLogGroup', {
+      logGroupName: `/golden-path/${platformConfig.environmentName}/${platformConfig.serviceName}/adot`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+    tagServiceResource(adotLogGroup);
 
     const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
       family: `${platformConfig.environmentName}-${platformConfig.serviceName}`,
-      cpu: 256,
-      memoryLimitMiB: 512,
+      cpu: 512,
+      memoryLimitMiB: 1024,
     });
     tagServiceResource(taskDefinition);
+
+    // X-Ray write APIs do not support resource-scoped ARNs. ECS task roles are
+    // task-wide, so the app and collector technically share these permissions.
+    taskDefinition.addToTaskRolePolicy(
+      new iam.PolicyStatement({
+        actions: XRAY_WRITE_ACTIONS,
+        resources: ['*'],
+      }),
+    );
 
     if (platformConfig.enableEcsExec) {
       // ECS Exec message-channel actions do not support resource-scoped ARNs.
@@ -197,6 +229,8 @@ export class GoldenPathDemoStack extends cdk.Stack {
       containerName: platformConfig.serviceName,
       image: ecs.ContainerImage.fromDockerImageAsset(appImage),
       essential: true,
+      cpu: 384,
+      memoryLimitMiB: 640,
       logging: ecs.LogDrivers.awsLogs({
         logGroup: appLogGroup,
         streamPrefix: 'app',
@@ -206,18 +240,60 @@ export class GoldenPathDemoStack extends cdk.Stack {
         HOST: '0.0.0.0',
         NODE_ENV: 'development',
         LOG_LEVEL: 'info',
-        SERVICE_VERSION: '0.1.0',
+        SERVICE_VERSION: serviceVersion,
         COMPOSITION_PROFILE: 'local-fixed-user',
         RESERVATION_WORKER_MODE: 'disabled',
         RESERVATION_FAILURE_INJECTION_MODE: 'disabled',
         RESERVATION_FAILURE_INJECTION_RATE: '0',
-        OBSERVABILITY_ENABLED: 'false',
+        OBSERVABILITY_ENABLED: 'true',
+        OTEL_SERVICE_NAME: platformConfig.serviceName,
+        OTEL_TRACES_EXPORTER: 'otlp',
+        OTEL_METRICS_EXPORTER: 'none',
+        OTEL_LOGS_EXPORTER: 'none',
+        OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4318',
+        OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
+        OTEL_PROPAGATORS: 'tracecontext,baggage',
+        // Deterministic sample-all is for this low-traffic demo and smoke test.
+        // Revisit sampling before production, higher traffic, or meaningful cost.
+        OTEL_TRACES_SAMPLER: 'parentbased_always_on',
+        OTEL_RESOURCE_ATTRIBUTES: `deployment.environment.name=${platformConfig.environmentName},service.namespace=${platformConfig.platformName}`,
         ENABLE_GRAPHIQL: 'false',
       },
     });
     appContainer.addPortMappings({
       containerPort: APP_CONTAINER_PORT,
       protocol: ecs.Protocol.TCP,
+    });
+
+    // TODO(platform-telemetry): This per-task ADOT sidecar is the issue #37
+    // demo topology, not the long-term platform shape. Before adding several
+    // microservices or scaling task counts, move export to a dedicated OTel
+    // collector service/gateway and point app tasks at that stable OTLP
+    // endpoint. Until then, ADOT remains nonessential so collector failure
+    // costs telemetry, not application availability.
+    taskDefinition.addContainer('AdotContainer', {
+      containerName: 'adot-collector',
+      image: ecs.ContainerImage.fromDockerImageAsset(adotImage),
+      essential: false,
+      cpu: 128,
+      memoryLimitMiB: 384,
+      enableRestartPolicy: true,
+      restartAttemptPeriod: cdk.Duration.seconds(60),
+      stopTimeout: cdk.Duration.seconds(30),
+      logging: ecs.LogDrivers.awsLogs({
+        logGroup: adotLogGroup,
+        streamPrefix: 'adot',
+      }),
+      environment: {
+        AWS_REGION: cdk.Stack.of(this).region,
+      },
+      healthCheck: {
+        command: ['CMD', '/healthcheck'],
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        retries: 3,
+        startPeriod: cdk.Duration.seconds(10),
+      },
     });
 
     const service = new ecs.FargateService(this, 'Service', {

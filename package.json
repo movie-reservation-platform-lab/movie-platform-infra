@@ -8,8 +8,11 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
+    "validate:adot-image": "bash scripts/validate-adot-image.sh",
+    "validate:xray-smoke": "bash -n scripts/xray-smoke.sh && bash scripts/xray-smoke.sh --self-test",
+    "smoke:xray": "bash scripts/xray-smoke.sh",
     "cdk": "cdk",
-    "ci": "npm run build && npm test && npm run cdk -- synth -c allowedIngressCidr=203.0.113.10/32"
+    "ci": "npm run build && npm test && npm run validate:adot-image && npm run validate:xray-smoke && npm run cdk -- synth -c allowedIngressCidr=203.0.113.10/32"
   },
   "devDependencies": {
     "@types/jest": "^30",

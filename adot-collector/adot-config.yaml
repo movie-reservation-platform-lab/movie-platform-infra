@@ -1,0 +1,42 @@
+extensions:
+  health_check:
+    endpoint: 127.0.0.1:13133
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+  batch:
+    timeout: 5s
+    send_batch_size: 256
+    send_batch_max_size: 512
+
+exporters:
+  awsxray:
+    region: ${env:AWS_REGION}
+    # TODO(platform-telemetry): Define a deliberate X-Ray annotation allowlist
+    #   before relying on X-Ray search by OTel attributes. Keep blanket indexing
+    #   disabled; only low-cardinality, nonsecret attributes should move from
+    #   metadata to indexed annotations.
+    index_all_attributes: false
+    num_workers: 2
+    request_timeout_seconds: 5
+    max_retries: 2
+
+service:
+  telemetry:
+    logs:
+      level: info
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [awsxray]

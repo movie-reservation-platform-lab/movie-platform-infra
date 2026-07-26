@@ -2,6 +2,10 @@
 
 AWS CDK app for the golden-path ECS demo environment.
 
+For one-time AWS account access and bootstrap setup plus the complete local
+synth, deploy, verification, teardown, and cost-control procedure, see the
+[local AWS CDK deployment runbook](../docs/operations/aws-cdk-local-deployment.md).
+
 The current stack is `GoldenPathDemoStack`. It models the first backend-only ECS
 slice:
 
@@ -12,13 +16,18 @@ slice:
 - no NAT Gateway;
 - platform-scoped ECS application cluster named
   `movie-reservation-platform-aws-demo`;
-- CDK Docker image asset for `movie-reservation-service`;
-- CloudWatch log group for the app container;
-- VPC endpoints for ECR image pull and CloudWatch log delivery.
+- CDK Docker image assets for `movie-reservation-service` and the repository-owned
+  ADOT collector;
+- separate one-week CloudWatch log groups for the app and collector;
+- nonessential ADOT sidecar receiving OTLP/HTTP on task loopback and exporting
+  traces to X-Ray;
+- VPC endpoints for ECR image pull, CloudWatch log delivery, and X-Ray writes.
 
-Wave 2 intentionally runs the app with `COMPOSITION_PROFILE=local-fixed-user`
-and in-memory persistence. The Postgres sidecar, migration container, ADOT
-collector, and production-shaped observability path are later waves.
+The stack runs the app with `COMPOSITION_PROFILE=local-fixed-user` and in-memory
+persistence. Issue #37's trace path is included. Issue #38 separately owns
+CloudWatch metrics, AMP, and Amazon Managed Grafana. Database work is also
+separate: issue #7 owns RDS and a deployment-time ECS migration `RunTask`. A
+Postgres sidecar is not planned for this stack.
 
 ## Useful commands
 
@@ -27,12 +36,23 @@ Run commands from the repository root:
 ```bash
 npm -w ecs-infra run build
 npm -w ecs-infra test
+npm -w ecs-infra run validate:adot-image
+npm -w ecs-infra run validate:xray-smoke
 npm -w ecs-infra run cdk -- synth -c allowedIngressCidr=203.0.113.10/32
 ```
 
+The collector Dockerfile pins the official Public ECR ADOT `v0.48.0` image at
+multi-architecture digest
+`sha256:9b28046359054b414f4ba76056ba4e8cffda2d53fbcee06171d7eeecd71326c3`,
+verified on 2026-07-18. That release does not expose a standalone config
+validation subcommand, so `validate:adot-image` proves the exact baked config by
+starting the pinned collector and reaching its bundled `/healthcheck` binary.
+Successful startup also proves the referenced OTLP receiver, memory limiter,
+batch processor, X-Ray exporter, and health extension are present.
+
 For a real deploy, replace `203.0.113.10/32` with your current public IP CIDR.
 That context value controls which source IP range can reach the public ALB on
-HTTP port 80. The configuration boundary rejects `0.0.0.0/0`; the Wave 2 demo
+HTTP port 80. The configuration boundary rejects `0.0.0.0/0`; the current demo
 must not expose the listener to the entire internet.
 
 The VPC topology and workload placement are intentionally not CDK context
@@ -59,7 +79,8 @@ Use this order for the first real deployment:
 ```bash
 aws sts get-caller-identity
 
-npm -w ecs-infra run cdk -- bootstrap aws://<account-id>/<region>
+npm -w ecs-infra run cdk -- bootstrap aws://<account-id>/<region> \
+  -c allowedIngressCidr=<your-public-ip>/32
 
 npm -w ecs-infra run cdk -- synth \
   -c allowedIngressCidr=<your-public-ip>/32
@@ -73,7 +94,18 @@ npm -w ecs-infra run cdk -- deploy GoldenPathDemoStack \
 
 Do not run `deploy` until the account, region, stack name, public ingress CIDR,
 and expected cost are clear. This stack creates a public ALB, ECS/Fargate
-service, ECR image asset, CloudWatch log group, and VPC endpoints.
+service, two ECR image assets, two CloudWatch log groups, and VPC endpoints.
+
+After deployment, run the deterministic trace smoke with the same explicit
+profile and Region:
+
+```bash
+AWS_PROFILE=<profile> AWS_REGION=<region> \
+  npm -w ecs-infra run smoke:xray -- --report /tmp/xray-smoke.json
+```
+
+The report includes the generated W3C `traceparent` and converted X-Ray trace
+ID so the exact request can be inspected without broad time-window searches.
 
 After testing, destroy the stack with the same required context boundary:
 
@@ -83,7 +115,9 @@ npm -w ecs-infra run cdk -- destroy GoldenPathDemoStack \
 ```
 
 Confirm that the CloudFormation stack, ALB, ECS service/tasks, VPC endpoints,
-and log group are gone. CDK bootstrap resources are account/region-level and
+and both log groups are gone. Ingested X-Ray traces remain for the X-Ray
+retention period; stack destruction does not delete them. CDK bootstrap
+resources are account/region-level and
 are not part of `GoldenPathDemoStack`; their S3 bucket and ECR repository remain
 for future CDK deployments and should be reviewed separately if the account is
 being fully cleaned up.
@@ -115,7 +149,7 @@ The human or automation invoking `aws ecs execute-command` also needs separate
 operator-side IAM permission such as `ecs:ExecuteCommand`. This stack does not
 grant permissions to your AWS identity.
 
-Before Wave 4 adds X-Ray, AMP, or STS endpoints, compare the region-specific
-hourly cost of the expanded endpoint set with a NAT-based alternative. The
-current no-NAT decision is a deliberate checkpoint, not a rule that every
-future AWS service must receive another endpoint automatically.
+Before #38 expands the endpoint set for AMP, STS, or other services, compare the
+region-specific hourly cost of the full endpoint inventory with a NAT-based
+alternative. The current no-NAT decision is a deliberate checkpoint, not a
+rule that every future AWS service must receive another endpoint automatically.
