@@ -12,6 +12,7 @@ export interface PlatformConfig {
   readonly vpcMaxAzs: 2;
   readonly workloadAzCount: 1;
   readonly enableEcsExec: boolean;
+  readonly metricsExportIntervalSeconds: number;
 }
 
 /**
@@ -22,6 +23,7 @@ export interface PlatformConfig {
 export interface PlatformConfigContext {
   readonly allowedIngressCidr?: unknown;
   readonly enableEcsExec?: unknown;
+  readonly metricsExportIntervalSeconds?: unknown;
 }
 
 function parseRequiredString(value: unknown, key: string): string {
@@ -64,6 +66,35 @@ function parseBoolean(value: unknown, key: string): boolean {
   throw new Error(`CDK context value "${key}" must be true or false.`);
 }
 
+function parseIntegerInRange(
+  value: unknown,
+  key: string,
+  defaultValue: number,
+  minimum: number,
+  maximum: number,
+): number {
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  const parsedValue =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim().length > 0
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isInteger(parsedValue)) {
+    throw new Error(`CDK context value "${key}" must be an integer from ${minimum} through ${maximum}.`);
+  }
+
+  if (parsedValue < minimum || parsedValue > maximum) {
+    throw new Error(`CDK context value "${key}" must be from ${minimum} through ${maximum}.`);
+  }
+
+  return parsedValue;
+}
+
 export function resolvePlatformConfig(context: PlatformConfigContext): PlatformConfig {
   return {
     platformName: 'movie-reservation-platform',
@@ -73,5 +104,12 @@ export function resolvePlatformConfig(context: PlatformConfigContext): PlatformC
     vpcMaxAzs: 2,
     workloadAzCount: 1,
     enableEcsExec: parseBoolean(context.enableEcsExec, 'enableEcsExec'),
+    metricsExportIntervalSeconds: parseIntegerInRange(
+      context.metricsExportIntervalSeconds,
+      'metricsExportIntervalSeconds',
+      30,
+      5,
+      300,
+    ),
   };
 }

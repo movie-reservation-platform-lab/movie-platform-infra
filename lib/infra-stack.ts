@@ -16,6 +16,7 @@ import type { PlatformConfig } from './config/platform-config';
 const APP_CONTAINER_PORT = 3000;
 const APP_DOCKERFILE = 'movie-reservation-service/Dockerfile';
 const XRAY_WRITE_ACTIONS = ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'];
+const RESERVATION_FAILURE_INJECTION_SALT = 'aws-demo-managed-observability';
 
 /** Input required to synthesize the current demo infrastructure stack. */
 export interface GoldenPathDemoStackProps extends cdk.StackProps {
@@ -37,10 +38,11 @@ export interface GoldenPathDemoStackProps extends cdk.StackProps {
  * - the S3, ECR, CloudWatch Logs, and X-Ray endpoints required by private tasks
  * - an optional SSM Messages endpoint and task permissions for ECS Exec
  * - the service and ADOT image assets, log groups, task definition, ECS service, and ALB
- * - common resource tags and the ALB DNS name as a stack output
+ * - common resource tags plus ALB and CloudWatch metric outputs
  *
  * The backend uses the in-memory demo composition and exports OTLP/HTTP traces
- * through a nonessential ADOT sidecar to X-Ray. Later waves can split
+ * and metrics through a nonessential ADOT sidecar. ADOT sends traces to X-Ray
+ * and application metrics to CloudWatch through EMF. Later waves can split
  * networking, workloads, and observability into separate constructs or stacks
  * when those ownership and lifecycle boundaries become useful.
  */
@@ -180,6 +182,8 @@ export class GoldenPathDemoStack extends cdk.Stack {
       directory: path.join(repositoryRoot, 'ecs-infra', 'adot-collector'),
     });
     const serviceVersion = readPackageVersion(path.join(repositoryRoot, 'movie-reservation-service', 'package.json'));
+    const cloudWatchApplicationMetricsNamespace =
+      `GoldenPath/${platformConfig.environmentName}/${platformConfig.serviceName}`;
 
     const appLogGroup = new logs.LogGroup(this, 'AppLogGroup', {
       logGroupName: `/golden-path/${platformConfig.environmentName}/${platformConfig.serviceName}/app`,
@@ -193,6 +197,12 @@ export class GoldenPathDemoStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
     tagServiceResource(adotLogGroup);
+    const applicationMetricsLogGroup = new logs.LogGroup(this, 'ApplicationMetricsLogGroup', {
+      logGroupName: `/golden-path/${platformConfig.environmentName}/${platformConfig.serviceName}/metrics`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+    tagServiceResource(applicationMetricsLogGroup);
 
     const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
       family: `${platformConfig.environmentName}-${platformConfig.serviceName}`,
@@ -209,6 +219,7 @@ export class GoldenPathDemoStack extends cdk.Stack {
         resources: ['*'],
       }),
     );
+    applicationMetricsLogGroup.grantWrite(taskDefinition.taskRole);
 
     if (platformConfig.enableEcsExec) {
       // ECS Exec message-channel actions do not support resource-scoped ARNs.
@@ -242,13 +253,15 @@ export class GoldenPathDemoStack extends cdk.Stack {
         LOG_LEVEL: 'info',
         SERVICE_VERSION: serviceVersion,
         COMPOSITION_PROFILE: 'local-fixed-user',
-        RESERVATION_WORKER_MODE: 'disabled',
-        RESERVATION_FAILURE_INJECTION_MODE: 'disabled',
-        RESERVATION_FAILURE_INJECTION_RATE: '0',
+        RESERVATION_WORKER_MODE: 'fake-in-process',
+        RESERVATION_FAILURE_INJECTION_MODE: 'stable-random-unexpected-error',
+        RESERVATION_FAILURE_INJECTION_RATE: '0.4',
+        RESERVATION_FAILURE_INJECTION_SALT,
         OBSERVABILITY_ENABLED: 'true',
         OTEL_SERVICE_NAME: platformConfig.serviceName,
         OTEL_TRACES_EXPORTER: 'otlp',
-        OTEL_METRICS_EXPORTER: 'none',
+        OTEL_METRICS_EXPORTER: 'otlp',
+        OTEL_METRIC_EXPORT_INTERVAL: (platformConfig.metricsExportIntervalSeconds * 1000).toString(),
         OTEL_LOGS_EXPORTER: 'none',
         OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4318',
         OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
@@ -286,6 +299,11 @@ export class GoldenPathDemoStack extends cdk.Stack {
       }),
       environment: {
         AWS_REGION: cdk.Stack.of(this).region,
+        APPLICATION_SERVICE_NAME: platformConfig.serviceName,
+        CLOUDWATCH_METRICS_NAMESPACE: cloudWatchApplicationMetricsNamespace,
+        CLOUDWATCH_METRICS_LOG_GROUP_NAME: applicationMetricsLogGroup.logGroupName,
+        DEPLOYMENT_ENVIRONMENT_NAME: platformConfig.environmentName,
+        METRICS_COLLECTION_INTERVAL: `${platformConfig.metricsExportIntervalSeconds}s`,
       },
       healthCheck: {
         command: ['CMD', '/healthcheck'],
@@ -352,6 +370,10 @@ export class GoldenPathDemoStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'LoadBalancerDnsName', {
       value: loadBalancer.loadBalancerDnsName,
       description: 'Public DNS name for the backend ALB',
+    });
+    new cdk.CfnOutput(this, 'CloudWatchApplicationMetricsNamespace', {
+      value: cloudWatchApplicationMetricsNamespace,
+      description: 'CloudWatch namespace containing application metrics exported through ADOT EMF',
     });
   }
 }

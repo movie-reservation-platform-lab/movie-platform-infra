@@ -8,6 +8,7 @@ const app = new cdk.App();
 const platformConfig = resolvePlatformConfig({
   allowedIngressCidr: app.node.tryGetContext('allowedIngressCidr'),
   enableEcsExec: app.node.tryGetContext('enableEcsExec'),
+  metricsExportIntervalSeconds: app.node.tryGetContext('metricsExportIntervalSeconds'),
 });
 
 new GoldenPathDemoStack(app, 'GoldenPathDemoStack', {

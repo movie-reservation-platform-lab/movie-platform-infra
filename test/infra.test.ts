@@ -315,31 +315,46 @@ test('configures an independent app and nonessential ADOT sidecar in one Fargate
 
   expect(appContainer.DependsOn).toBeUndefined();
   expect(adotContainer.PortMappings).toBeUndefined();
-  expect(environmentFor(adotContainer)).toEqual({
-    AWS_REGION: { Ref: 'AWS::Region' },
-  });
   expect(environmentFor(appContainer)).toMatchObject({
     SERVICE_VERSION: '1.0.0',
     OTEL_SERVICE_NAME: 'movie-reservation-service',
     OTEL_TRACES_EXPORTER: 'otlp',
-    OTEL_METRICS_EXPORTER: 'none',
+    OTEL_METRICS_EXPORTER: 'otlp',
+    OTEL_METRIC_EXPORT_INTERVAL: '30000',
     OTEL_LOGS_EXPORTER: 'none',
     OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4318',
     OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
     OTEL_PROPAGATORS: 'tracecontext,baggage',
     OTEL_TRACES_SAMPLER: 'parentbased_always_on',
     OTEL_RESOURCE_ATTRIBUTES: 'deployment.environment.name=aws-demo,service.namespace=movie-reservation-platform',
+    RESERVATION_WORKER_MODE: 'fake-in-process',
+    RESERVATION_FAILURE_INJECTION_MODE: 'stable-random-unexpected-error',
+    RESERVATION_FAILURE_INJECTION_RATE: '0.4',
+    RESERVATION_FAILURE_INJECTION_SALT: 'aws-demo-managed-observability',
+  });
+  expect(environmentFor(adotContainer)).toEqual({
+    AWS_REGION: { Ref: 'AWS::Region' },
+    APPLICATION_SERVICE_NAME: 'movie-reservation-service',
+    CLOUDWATCH_METRICS_NAMESPACE: 'GoldenPath/aws-demo/movie-reservation-service',
+    CLOUDWATCH_METRICS_LOG_GROUP_NAME: {
+      Ref: expect.stringContaining('ApplicationMetricsLogGroup'),
+    },
+    DEPLOYMENT_ENVIRONMENT_NAME: 'aws-demo',
+    METRICS_COLLECTION_INTERVAL: '30s',
   });
 });
 
-test('uses separate disposable one-week app and collector log groups', () => {
+test('uses separate disposable one-week application, collector, and EMF log groups', () => {
   const logGroups = findResources(template, 'AWS::Logs::LogGroup');
 
-  expect(logGroups).toHaveLength(2);
-  expect(logGroups.map((logGroup) => logGroup.Properties?.LogGroupName)).toEqual([
-    '/golden-path/aws-demo/movie-reservation-service/app',
-    '/golden-path/aws-demo/movie-reservation-service/adot',
-  ]);
+  expect(logGroups).toHaveLength(3);
+  expect(logGroups.map((logGroup) => logGroup.Properties?.LogGroupName)).toEqual(
+    expect.arrayContaining([
+      '/golden-path/aws-demo/movie-reservation-service/app',
+      '/golden-path/aws-demo/movie-reservation-service/adot',
+      '/golden-path/aws-demo/movie-reservation-service/metrics',
+    ]),
+  );
   for (const logGroup of logGroups) {
     expect(logGroup.Properties?.RetentionInDays).toBe(7);
     expect(logGroup.DeletionPolicy).toBe('Delete');
@@ -351,7 +366,7 @@ test('uses separate disposable one-week app and collector log groups', () => {
   expect(adotContainer?.LogConfiguration?.Options?.['awslogs-stream-prefix']).toBe('adot');
 });
 
-test('grants only X-Ray segment and telemetry writes to the task and endpoint', () => {
+test('grants only X-Ray and scoped EMF log writes to the task role', () => {
   const policies = findResources(template, 'AWS::IAM::Policy');
   const taskRolePolicy = policies.find((policy) =>
     String(policy.Properties?.PolicyName).includes('TaskRoleDefaultPolicy'),
@@ -366,21 +381,31 @@ test('grants only X-Ray segment and telemetry writes to the task and endpoint', 
     readonly Version: string;
   };
   expect(policyDocument.Version).toBe('2012-10-17');
-  expect(policyDocument.Statement).toHaveLength(1);
-  expect(policyDocument.Statement[0]).toMatchObject({
+  expect(policyDocument.Statement).toHaveLength(2);
+  const xrayStatement = policyDocument.Statement.find(({ Action }) => Action.includes('xray:PutTraceSegments'));
+  const metricsLogStatement = policyDocument.Statement.find(({ Action }) => Action.includes('logs:PutLogEvents'));
+  expect(xrayStatement).toMatchObject({
     Effect: 'Allow',
     Resource: '*',
   });
-  expect(new Set(policyDocument.Statement[0]?.Action)).toEqual(
+  expect(new Set(xrayStatement?.Action)).toEqual(
     new Set(['xray:PutTraceSegments', 'xray:PutTelemetryRecords']),
   );
+  expect(metricsLogStatement).toMatchObject({
+    Effect: 'Allow',
+    Resource: {
+      'Fn::GetAtt': [expect.stringContaining('ApplicationMetricsLogGroup'), 'Arn'],
+    },
+  });
+  expect(new Set(metricsLogStatement?.Action)).toEqual(new Set(['logs:CreateLogStream', 'logs:PutLogEvents']));
 
   const renderedTemplate = JSON.stringify(template.toJSON());
   expect(renderedTemplate).not.toContain('xray:GetSampling');
   expect(renderedTemplate).not.toContain('AWSXRayDaemonWriteAccess');
+  expect(renderedTemplate).not.toContain('CloudWatchAgentServerPolicy');
 });
 
-test('does not introduce deferred metrics, database, or public-network resources', () => {
+test('does not introduce deferred AMP, Grafana, database, or public-network resources', () => {
   template.resourceCountIs('AWS::EC2::NatGateway', 0);
   template.resourceCountIs('AWS::APS::Workspace', 0);
   template.resourceCountIs('AWS::Grafana::Workspace', 0);
@@ -444,5 +469,50 @@ test('keeps the VPC and workload AZ counts fixed outside caller-controlled conte
     vpcMaxAzs: 2,
     workloadAzCount: 1,
     enableEcsExec: false,
+    metricsExportIntervalSeconds: 30,
+  });
+});
+
+test('validates and applies the application metric export cadence', () => {
+  expect(
+    resolvePlatformConfig({
+      allowedIngressCidr: '203.0.113.10/32',
+      metricsExportIntervalSeconds: '45',
+    }).metricsExportIntervalSeconds,
+  ).toBe(45);
+
+  const overrideTemplate = synthesizeTemplate({
+    metricsExportIntervalSeconds: '45',
+  });
+  const [appContainer, adotContainer] = findTaskContainers(overrideTemplate);
+  expect(environmentFor(appContainer)).toMatchObject({
+    OTEL_METRIC_EXPORT_INTERVAL: '45000',
+  });
+  expect(environmentFor(adotContainer)).toMatchObject({
+    METRICS_COLLECTION_INTERVAL: '45s',
+  });
+});
+
+test.each([4, 301])('rejects metric export cadence outside the supported range: %s', (value) => {
+  expect(() =>
+    resolvePlatformConfig({
+      allowedIngressCidr: '203.0.113.10/32',
+      metricsExportIntervalSeconds: value,
+    }),
+  ).toThrow('metricsExportIntervalSeconds');
+});
+
+test.each(['30.5', '', true])('rejects noninteger metric export cadence: %p', (value) => {
+  expect(() =>
+    resolvePlatformConfig({
+      allowedIngressCidr: '203.0.113.10/32',
+      metricsExportIntervalSeconds: value,
+    }),
+  ).toThrow('must be an integer');
+});
+
+test('outputs the CloudWatch application metrics namespace for smoke tooling', () => {
+  template.hasOutput('CloudWatchApplicationMetricsNamespace', {
+    Value: 'GoldenPath/aws-demo/movie-reservation-service',
   });
 });

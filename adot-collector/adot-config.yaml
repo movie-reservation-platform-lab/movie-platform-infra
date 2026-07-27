@@ -13,7 +13,23 @@ processors:
     check_interval: 1s
     limit_mib: 256
     spike_limit_mib: 64
+  # ADOT v0.48.0 does not include the transform processor. These values come
+  # from the same typed CDK identity used for the application's OTel resource.
+  # Keeping exporter resource conversion disabled prevents unrelated process
+  # and host resource attributes from becoming CloudWatch dimensions.
+  attributes/application_cloudwatch:
+    actions:
+      - key: ServiceName
+        value: ${env:APPLICATION_SERVICE_NAME}
+        action: upsert
+      - key: Environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
+        action: upsert
   batch:
+    timeout: 5s
+    send_batch_size: 256
+    send_batch_max_size: 512
+  batch/application_cloudwatch:
     timeout: 5s
     send_batch_size: 256
     send_batch_max_size: 512
@@ -29,6 +45,56 @@ exporters:
     num_workers: 2
     request_timeout_seconds: 5
     max_retries: 2
+  awsemf/application:
+    region: ${env:AWS_REGION}
+    namespace: ${env:CLOUDWATCH_METRICS_NAMESPACE}
+    log_group_name: ${env:CLOUDWATCH_METRICS_LOG_GROUP_NAME}
+    log_stream_name: otel-application-metrics
+    dimension_rollup_option: NoDimensionRollup
+    resource_to_telemetry_conversion:
+      enabled: false
+    retain_initial_value_of_delta_metric: true
+    max_retries: 2
+    # otel -> cloudwatch projection contract
+    # which OTel metric names are allowed to become CloudWatch custom metrics
+    #    - which OTel metric names are allowed to become CloudWatch custom metrics
+    #    - which attributes are allowed to become CloudWatch dimensions
+    #    - which dimension shapes CloudWatch should materialize
+    # This allowlisting have to be revisited once we onboard more services, we simply can't
+    # support maintaining a huge list, so the metrics will need some standardization (contract definition)
+
+    metric_declarations:
+      - dimensions:
+          - [ServiceName, Environment, http_method, http_route, status_family]
+        metric_name_selectors:
+          - ^http_request_total$
+          - ^http_request_duration_ms$
+      - dimensions:
+          - [ServiceName, Environment, business_operation, graphql_operation_type, outcome]
+        metric_name_selectors:
+          - ^graphql_operation_total$
+          - ^graphql_operation_duration_ms$
+      - dimensions:
+          - [ServiceName, Environment, business_operation, exception_type]
+        metric_name_selectors:
+          - ^graphql_operation_exceptions_total$
+      - dimensions:
+          - [ServiceName, Environment, business_operation]
+        metric_name_selectors:
+          - ^reservation_request_created_total$
+      - dimensions:
+          - [ServiceName, Environment]
+        metric_name_selectors:
+          - ^reservation_processor_claim_total$
+      - dimensions:
+          - [ServiceName, Environment, outcome]
+        metric_name_selectors:
+          - ^reservation_processor_outcome_total$
+          - ^reservation_processor_duration_ms$
+      - dimensions:
+          - [ServiceName, Environment, exception_type]
+        metric_name_selectors:
+          - ^reservation_processor_exceptions_total$
 
 service:
   telemetry:
@@ -40,3 +106,7 @@ service:
       receivers: [otlp]
       processors: [memory_limiter, batch]
       exporters: [awsxray]
+    metrics/application/cloudwatch:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/application_cloudwatch, batch/application_cloudwatch]
+      exporters: [awsemf/application]
