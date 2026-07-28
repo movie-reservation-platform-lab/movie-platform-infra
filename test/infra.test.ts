@@ -19,6 +19,7 @@ function regionalServiceName(serviceShortName: string) {
 
 interface SynthesizedResource {
   readonly Properties?: Record<string, unknown>;
+  readonly DependsOn?: string | string[];
   readonly DeletionPolicy?: string;
   readonly UpdateReplacePolicy?: string;
 }
@@ -67,6 +68,10 @@ function environmentFor(container: SynthesizedContainerDefinition): Record<strin
   return Object.fromEntries((container.Environment ?? []).map(({ Name, Value }) => [Name, Value]));
 }
 
+function policyActions(action: string | string[]): string[] {
+  return Array.isArray(action) ? action : [action];
+}
+
 let template: Template;
 
 beforeAll(() => {
@@ -109,13 +114,13 @@ test('creates a two-AZ no-NAT VPC while keeping the workload in one subnet', () 
   expect(networkConfiguration.AwsvpcConfiguration.Subnets).toHaveLength(1);
 });
 
-test('names the application cluster for the platform and environment', () => {
+test('names the application cluster and enables enhanced Container Insights', () => {
   template.hasResourceProperties('AWS::ECS::Cluster', {
     ClusterName: 'movie-reservation-platform-aws-demo',
     ClusterSettings: [
       {
         Name: 'containerInsights',
-        Value: 'disabled',
+        Value: 'enhanced',
       },
     ],
     Tags: Match.arrayWith([
@@ -135,6 +140,7 @@ test('names the application cluster for the platform and environment', () => {
     Key: 'Service',
     Value: 'movie-reservation-service',
   });
+  expect(cluster.DependsOn).toEqual(expect.arrayContaining([expect.stringContaining('ContainerInsightsLogGroup')]));
 });
 
 test('restricts public ALB ingress to the configured CIDR', () => {
@@ -151,7 +157,7 @@ test('restricts public ALB ingress to the configured CIDR', () => {
   });
 });
 
-test('creates private endpoints for image pull, log delivery, and X-Ray writes', () => {
+test('creates one-subnet private endpoints for runtime AWS API calls', () => {
   template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
     VpcEndpointType: 'Gateway',
     ServiceName: regionalServiceName('s3'),
@@ -174,6 +180,18 @@ test('creates private endpoints for image pull, log delivery, and X-Ray writes',
     PrivateDnsEnabled: true,
     PolicyDocument: Match.anyValue(),
   });
+  template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
+    VpcEndpointType: 'Interface',
+    ServiceName: regionalServiceName('aps-workspaces'),
+    PrivateDnsEnabled: true,
+    PolicyDocument: Match.anyValue(),
+  });
+  template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
+    VpcEndpointType: 'Interface',
+    ServiceName: regionalServiceName('sts'),
+    PrivateDnsEnabled: true,
+    PolicyDocument: Match.anyValue(),
+  });
 
   const endpoints = findResources(template, 'AWS::EC2::VPCEndpoint');
   const gatewayEndpoints = endpoints.filter((endpoint) => endpoint.Properties?.VpcEndpointType === 'Gateway');
@@ -181,7 +199,7 @@ test('creates private endpoints for image pull, log delivery, and X-Ray writes',
 
   expect(gatewayEndpoints).toHaveLength(1);
   expect(gatewayEndpoints[0].Properties?.RouteTableIds).toHaveLength(1);
-  expect(interfaceEndpoints).toHaveLength(4);
+  expect(interfaceEndpoints).toHaveLength(6);
   for (const endpoint of interfaceEndpoints) {
     expect(endpoint.Properties?.SubnetIds).toHaveLength(1);
   }
@@ -206,6 +224,57 @@ test('creates private endpoints for image pull, log delivery, and X-Ray writes',
   expect(new Set(xrayEndpointPolicy.Statement[0]?.Action)).toEqual(
     new Set(['xray:PutTraceSegments', 'xray:PutTelemetryRecords']),
   );
+
+  const ampEndpoint = interfaceEndpoints.find((endpoint) =>
+    JSON.stringify(endpoint.Properties?.ServiceName).includes('.aps-workspaces'),
+  );
+  expect(ampEndpoint?.Properties?.PolicyDocument).toEqual({
+    Statement: [
+      {
+        Action: 'aps:RemoteWrite',
+        Effect: 'Allow',
+        Principal: { AWS: '*' },
+        Resource: {
+          'Fn::GetAtt': [expect.stringContaining('AmpWorkspace'), 'Arn'],
+        },
+      },
+    ],
+    Version: '2012-10-17',
+  });
+
+  const stsEndpoint = interfaceEndpoints.find((endpoint) =>
+    JSON.stringify(endpoint.Properties?.ServiceName).includes('.sts'),
+  );
+  expect(stsEndpoint?.Properties?.PolicyDocument).toEqual({
+    Statement: [
+      {
+        Action: 'sts:GetCallerIdentity',
+        Effect: 'Allow',
+        Principal: { AWS: '*' },
+        Resource: '*',
+      },
+    ],
+    Version: '2012-10-17',
+  });
+});
+
+test('creates a disposable seven-day AMP workspace', () => {
+  template.hasResourceProperties('AWS::APS::Workspace', {
+    Alias: 'movie-reservation-platform-aws-demo',
+    WorkspaceConfiguration: {
+      RetentionPeriodInDays: 7,
+    },
+    Tags: Match.arrayWith([
+      Match.objectLike({
+        Key: 'Service',
+        Value: 'movie-reservation-service',
+      }),
+    ]),
+  });
+
+  const [workspace] = findResources(template, 'AWS::APS::Workspace');
+  expect(workspace.DeletionPolicy).toBe('Delete');
+  expect(workspace.UpdateReplacePolicy).toBe('Delete');
 });
 
 test('keeps AWS endpoint ingress on HTTPS without exposing collector ports', () => {
@@ -333,7 +402,19 @@ test('configures an independent app and nonessential ADOT sidecar in one Fargate
     RESERVATION_FAILURE_INJECTION_SALT: 'aws-demo-managed-observability',
   });
   expect(environmentFor(adotContainer)).toEqual({
+    AMP_REMOTE_WRITE_ENDPOINT: {
+      'Fn::Join': [
+        '',
+        [
+          {
+            'Fn::GetAtt': [expect.stringContaining('AmpWorkspace'), 'PrometheusEndpoint'],
+          },
+          'remote_write',
+        ],
+      ],
+    },
     AWS_REGION: { Ref: 'AWS::Region' },
+    AWS_STS_REGIONAL_ENDPOINTS: 'regional',
     APPLICATION_SERVICE_NAME: 'movie-reservation-service',
     CLOUDWATCH_METRICS_NAMESPACE: 'GoldenPath/aws-demo/movie-reservation-service',
     CLOUDWATCH_METRICS_LOG_GROUP_NAME: {
@@ -344,12 +425,13 @@ test('configures an independent app and nonessential ADOT sidecar in one Fargate
   });
 });
 
-test('uses separate disposable one-week application, collector, and EMF log groups', () => {
+test('uses separate disposable one-week application, collector, EMF, and Container Insights log groups', () => {
   const logGroups = findResources(template, 'AWS::Logs::LogGroup');
 
-  expect(logGroups).toHaveLength(3);
+  expect(logGroups).toHaveLength(4);
   expect(logGroups.map((logGroup) => logGroup.Properties?.LogGroupName)).toEqual(
     expect.arrayContaining([
+      '/aws/ecs/containerinsights/movie-reservation-platform-aws-demo/performance',
       '/golden-path/aws-demo/movie-reservation-service/app',
       '/golden-path/aws-demo/movie-reservation-service/adot',
       '/golden-path/aws-demo/movie-reservation-service/metrics',
@@ -366,7 +448,7 @@ test('uses separate disposable one-week application, collector, and EMF log grou
   expect(adotContainer?.LogConfiguration?.Options?.['awslogs-stream-prefix']).toBe('adot');
 });
 
-test('grants only X-Ray and scoped EMF log writes to the task role', () => {
+test('grants only X-Ray, workspace-scoped AMP, and scoped EMF log writes to the task role', () => {
   const policies = findResources(template, 'AWS::IAM::Policy');
   const taskRolePolicy = policies.find((policy) =>
     String(policy.Properties?.PolicyName).includes('TaskRoleDefaultPolicy'),
@@ -374,30 +456,44 @@ test('grants only X-Ray and scoped EMF log writes to the task role', () => {
 
   const policyDocument = taskRolePolicy?.Properties?.PolicyDocument as {
     readonly Statement: Array<{
-      readonly Action: string[];
+      readonly Action: string | string[];
       readonly Effect: string;
-      readonly Resource: string;
+      readonly Resource: unknown;
     }>;
     readonly Version: string;
   };
   expect(policyDocument.Version).toBe('2012-10-17');
-  expect(policyDocument.Statement).toHaveLength(2);
-  const xrayStatement = policyDocument.Statement.find(({ Action }) => Action.includes('xray:PutTraceSegments'));
-  const metricsLogStatement = policyDocument.Statement.find(({ Action }) => Action.includes('logs:PutLogEvents'));
+  expect(policyDocument.Statement).toHaveLength(3);
+  const xrayStatement = policyDocument.Statement.find(({ Action }) =>
+    policyActions(Action).includes('xray:PutTraceSegments'),
+  );
+  const ampStatement = policyDocument.Statement.find(({ Action }) => policyActions(Action).includes('aps:RemoteWrite'));
+  const metricsLogStatement = policyDocument.Statement.find(({ Action }) =>
+    policyActions(Action).includes('logs:PutLogEvents'),
+  );
   expect(xrayStatement).toMatchObject({
     Effect: 'Allow',
     Resource: '*',
   });
-  expect(new Set(xrayStatement?.Action)).toEqual(
+  expect(new Set(policyActions(xrayStatement?.Action ?? []))).toEqual(
     new Set(['xray:PutTraceSegments', 'xray:PutTelemetryRecords']),
   );
+  expect(ampStatement).toEqual({
+    Action: 'aps:RemoteWrite',
+    Effect: 'Allow',
+    Resource: {
+      'Fn::GetAtt': [expect.stringContaining('AmpWorkspace'), 'Arn'],
+    },
+  });
   expect(metricsLogStatement).toMatchObject({
     Effect: 'Allow',
     Resource: {
       'Fn::GetAtt': [expect.stringContaining('ApplicationMetricsLogGroup'), 'Arn'],
     },
   });
-  expect(new Set(metricsLogStatement?.Action)).toEqual(new Set(['logs:CreateLogStream', 'logs:PutLogEvents']));
+  expect(new Set(policyActions(metricsLogStatement?.Action ?? []))).toEqual(
+    new Set(['logs:CreateLogStream', 'logs:PutLogEvents']),
+  );
 
   const renderedTemplate = JSON.stringify(template.toJSON());
   expect(renderedTemplate).not.toContain('xray:GetSampling');
@@ -405,14 +501,14 @@ test('grants only X-Ray and scoped EMF log writes to the task role', () => {
   expect(renderedTemplate).not.toContain('CloudWatchAgentServerPolicy');
 });
 
-test('does not introduce deferred AMP, Grafana, database, or public-network resources', () => {
+test('does not introduce deferred Grafana, database, or public-network resources', () => {
   template.resourceCountIs('AWS::EC2::NatGateway', 0);
-  template.resourceCountIs('AWS::APS::Workspace', 0);
+  template.resourceCountIs('AWS::APS::Workspace', 1);
   template.resourceCountIs('AWS::Grafana::Workspace', 0);
   template.resourceCountIs('AWS::RDS::DBInstance', 0);
 
   const renderedTemplate = JSON.stringify(template.toJSON());
-  expect(renderedTemplate).not.toContain('.sts');
+  expect(renderedTemplate).not.toContain('".aps"]');
   expect(findTaskContainers(template).map(({ Name }) => Name)).not.toEqual(
     expect.arrayContaining(['postgres', 'migration']),
   );
@@ -511,8 +607,23 @@ test.each(['30.5', '', true])('rejects noninteger metric export cadence: %p', (v
   ).toThrow('must be an integer');
 });
 
-test('outputs the CloudWatch application metrics namespace for smoke tooling', () => {
+test('outputs CloudWatch, ECS, and AMP identifiers for smoke tooling', () => {
   template.hasOutput('CloudWatchApplicationMetricsNamespace', {
     Value: 'GoldenPath/aws-demo/movie-reservation-service',
+  });
+  template.hasOutput('EcsClusterName', {
+    Value: Match.anyValue(),
+  });
+  template.hasOutput('EcsServiceName', {
+    Value: Match.anyValue(),
+  });
+  template.hasOutput('AmpWorkspaceId', {
+    Value: Match.anyValue(),
+  });
+  template.hasOutput('AmpWorkspaceArn', {
+    Value: Match.anyValue(),
+  });
+  template.hasOutput('AmpPrometheusEndpoint', {
+    Value: Match.anyValue(),
   });
 });

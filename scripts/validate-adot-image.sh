@@ -42,12 +42,38 @@ if ! grep --fixed-strings --quiet '    metrics/application/cloudwatch:' <<<"${pi
   printf 'ADOT config must contain the CloudWatch application metrics pipeline\n' >&2
   exit 1
 fi
+if ! grep --fixed-strings --quiet '    metrics/application/amp:' <<<"${pipeline_block}"; then
+  printf 'ADOT config must contain the AMP application metrics pipeline\n' >&2
+  exit 1
+fi
+if ! grep --fixed-strings --quiet '    metrics/ecs/amp:' <<<"${pipeline_block}"; then
+  printf 'ADOT config must contain the AMP ECS metrics pipeline\n' >&2
+  exit 1
+fi
 if grep --extended-regexp --quiet '^    logs([/:]|$)' <<<"${pipeline_block}"; then
   printf 'ADOT config must not contain a logs pipeline\n' >&2
   exit 1
 fi
-if grep --extended-regexp --quiet 'prometheus|sigv4|awsecscontainermetrics' "${collector_directory}/adot-config.yaml"; then
-  printf 'ADOT config must not contain the deferred AMP or ECS metrics path in this PR\n' >&2
+if ! grep --fixed-strings --quiet '  sigv4auth:' "${collector_directory}/adot-config.yaml"; then
+  printf 'ADOT config must contain SigV4 authentication for AMP\n' >&2
+  exit 1
+fi
+if ! grep --fixed-strings --quiet '  awsecscontainermetrics:' "${collector_directory}/adot-config.yaml"; then
+  printf 'ADOT config must contain the ECS task/container metrics receiver\n' >&2
+  exit 1
+fi
+if [[ "$(grep --fixed-strings --count '    add_metric_suffixes: false' \
+  "${collector_directory}/adot-config.yaml")" -ne 2 ]]; then
+  printf 'Both AMP exporters must preserve the repository metric-name contract\n' >&2
+  exit 1
+fi
+if [[ "$(grep --fixed-strings --count '    target_info:' \
+  "${collector_directory}/adot-config.yaml")" -ne 2 ]] ||
+  [[ "$(grep --fixed-strings --count '      enabled: false' \
+    "${collector_directory}/adot-config.yaml")" -lt 3 ]] ||
+  [[ "$(grep --fixed-strings --count '    disable_scope_info: true' \
+    "${collector_directory}/adot-config.yaml")" -ne 2 ]]; then
+  printf 'AMP exporters must disable generated target/scope metadata series\n' >&2
   exit 1
 fi
 if grep --extended-regexp --quiet '^[[:space:]]+grpc:' "${collector_directory}/adot-config.yaml"; then
@@ -72,6 +98,37 @@ if [[ "$(grep --extended-regexp --count '^[[:space:]]+- \^.+\$$' "${collector_di
   exit 1
 fi
 
+expected_ecs_metrics=(
+  'ecs.task.cpu.reserved'
+  'ecs.task.cpu.utilized'
+  'ecs.task.memory.reserved'
+  'ecs.task.memory.utilized'
+  'container.cpu.reserved'
+  'container.cpu.utilized'
+  'container.memory.reserved'
+  'container.memory.utilized'
+)
+for metric_name in "${expected_ecs_metrics[@]}"; do
+  if [[ "$(grep --fixed-strings --count -- "- ${metric_name}" \
+    "${collector_directory}/adot-config.yaml")" -ne 1 ]]; then
+    printf 'ADOT ECS metric allowlist must contain exactly one %s entry\n' "${metric_name}" >&2
+    exit 1
+  fi
+done
+
+for forbidden_label in service.instance.id aws.ecs.task.arn aws.ecs.task.id container.id container.image.tag aws.ecs.container.image.id; do
+  if ! grep --fixed-strings --quiet "      - key: ${forbidden_label}" "${collector_directory}/adot-config.yaml"; then
+    printf 'ADOT AMP label policy must explicitly delete %s\n' "${forbidden_label}" >&2
+    exit 1
+  fi
+done
+
+if [[ "$(grep --fixed-strings --count '      queue_size: 256' \
+  "${collector_directory}/adot-config.yaml")" -ne 2 ]]; then
+  printf 'Both AMP exporters must use bounded remote-write queues\n' >&2
+  exit 1
+fi
+
 docker build --pull --tag "${image_name}" "${collector_directory}"
 
 # v0.48.0 has no standalone config-validation subcommand. Reaching the health
@@ -79,16 +136,23 @@ docker build --pull --tag "${image_name}" "${collector_directory}"
 # every referenced receiver, processor, exporter, and extension.
 container_id="$(docker run \
   --detach \
+  --env AWS_ACCESS_KEY_ID=validation \
+  --env AWS_SECRET_ACCESS_KEY=validation \
+  --env AWS_EC2_METADATA_DISABLED=true \
   --env AWS_REGION=us-east-1 \
+  --env AWS_STS_REGIONAL_ENDPOINTS=regional \
+  --env AMP_REMOTE_WRITE_ENDPOINT=https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-validation/api/v1/remote_write \
   --env APPLICATION_SERVICE_NAME=movie-reservation-service \
   --env CLOUDWATCH_METRICS_NAMESPACE=GoldenPath/test/movie-reservation-service \
   --env CLOUDWATCH_METRICS_LOG_GROUP_NAME=/golden-path/test/movie-reservation-service/metrics \
   --env DEPLOYMENT_ENVIRONMENT_NAME=test \
+  --env ECS_CONTAINER_METADATA_URI_V4=http://127.0.0.1:1 \
+  --env METRICS_COLLECTION_INTERVAL=30s \
   "${image_name}")"
 
 for _ in {1..30}; do
   if docker exec "${container_id}" /healthcheck >/dev/null 2>&1; then
-    printf 'ADOT image, X-Ray/CloudWatch config, and /healthcheck validated successfully\n'
+    printf 'ADOT image, X-Ray/CloudWatch/AMP/ECS config, and /healthcheck validated successfully\n'
     exit 0
   fi
 

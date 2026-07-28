@@ -18,20 +18,24 @@ slice:
   `movie-reservation-platform-aws-demo`;
 - CDK Docker image assets for `movie-reservation-service` and the repository-owned
   ADOT collector;
-- separate one-week CloudWatch log groups for the app, collector, and EMF
-  application metrics;
+- separate one-week CloudWatch log groups for the app, collector, EMF
+  application metrics, and enhanced Container Insights performance events;
 - nonessential ADOT sidecar receiving OTLP/HTTP on task loopback and exporting
-  traces to X-Ray plus the ten existing application metrics to CloudWatch;
-- VPC endpoints for ECR image pull, CloudWatch log delivery, and X-Ray writes.
+  traces to X-Ray, the ten existing application metrics to CloudWatch and AMP,
+  and eight curated ECS task/container CPU and memory metrics to AMP;
+- enhanced ECS Container Insights for the AWS-native task/container view;
+- a disposable AMP workspace with seven-day retention;
+- VPC endpoints for ECR image pull, CloudWatch log delivery, X-Ray writes, AMP
+  remote write, and regional STS identity calls.
 
 The stack runs the app with `COMPOSITION_PROFILE=local-fixed-user` and in-memory
 persistence. The AWS demo enables the fake in-process worker and deterministic
 failure injection so smoke traffic creates useful metric outcomes. Issue #37's
-trace path and issue #38 PR 1's CloudWatch application-metric path are included.
-Later issue #38 PRs own AMP, ECS metrics, enhanced Container Insights, and
-Amazon Managed Grafana. Database work is separate: issue #7 owns RDS and a
-deployment-time ECS migration `RunTask`. A Postgres sidecar is not planned for
-this stack.
+trace path and issue #38 PR #41's CloudWatch application-metric path are
+included. The current issue #38 slice adds AMP, ECS metrics, and enhanced
+Container Insights; the final slice owns Amazon Managed Grafana. Database work
+is separate: issue #7 owns RDS and a deployment-time ECS migration `RunTask`.
+A Postgres sidecar is not planned for this stack.
 
 ## Useful commands
 
@@ -52,9 +56,10 @@ multi-architecture digest
 verified on 2026-07-18. That release does not expose a standalone config
 validation subcommand, so `validate:adot-image` proves the exact baked config by
 starting the pinned collector and reaching its bundled `/healthcheck` binary.
-Successful startup also proves the referenced OTLP receiver, memory limiter,
-attributes and batch processors, X-Ray/EMF exporters, and health extension are
-present.
+Successful startup also proves the referenced OTLP and ECS container-metrics
+receivers, memory limiter, filter/resource/attributes/batch processors,
+X-Ray/EMF/Prometheus remote-write exporters, SigV4 authentication, and health
+extension are present.
 
 For a real deploy, replace `203.0.113.10/32` with your current public IP CIDR.
 That context value controls which source IP range can reach the public ALB on
@@ -100,8 +105,8 @@ npm -w ecs-infra run cdk -- deploy GoldenPathDemoStack \
 
 Do not run `deploy` until the account, region, stack name, public ingress CIDR,
 and expected cost are clear. This stack creates a public ALB, ECS/Fargate
-service, two ECR image assets, three CloudWatch log groups, custom CloudWatch
-metrics, and VPC endpoints.
+service, two ECR image assets, four CloudWatch log groups, custom and enhanced
+Container Insights metrics, an AMP workspace, and six interface VPC endpoints.
 
 After deployment, run the deterministic trace smoke with the same explicit
 profile and Region:
@@ -114,7 +119,8 @@ AWS_PROFILE=<profile> AWS_REGION=<region> \
 The report includes the generated W3C `traceparent` and converted X-Ray trace
 ID so the exact request can be inspected without broad time-window searches.
 
-Run the CloudWatch application-metrics smoke separately:
+Install `awscurl` once on the laptop, then run the managed-metrics smoke
+separately:
 
 ```bash
 AWS_PROFILE=<profile> AWS_REGION=<region> \
@@ -123,8 +129,14 @@ AWS_PROFILE=<profile> AWS_REGION=<region> \
 ```
 
 It generates bounded reservation traffic, requires both confirmed and
-failed/rejected outcomes, then queries `graphql_operation_total` in the
-stack-output namespace.
+failed/rejected outcomes, and then proves:
+
+- `graphql_operation_total` is queryable from both CloudWatch and AMP;
+- all eight allowlisted ECS task/container CPU and memory metrics are present
+  in AMP with the expected stable label contract and without task/container
+  identity labels;
+- task/container CPU and memory utilization are present through enhanced
+  Container Insights in CloudWatch.
 
 After testing, destroy the stack with the same required context boundary:
 
@@ -133,11 +145,11 @@ npm -w ecs-infra run cdk -- destroy GoldenPathDemoStack \
   -c allowedIngressCidr=<your-public-ip>/32
 ```
 
-Confirm that the CloudFormation stack, ALB, ECS service/tasks, VPC endpoints,
-and all three log groups are gone. Ingested X-Ray traces and historical
-CloudWatch metric datapoints follow their service retention; stack destruction
-stops new publication but does not delete that history immediately. CDK
-bootstrap resources are account/region-level and
+Confirm that the CloudFormation stack, ALB, ECS service/tasks, AMP workspace,
+VPC endpoints, and all four log groups are gone. Ingested X-Ray traces and
+historical CloudWatch metric datapoints follow their service retention; stack
+destruction stops new publication but does not delete that history immediately.
+CDK bootstrap resources are account/region-level and
 are not part of `GoldenPathDemoStack`; their S3 bucket and ECR repository remain
 for future CDK deployments and should be reviewed separately if the account is
 being fully cleaned up.
@@ -173,7 +185,7 @@ Application metric export defaults to 30 seconds. Use
 `-c metricsExportIntervalSeconds=<5-300>` consistently across CDK commands to
 test another cadence.
 
-Before the next #38 PR expands the endpoint set for AMP and STS, compare the
-region-specific hourly cost of the full endpoint inventory with a NAT-based
-alternative. The current no-NAT decision is a deliberate checkpoint, not a
-rule that every future AWS service must receive another endpoint automatically.
+The current slice accepts the region-specific hourly cost of six one-AZ
+interface endpoints after comparing the full inventory with a NAT-based
+alternative. The no-NAT decision is a deliberate checkpoint, not a rule that
+every future AWS service must receive another endpoint automatically.

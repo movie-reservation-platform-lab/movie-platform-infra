@@ -1,12 +1,17 @@
 extensions:
   health_check:
     endpoint: 127.0.0.1:13133
+  sigv4auth:
+    region: ${env:AWS_REGION}
+    service: aps
 
 receivers:
   otlp:
     protocols:
       http:
         endpoint: 127.0.0.1:4318
+  awsecscontainermetrics:
+    collection_interval: ${env:METRICS_COLLECTION_INTERVAL}
 
 processors:
   memory_limiter:
@@ -25,11 +30,96 @@ processors:
       - key: Environment
         value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
         action: upsert
+  # The pinned ADOT image has no transform processor, so copy only the two
+  # stable deployment identities into AMP metric labels at the datapoint level.
+  # Resource conversion remains disabled for application metrics to avoid
+  # promoting process/host resource attributes into Prometheus labels.
+  attributes/application_amp:
+    actions:
+      - key: service_name
+        value: ${env:APPLICATION_SERVICE_NAME}
+        action: upsert
+      - key: deployment_environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
+        action: upsert
+  # Prometheus translation treats service.instance.id specially and turns it
+  # into an instance label even when general resource conversion is disabled.
+  # Remove it explicitly so task/process churn cannot enter application series.
+  resource/application_amp:
+    attributes:
+      - key: service.instance.id
+        action: delete
+  filter/ecs_amp:
+    metrics:
+      include:
+        match_type: strict
+        metric_names:
+          - ecs.task.cpu.reserved
+          - ecs.task.cpu.utilized
+          - ecs.task.memory.reserved
+          - ecs.task.memory.utilized
+          - container.cpu.reserved
+          - container.cpu.utilized
+          - container.memory.reserved
+          - container.memory.utilized
+  # awsecscontainermetrics emits a documented, finite resource-attribute set.
+  # Delete every non-contract attribute before resource conversion so task IDs,
+  # image identity, timestamps, and other churn cannot become AMP labels.
+  resource/ecs_amp:
+    attributes:
+      - key: aws.ecs.task.arn
+        action: delete
+      - key: aws.ecs.task.id
+        action: delete
+      - key: aws.ecs.task.version
+        action: delete
+      - key: cloud.zone
+        action: delete
+      - key: cloud.account.id
+        action: delete
+      - key: aws.ecs.task.pull_started_at
+        action: delete
+      - key: aws.ecs.task.pull_stopped_at
+        action: delete
+      - key: aws.ecs.task.known_status
+        action: delete
+      - key: aws.ecs.task.launch_type
+        action: delete
+      - key: aws.ecs.container.created_at
+        action: delete
+      - key: aws.ecs.container.finished_at
+        action: delete
+      - key: aws.ecs.container.known_status
+        action: delete
+      - key: aws.ecs.container.know_status
+        action: delete
+      - key: aws.ecs.container.exit_code
+        action: delete
+      - key: container.id
+        action: delete
+      - key: aws.ecs.docker.name
+        action: delete
+      - key: container.image.name
+        action: delete
+      - key: container.image.tag
+        action: delete
+      - key: container.image.id
+        action: delete
+      - key: aws.ecs.container.image.id
+        action: delete
   batch:
     timeout: 5s
     send_batch_size: 256
     send_batch_max_size: 512
   batch/application_cloudwatch:
+    timeout: 5s
+    send_batch_size: 256
+    send_batch_max_size: 512
+  batch/application_amp:
+    timeout: 5s
+    send_batch_size: 256
+    send_batch_max_size: 512
+  batch/ecs_amp:
     timeout: 5s
     send_batch_size: 256
     send_batch_max_size: 512
@@ -56,12 +146,11 @@ exporters:
     retain_initial_value_of_delta_metric: true
     max_retries: 2
     # otel -> cloudwatch projection contract
-    # which OTel metric names are allowed to become CloudWatch custom metrics
-    #    - which OTel metric names are allowed to become CloudWatch custom metrics
-    #    - which attributes are allowed to become CloudWatch dimensions
-    #    - which dimension shapes CloudWatch should materialize
-    # This allowlisting have to be revisited once we onboard more services, we simply can't
-    # support maintaining a huge list, so the metrics will need some standardization (contract definition)
+    #   - which OTel metric names may become CloudWatch custom metrics
+    #   - which attributes may become CloudWatch dimensions
+    #   - which dimension shapes CloudWatch should materialize
+    # Revisit how this contract is standardized before onboarding many
+    # services; do not turn CloudWatch into a raw projection of every metric.
 
     metric_declarations:
       - dimensions:
@@ -95,12 +184,52 @@ exporters:
           - [ServiceName, Environment, exception_type]
         metric_name_selectors:
           - ^reservation_processor_exceptions_total$
+  prometheusremotewrite/application:
+    endpoint: ${env:AMP_REMOTE_WRITE_ENDPOINT}
+    auth:
+      authenticator: sigv4auth
+    add_metric_suffixes: false
+    resource_to_telemetry_conversion:
+      enabled: false
+    target_info:
+      enabled: false
+    disable_scope_info: true
+    remote_write_queue:
+      enabled: true
+      num_consumers: 1
+      queue_size: 256
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
+    timeout: 10s
+  prometheusremotewrite/ecs:
+    endpoint: ${env:AMP_REMOTE_WRITE_ENDPOINT}
+    auth:
+      authenticator: sigv4auth
+    add_metric_suffixes: false
+    resource_to_telemetry_conversion:
+      enabled: true
+    target_info:
+      enabled: false
+    disable_scope_info: true
+    remote_write_queue:
+      enabled: true
+      num_consumers: 1
+      queue_size: 256
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
+    timeout: 10s
 
 service:
   telemetry:
     logs:
       level: info
-  extensions: [health_check]
+  extensions: [health_check, sigv4auth]
   pipelines:
     traces:
       receivers: [otlp]
@@ -110,3 +239,11 @@ service:
       receivers: [otlp]
       processors: [memory_limiter, attributes/application_cloudwatch, batch/application_cloudwatch]
       exporters: [awsemf/application]
+    metrics/application/amp:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/application_amp, resource/application_amp, batch/application_amp]
+      exporters: [prometheusremotewrite/application]
+    metrics/ecs/amp:
+      receivers: [awsecscontainermetrics]
+      processors: [memory_limiter, filter/ecs_amp, resource/ecs_amp, batch/ecs_amp]
+      exporters: [prometheusremotewrite/ecs]

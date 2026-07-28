@@ -17,6 +17,11 @@ interface ManagedMetricsSmokeReport {
   readonly confirmed_outcomes: number;
   readonly negative_outcomes: number;
   readonly cloudwatch_datapoint_count: number;
+  readonly amp_application_series_count: number;
+  readonly amp_ecs_task_series_count: number;
+  readonly amp_container_series_count: number;
+  readonly container_insights_task_datapoint_count: number;
+  readonly container_insights_container_datapoint_count: number;
   readonly duration_ms: number;
 }
 
@@ -40,6 +45,7 @@ test('fails prerequisites before AWS or GraphQL calls when AWS_PROFILE is missin
     expect(result.status).toBe(1);
     expect(report.failure_stage).toBe('prerequisites');
     expect(readFileSync(fixture.awsMarker, 'utf8')).toBe('');
+    expect(readFileSync(fixture.awscurlMarker, 'utf8')).toBe('');
     expect(readFileSync(fixture.curlMarker, 'utf8')).toBe('');
   } finally {
     fixture.cleanup();
@@ -56,13 +62,14 @@ test('reports a missing CloudWatch namespace output before generating traffic', 
     expect(result.status).toBe(1);
     expect(report.failure_stage).toBe('stack_output');
     expect(result.stderr).toContain('no CloudWatch application metrics namespace output');
+    expect(readFileSync(fixture.awscurlMarker, 'utf8')).toBe('');
     expect(readFileSync(fixture.curlMarker, 'utf8')).toBe('');
   } finally {
     fixture.cleanup();
   }
 });
 
-test('writes a sanitized success report after bounded outcomes and a CloudWatch datapoint', () => {
+test('writes a sanitized dual-route success report with AMP and Container Insights evidence', () => {
   const fixture = createFixture(successfulAws, successfulCurl);
   const reportPath = path.join(fixture.directory, 'report.json');
 
@@ -83,6 +90,11 @@ test('writes a sanitized success report after bounded outcomes and a CloudWatch 
       confirmed_outcomes: 1,
       negative_outcomes: 1,
       cloudwatch_datapoint_count: 2,
+      amp_application_series_count: 1,
+      amp_ecs_task_series_count: 4,
+      amp_container_series_count: 4,
+      container_insights_task_datapoint_count: 2,
+      container_insights_container_datapoint_count: 2,
     });
     expect(report.duration_ms).toBeGreaterThanOrEqual(0);
     expect(JSON.parse(readFileSync(reportPath, 'utf8'))).toEqual(report);
@@ -91,6 +103,16 @@ test('writes a sanitized success report after bounded outcomes and a CloudWatch 
     expect(serializedReport).not.toContain('request-1');
     expect(serializedReport).not.toContain('seat-1');
     expect(serializedReport).not.toContain('response');
+
+    const awscurlArguments = readFileSync(fixture.awscurlArguments, 'utf8');
+    expect(awscurlArguments).toContain('--profile\ntest-profile');
+    expect(awscurlArguments).toContain('--region\neu-central-1');
+    expect(awscurlArguments).toContain('--service\naps');
+    expect(awscurlArguments).toContain(
+      'https://aps-workspaces.eu-central-1.amazonaws.com/workspaces/ws-test/api/v1/query',
+    );
+    expect(awscurlArguments).not.toContain('AWS_ACCESS_KEY_ID');
+    expect(awscurlArguments).not.toContain('AWS_SECRET_ACCESS_KEY');
   } finally {
     fixture.cleanup();
   }
@@ -113,27 +135,89 @@ test('distinguishes a successful CloudWatch query from missing metric datapoints
   }
 });
 
+test('distinguishes a successful AMP query from an incomplete required metric set', () => {
+  const fixture = createFixture(successfulAws, successfulCurl, emptyAmpAwscurl);
+
+  try {
+    const result = runSmoke(fixture, {
+      MANAGED_METRICS_SMOKE_METRIC_TIMEOUT_SECONDS: '1',
+    });
+    const report = parseReport(result);
+
+    expect(result.status).toBe(1);
+    expect(report.failure_stage).toBe('amp_metric');
+    expect(result.stderr).toContain('all eight ECS metrics before timeout');
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('rejects high-cardinality ECS identity labels returned by AMP', () => {
+  const fixture = createFixture(successfulAws, successfulCurl, forbiddenLabelAwscurl);
+
+  try {
+    const result = runSmoke(fixture);
+    const report = parseReport(result);
+
+    expect(result.status).toBe(1);
+    expect(report.failure_stage).toBe('amp_contract');
+    expect(result.stderr).toContain('violated the metric label contract');
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('requires all four enhanced Container Insights metrics', () => {
+  const fixture = createFixture(emptyContainerInsightsAws, successfulCurl);
+
+  try {
+    const result = runSmoke(fixture, {
+      MANAGED_METRICS_SMOKE_METRIC_TIMEOUT_SECONDS: '1',
+    });
+    const report = parseReport(result);
+
+    expect(result.status).toBe(1);
+    expect(report.failure_stage).toBe('container_insights_metric');
+    expect(result.stderr).toContain('all four enhanced Container Insights metrics');
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 interface SmokeFixture {
   readonly directory: string;
   readonly awsMarker: string;
+  readonly awscurlMarker: string;
+  readonly awscurlArguments: string;
   readonly curlMarker: string;
   readonly cleanup: () => void;
 }
 
-function createFixture(awsScript: string, curlScript: string): SmokeFixture {
+function createFixture(
+  awsScript: string,
+  curlScript: string,
+  awscurlScript: string = successfulAwscurl,
+): SmokeFixture {
   const directory = mkdtempSync(path.join(tmpdir(), 'managed-metrics-smoke-'));
   const awsMarker = path.join(directory, 'aws-called');
+  const awscurlMarker = path.join(directory, 'awscurl-called');
+  const awscurlArguments = path.join(directory, 'awscurl-arguments');
   const curlMarker = path.join(directory, 'curl-called');
   const requestCounter = path.join(directory, 'request-counter');
   writeFileSync(awsMarker, '');
+  writeFileSync(awscurlMarker, '');
+  writeFileSync(awscurlArguments, '');
   writeFileSync(curlMarker, '');
   writeFileSync(requestCounter, '0');
   writeExecutable(path.join(directory, 'aws'), awsScript);
+  writeExecutable(path.join(directory, 'awscurl'), awscurlScript);
   writeExecutable(path.join(directory, 'curl'), curlScript);
 
   return {
     directory,
     awsMarker,
+    awscurlMarker,
+    awscurlArguments,
     curlMarker,
     cleanup: () => rmSync(directory, { recursive: true, force: true }),
   };
@@ -155,6 +239,8 @@ function runSmoke(
     AWS_PROFILE: 'test-profile',
     AWS_REGION: 'eu-central-1',
     AWS_MARKER: fixture.awsMarker,
+    AWSCURL_MARKER: fixture.awscurlMarker,
+    AWSCURL_ARGUMENTS: fixture.awscurlArguments,
     CURL_MARKER: fixture.curlMarker,
     REQUEST_COUNTER: path.join(fixture.directory, 'request-counter'),
     MANAGED_METRICS_SMOKE_ATTEMPT_LIMIT: '3',
@@ -207,6 +293,18 @@ const stackOutputs = JSON.stringify([
     OutputKey: 'CloudWatchApplicationMetricsNamespace',
     OutputValue: 'GoldenPath/aws-demo/movie-reservation-service',
   },
+  {
+    OutputKey: 'AmpPrometheusEndpoint',
+    OutputValue: 'https://aps-workspaces.eu-central-1.amazonaws.com/workspaces/ws-test/api/v1/',
+  },
+  {
+    OutputKey: 'EcsClusterName',
+    OutputValue: 'movie-reservation-platform-aws-demo',
+  },
+  {
+    OutputKey: 'EcsServiceName',
+    OutputValue: 'movie-reservation-service',
+  },
 ]);
 
 const successfulAws = `#!/usr/bin/env bash
@@ -215,7 +313,11 @@ printf called >"\${AWS_MARKER}"
 if [[ "\${1:-}" == 'cloudformation' ]]; then
   printf '%s\\n' '${stackOutputs}'
 elif [[ "\${1:-}" == 'cloudwatch' ]]; then
-  printf '%s\\n' '{"MetricDataResults":[{"Id":"applicationMetrics","Values":[2,1]}]}'
+  if [[ " \$* " == *'taskCpu'* ]]; then
+    printf '%s\\n' '{"MetricDataResults":[{"Id":"taskCpu","Values":[1]},{"Id":"taskMemory","Values":[1]},{"Id":"containerCpu","Values":[1]},{"Id":"containerMemory","Values":[1]}]}'
+  else
+    printf '%s\\n' '{"MetricDataResults":[{"Id":"applicationMetrics","Values":[2,1]}]}'
+  fi
 else
   exit 2
 fi
@@ -237,6 +339,99 @@ elif [[ "\${1:-}" == 'cloudwatch' ]]; then
 else
   exit 2
 fi
+`;
+
+const emptyContainerInsightsAws = `#!/usr/bin/env bash
+set -euo pipefail
+printf called >"\${AWS_MARKER}"
+if [[ "\${1:-}" == 'cloudformation' ]]; then
+  printf '%s\\n' '${stackOutputs}'
+elif [[ "\${1:-}" == 'cloudwatch' ]]; then
+  if [[ " \$* " == *'taskCpu'* ]]; then
+    printf '%s\\n' '{"MetricDataResults":[{"Id":"taskCpu","Values":[]},{"Id":"taskMemory","Values":[]},{"Id":"containerCpu","Values":[]},{"Id":"containerMemory","Values":[]}]}'
+  else
+    printf '%s\\n' '{"MetricDataResults":[{"Id":"applicationMetrics","Values":[2,1]}]}'
+  fi
+else
+  exit 2
+fi
+`;
+
+const ampBaseLabels = {
+  aws_ecs_cluster_name: 'movie-reservation-platform-aws-demo',
+  aws_ecs_service_name: 'movie-reservation-service',
+  aws_ecs_task_family: 'aws-demo-movie-reservation-service',
+  cloud_region: 'eu-central-1',
+};
+const successfulAmpResponse = JSON.stringify({
+  status: 'success',
+  data: {
+    result: [
+      {
+        metric: {
+          __name__: 'graphql_operation_total',
+          service_name: 'movie-reservation-service',
+          deployment_environment: 'aws-demo',
+        },
+      },
+      ...[
+        'ecs_task_cpu_reserved',
+        'ecs_task_cpu_utilized',
+        'ecs_task_memory_reserved',
+        'ecs_task_memory_utilized',
+      ].map((metricName) => ({
+        metric: { __name__: metricName, ...ampBaseLabels },
+      })),
+      ...[
+        'container_cpu_reserved',
+        'container_cpu_utilized',
+        'container_memory_reserved',
+        'container_memory_utilized',
+      ].map((metricName) => ({
+        metric: {
+          __name__: metricName,
+          ...ampBaseLabels,
+          container_name: 'movie-reservation-service',
+        },
+      })),
+    ],
+  },
+});
+
+const forbiddenLabelAmpResponse = JSON.stringify({
+  status: 'success',
+  data: {
+    result: [
+      {
+        metric: {
+          __name__: 'ecs_task_cpu_reserved',
+          ...ampBaseLabels,
+          aws_ecs_task_id: 'task-identity-must-not-be-a-label',
+        },
+      },
+    ],
+  },
+});
+
+const successfulAwscurl = `#!/usr/bin/env bash
+set -euo pipefail
+printf called >"\${AWSCURL_MARKER}"
+printf '%s\\n' "\$@" >"\${AWSCURL_ARGUMENTS}"
+printf '%s\\n' '${successfulAmpResponse}'
+`;
+
+const emptyAmpAwscurl = `#!/usr/bin/env bash
+set -euo pipefail
+printf called >"\${AWSCURL_MARKER}"
+printf '%s\\n' "\$@" >"\${AWSCURL_ARGUMENTS}"
+printf '%s\\n' '{"status":"success","data":{"result":[]}}'
+`;
+
+const forbiddenLabelAwscurl = `#!/usr/bin/env bash
+set -euo pipefail
+printf called >"\${AWSCURL_MARKER}"
+printf '%s\\n' "\$@" >"\${AWSCURL_ARGUMENTS}"
+printf '%s\\n' '${forbiddenLabelAmpResponse}'
 `;
 
 const successfulCurl = `#!/usr/bin/env bash

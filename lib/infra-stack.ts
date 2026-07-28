@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 
 import * as cdk from 'aws-cdk-lib';
+import * as aps from 'aws-cdk-lib/aws-aps';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -15,6 +16,8 @@ import type { PlatformConfig } from './config/platform-config';
 
 const APP_CONTAINER_PORT = 3000;
 const APP_DOCKERFILE = 'movie-reservation-service/Dockerfile';
+const AMP_REMOTE_WRITE_ACTIONS = ['aps:RemoteWrite'];
+const STS_IDENTITY_ACTIONS = ['sts:GetCallerIdentity'];
 const XRAY_WRITE_ACTIONS = ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'];
 const RESERVATION_FAILURE_INJECTION_SALT = 'aws-demo-managed-observability';
 
@@ -35,16 +38,19 @@ export interface GoldenPathDemoStackProps extends cdk.StackProps {
  * - a two-AZ VPC without a NAT gateway
  * - public subnets for a CIDR-restricted Application Load Balancer
  * - one selected isolated workload subnet for the Fargate service
- * - the S3, ECR, CloudWatch Logs, and X-Ray endpoints required by private tasks
+ * - the S3, ECR, CloudWatch Logs, X-Ray, AMP, and STS endpoints required by private tasks
  * - an optional SSM Messages endpoint and task permissions for ECS Exec
+ * - a disposable AMP workspace and enhanced ECS Container Insights
  * - the service and ADOT image assets, log groups, task definition, ECS service, and ALB
- * - common resource tags plus ALB and CloudWatch metric outputs
+ * - common resource tags plus ALB, CloudWatch, ECS, and AMP outputs
  *
  * The backend uses the in-memory demo composition and exports OTLP/HTTP traces
  * and metrics through a nonessential ADOT sidecar. ADOT sends traces to X-Ray
- * and application metrics to CloudWatch through EMF. Later waves can split
- * networking, workloads, and observability into separate constructs or stacks
- * when those ownership and lifecycle boundaries become useful.
+ * and fans application metrics out to CloudWatch through EMF and AMP through
+ * Prometheus remote write. The same sidecar also exports bounded task/container
+ * metrics to AMP. Later waves can split networking, workloads, and
+ * observability into separate constructs or stacks when those ownership and
+ * lifecycle boundaries become useful.
  */
 export class GoldenPathDemoStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GoldenPathDemoStackProps) {
@@ -122,6 +128,15 @@ export class GoldenPathDemoStack extends cdk.Stack {
       'Private ECS tasks use HTTPS to AWS service endpoints',
     );
 
+    const ampWorkspace = new aps.CfnWorkspace(this, 'AmpWorkspace', {
+      alias: `${platformConfig.platformName}-${platformConfig.environmentName}`,
+      workspaceConfiguration: {
+        retentionPeriodInDays: 7,
+      },
+    });
+    ampWorkspace.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    tagServiceResource(ampWorkspace);
+
     vpc.addGatewayEndpoint('S3Endpoint', {
       service: ec2.GatewayVpcEndpointAwsService.S3,
       subnets: [workloadSubnetSelection],
@@ -157,6 +172,28 @@ export class GoldenPathDemoStack extends cdk.Stack {
         resources: ['*'],
       }),
     );
+    const ampWorkspaceEndpoint = vpc.addInterfaceEndpoint('AmpWorkspaceEndpoint', {
+      ...interfaceEndpointProps,
+      service: ec2.InterfaceVpcEndpointAwsService.PROMETHEUS_WORKSPACES,
+    });
+    ampWorkspaceEndpoint.addToPolicy(
+      new iam.PolicyStatement({
+        principals: [new iam.AnyPrincipal()],
+        actions: AMP_REMOTE_WRITE_ACTIONS,
+        resources: [ampWorkspace.attrArn],
+      }),
+    );
+    const stsEndpoint = vpc.addInterfaceEndpoint('StsEndpoint', {
+      ...interfaceEndpointProps,
+      service: ec2.InterfaceVpcEndpointAwsService.STS,
+    });
+    stsEndpoint.addToPolicy(
+      new iam.PolicyStatement({
+        principals: [new iam.AnyPrincipal()],
+        actions: STS_IDENTITY_ACTIONS,
+        resources: ['*'],
+      }),
+    );
 
     if (platformConfig.enableEcsExec) {
       vpc.addInterfaceEndpoint('SsmMessagesEndpoint', {
@@ -165,11 +202,19 @@ export class GoldenPathDemoStack extends cdk.Stack {
       });
     }
 
+    const clusterName = `${platformConfig.platformName}-${platformConfig.environmentName}`;
+    const containerInsightsLogGroup = new logs.LogGroup(this, 'ContainerInsightsLogGroup', {
+      logGroupName: `/aws/ecs/containerinsights/${clusterName}/performance`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     const cluster = new ecs.Cluster(this, 'ApplicationCluster', {
       vpc,
-      clusterName: `${platformConfig.platformName}-${platformConfig.environmentName}`,
-      containerInsightsV2: ecs.ContainerInsights.DISABLED,
+      clusterName,
+      containerInsightsV2: ecs.ContainerInsights.ENHANCED,
     });
+    cluster.node.addDependency(containerInsightsLogGroup);
 
     const repositoryRoot = path.join(__dirname, '..', '..');
     const appImage = new ecrAssets.DockerImageAsset(this, 'AppImage', {
@@ -217,6 +262,12 @@ export class GoldenPathDemoStack extends cdk.Stack {
       new iam.PolicyStatement({
         actions: XRAY_WRITE_ACTIONS,
         resources: ['*'],
+      }),
+    );
+    taskDefinition.addToTaskRolePolicy(
+      new iam.PolicyStatement({
+        actions: AMP_REMOTE_WRITE_ACTIONS,
+        resources: [ampWorkspace.attrArn],
       }),
     );
     applicationMetricsLogGroup.grantWrite(taskDefinition.taskRole);
@@ -299,6 +350,8 @@ export class GoldenPathDemoStack extends cdk.Stack {
       }),
       environment: {
         AWS_REGION: cdk.Stack.of(this).region,
+        AWS_STS_REGIONAL_ENDPOINTS: 'regional',
+        AMP_REMOTE_WRITE_ENDPOINT: cdk.Fn.join('', [ampWorkspace.attrPrometheusEndpoint, 'remote_write']),
         APPLICATION_SERVICE_NAME: platformConfig.serviceName,
         CLOUDWATCH_METRICS_NAMESPACE: cloudWatchApplicationMetricsNamespace,
         CLOUDWATCH_METRICS_LOG_GROUP_NAME: applicationMetricsLogGroup.logGroupName,
@@ -374,6 +427,26 @@ export class GoldenPathDemoStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'CloudWatchApplicationMetricsNamespace', {
       value: cloudWatchApplicationMetricsNamespace,
       description: 'CloudWatch namespace containing application metrics exported through ADOT EMF',
+    });
+    new cdk.CfnOutput(this, 'EcsClusterName', {
+      value: cluster.clusterName,
+      description: 'ECS cluster name used by Container Insights and smoke tooling',
+    });
+    new cdk.CfnOutput(this, 'EcsServiceName', {
+      value: service.serviceName,
+      description: 'ECS service name used by Container Insights and smoke tooling',
+    });
+    new cdk.CfnOutput(this, 'AmpWorkspaceId', {
+      value: ampWorkspace.attrWorkspaceId,
+      description: 'Amazon Managed Service for Prometheus workspace ID',
+    });
+    new cdk.CfnOutput(this, 'AmpWorkspaceArn', {
+      value: ampWorkspace.attrArn,
+      description: 'Amazon Managed Service for Prometheus workspace ARN',
+    });
+    new cdk.CfnOutput(this, 'AmpPrometheusEndpoint', {
+      value: ampWorkspace.attrPrometheusEndpoint,
+      description: 'Base Prometheus-compatible API endpoint for the AMP workspace',
     });
   }
 }
