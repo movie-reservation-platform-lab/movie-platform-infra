@@ -277,6 +277,135 @@ test('creates a disposable seven-day AMP workspace', () => {
   expect(workspace.UpdateReplacePolicy).toBe('Delete');
 });
 
+test('grants Grafana only the planned AMP and CloudWatch metric reads', () => {
+  template.hasResourceProperties('AWS::IAM::Role', {
+    AssumeRolePolicyDocument: {
+      Statement: Match.arrayWith([
+        Match.objectLike({
+          Action: 'sts:AssumeRole',
+          Condition: {
+            ArnLike: {
+              'aws:SourceArn': {
+                'Fn::Join': [
+                  '',
+                  [
+                    'arn:',
+                    { Ref: 'AWS::Partition' },
+                    ':grafana:',
+                    { Ref: 'AWS::Region' },
+                    ':',
+                    { Ref: 'AWS::AccountId' },
+                    ':/workspaces/*',
+                  ],
+                ],
+              },
+            },
+            StringEquals: {
+              'aws:SourceAccount': { Ref: 'AWS::AccountId' },
+            },
+          },
+          Effect: 'Allow',
+          Principal: {
+            Service: 'grafana.amazonaws.com',
+          },
+        }),
+      ]),
+    },
+  });
+
+  const grafanaPolicy = findResources(template, 'AWS::IAM::Policy').find((policy) => {
+    const policyDocument = policy.Properties?.PolicyDocument as {
+      readonly Statement?: Array<{ readonly Action?: string | string[] }>;
+    };
+
+    return policyDocument.Statement?.some(({ Action }) => policyActions(Action ?? []).includes('aps:QueryMetrics'));
+  });
+  const policyDocument = grafanaPolicy?.Properties?.PolicyDocument as {
+    readonly Statement: Array<{
+      readonly Action: string | string[];
+      readonly Effect: string;
+      readonly Resource: unknown;
+    }>;
+    readonly Version: string;
+  };
+  expect(policyDocument.Version).toBe('2012-10-17');
+  expect(policyDocument.Statement).toHaveLength(2);
+
+  const ampQueryStatement = policyDocument.Statement.find(({ Action }) =>
+    policyActions(Action).includes('aps:QueryMetrics'),
+  );
+  expect(new Set(policyActions(ampQueryStatement?.Action ?? []))).toEqual(
+    new Set(['aps:GetLabels', 'aps:GetMetricMetadata', 'aps:GetSeries', 'aps:QueryMetrics']),
+  );
+  expect(ampQueryStatement).toMatchObject({
+    Effect: 'Allow',
+    Resource: {
+      'Fn::GetAtt': [expect.stringContaining('AmpWorkspace'), 'Arn'],
+    },
+  });
+
+  const cloudWatchQueryStatement = policyDocument.Statement.find(({ Action }) =>
+    policyActions(Action).includes('cloudwatch:GetMetricData'),
+  );
+  expect(new Set(policyActions(cloudWatchQueryStatement?.Action ?? []))).toEqual(
+    new Set(['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics', 'ec2:DescribeRegions']),
+  );
+  expect(cloudWatchQueryStatement).toMatchObject({
+    Effect: 'Allow',
+    Resource: '*',
+  });
+
+  const renderedGrafanaPolicy = JSON.stringify(policyDocument);
+  expect(renderedGrafanaPolicy).not.toContain('logs:');
+  expect(renderedGrafanaPolicy).not.toContain('xray:');
+  expect(renderedGrafanaPolicy).not.toContain('cloudwatch:DescribeAlarms');
+  expect(renderedGrafanaPolicy).not.toContain('sns:');
+  expect(renderedGrafanaPolicy).not.toContain('"Action":"*"');
+});
+
+test('restricts the Managed Grafana workspace to the configured CIDR and Identity Center', () => {
+  template.hasResourceProperties('AWS::EC2::PrefixList', {
+    AddressFamily: 'IPv4',
+    Entries: [
+      {
+        Cidr: '203.0.113.10/32',
+        Description: 'Trusted laptop CIDR for the disposable Grafana workspace',
+      },
+    ],
+    MaxEntries: 1,
+    PrefixListName: 'movie-reservation-platform-aws-demo-grafana-access',
+  });
+  template.hasResourceProperties('AWS::Grafana::Workspace', {
+    AccountAccessType: 'CURRENT_ACCOUNT',
+    AuthenticationProviders: ['AWS_SSO'],
+    Name: 'movie-reservation-platform-aws-demo',
+    NetworkAccessControl: {
+      PrefixListIds: [
+        {
+          'Fn::GetAtt': [Match.stringLikeRegexp('GrafanaAccessPrefixList'), 'PrefixListId'],
+        },
+      ],
+      VpceIds: [],
+    },
+    PermissionType: 'CUSTOMER_MANAGED',
+    RoleArn: {
+      'Fn::GetAtt': [Match.stringLikeRegexp('GrafanaDataAccessRole'), 'Arn'],
+    },
+  });
+
+  const [workspace] = findResources(template, 'AWS::Grafana::Workspace');
+  expect(workspace.DependsOn).toEqual(
+    expect.arrayContaining([expect.stringContaining('GrafanaDataAccessPolicy')]),
+  );
+  expect(workspace.DeletionPolicy).toBe('Delete');
+  expect(workspace.UpdateReplacePolicy).toBe('Delete');
+  expect(workspace.Properties).not.toHaveProperty('DataSources');
+  expect(workspace.Properties).not.toHaveProperty('GrafanaVersion');
+  expect(workspace.Properties).not.toHaveProperty('NotificationDestinations');
+  expect(workspace.Properties).not.toHaveProperty('PluginAdminEnabled');
+  expect(workspace.Properties).not.toHaveProperty('VpcConfiguration');
+});
+
 test('keeps AWS endpoint ingress on HTTPS without exposing collector ports', () => {
   const ingressRules = findResources(template, 'AWS::EC2::SecurityGroupIngress');
   const ingressPorts = ingressRules.map((rule) => rule.Properties?.FromPort);
@@ -501,10 +630,12 @@ test('grants only X-Ray, workspace-scoped AMP, and scoped EMF log writes to the 
   expect(renderedTemplate).not.toContain('CloudWatchAgentServerPolicy');
 });
 
-test('does not introduce deferred Grafana, database, or public-network resources', () => {
+test('does not introduce deferred databases, alarms, or public-network resources', () => {
   template.resourceCountIs('AWS::EC2::NatGateway', 0);
   template.resourceCountIs('AWS::APS::Workspace', 1);
-  template.resourceCountIs('AWS::Grafana::Workspace', 0);
+  template.resourceCountIs('AWS::Grafana::Workspace', 1);
+  template.resourceCountIs('AWS::EC2::PrefixList', 1);
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
   template.resourceCountIs('AWS::RDS::DBInstance', 0);
 
   const renderedTemplate = JSON.stringify(template.toJSON());
@@ -607,7 +738,7 @@ test.each(['30.5', '', true])('rejects noninteger metric export cadence: %p', (v
   ).toThrow('must be an integer');
 });
 
-test('outputs CloudWatch, ECS, and AMP identifiers for smoke tooling', () => {
+test('outputs CloudWatch, ECS, AMP, and Grafana identifiers', () => {
   template.hasOutput('CloudWatchApplicationMetricsNamespace', {
     Value: 'GoldenPath/aws-demo/movie-reservation-service',
   });
@@ -625,5 +756,13 @@ test('outputs CloudWatch, ECS, and AMP identifiers for smoke tooling', () => {
   });
   template.hasOutput('AmpPrometheusEndpoint', {
     Value: Match.anyValue(),
+  });
+  template.hasOutput('GrafanaWorkspaceId', {
+    Value: Match.anyValue(),
+  });
+  template.hasOutput('GrafanaWorkspaceUrl', {
+    Value: Match.objectLike({
+      'Fn::Join': Match.anyValue(),
+    }),
   });
 });

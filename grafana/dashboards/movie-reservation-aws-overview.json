@@ -1,0 +1,630 @@
+{
+  "__inputs": [
+    {
+      "description": "Amazon Managed Service for Prometheus data source for application and curated ECS metrics",
+      "label": "Amazon Managed Service for Prometheus",
+      "name": "DS_AMP",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus",
+      "type": "datasource"
+    },
+    {
+      "description": "CloudWatch data source for enhanced Container Insights and ALB health metrics",
+      "label": "Amazon CloudWatch",
+      "name": "DS_CLOUDWATCH",
+      "pluginId": "cloudwatch",
+      "pluginName": "CloudWatch",
+      "type": "datasource"
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "panels": [],
+      "title": "Overview",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 1 },
+      "id": 2,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum(rate(graphql_operation_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m]))",
+          "legendFormat": "operations/s",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "GraphQL Request Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "min": 0, "max": 1, "unit": "percentunit" },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 1 },
+      "id": 3,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum(rate(graphql_operation_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",outcome!=\"success\"}[5m])) / clamp_min(sum(rate(graphql_operation_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m])), 1e-9)",
+          "legendFormat": "error ratio",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "GraphQL Error Ratio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "unit": "ms" },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 1 },
+      "id": 4,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, business_operation) (rate(graphql_operation_duration_ms_bucket{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m])))",
+          "legendFormat": "{{business_operation}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "GraphQL P95 Latency",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+      "id": 5,
+      "panels": [],
+      "title": "Traffic",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "id": 6,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum by (http_route, status_family) (rate(http_request_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m]))",
+          "legendFormat": "{{http_route}} {{status_family}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP Rate by Route and Status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "id": 7,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum by (business_operation, outcome) (rate(graphql_operation_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m]))",
+          "legendFormat": "{{business_operation}} {{outcome}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "GraphQL Rate by Operation and Outcome",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "id": 8,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum(rate(reservation_request_created_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m]))",
+          "legendFormat": "created",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum(rate(reservation_processor_claim_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m]))",
+          "legendFormat": "claimed",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum(rate(reservation_processor_outcome_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",outcome=~\"confirmed|rejected|failed\"}[5m]))",
+          "legendFormat": "completed",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Reservation Created, Claimed, and Completed Rate",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "id": 9,
+      "panels": [],
+      "title": "Errors",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 17 },
+      "id": 10,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum by (http_route) (rate(http_request_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",status_family=\"5xx\"}[5m]))",
+          "legendFormat": "{{http_route}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP 5xx Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 17 },
+      "id": 11,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum by (business_operation, outcome) (rate(graphql_operation_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",outcome!=\"success\"}[5m]))",
+          "legendFormat": "{{business_operation}} {{outcome}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "GraphQL Error Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 17 },
+      "id": 12,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum by (outcome, reason) (rate(reservation_processor_outcome_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",outcome=~\"rejected|retryable-failure|failed\"}[5m]))",
+          "legendFormat": "processor {{outcome}} {{reason}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum by (exception_type) (rate(graphql_operation_exceptions_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m]))",
+          "legendFormat": "GraphQL {{exception_type}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum by (exception_type) (rate(reservation_processor_exceptions_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m]))",
+          "legendFormat": "processor {{exception_type}}",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Reservation Failures and Diagnostic Exception Rate",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 25 },
+      "id": 13,
+      "panels": [],
+      "title": "Latency",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "unit": "ms" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 26 },
+      "id": 14,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum by (le, http_route) (rate(http_request_duration_ms_bucket{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m])))",
+          "legendFormat": "p50 {{http_route}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(http_request_duration_ms_bucket{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m])))",
+          "legendFormat": "p95 {{http_route}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum by (le, http_route) (rate(http_request_duration_ms_bucket{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m])))",
+          "legendFormat": "p99 {{http_route}}",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "HTTP Latency p50/p95/p99",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "unit": "ms" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 26 },
+      "id": 15,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum by (le, business_operation) (rate(graphql_operation_duration_ms_bucket{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m])))",
+          "legendFormat": "p50 {{business_operation}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, business_operation) (rate(graphql_operation_duration_ms_bucket{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m])))",
+          "legendFormat": "p95 {{business_operation}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum by (le, business_operation) (rate(graphql_operation_duration_ms_bucket{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m])))",
+          "legendFormat": "p99 {{business_operation}}",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "GraphQL Latency p50/p95/p99",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "unit": "ms" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 26 },
+      "id": 16,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum by (le, outcome) (rate(reservation_processor_duration_ms_bucket{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m])))",
+          "legendFormat": "p50 {{outcome}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(reservation_processor_duration_ms_bucket{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m])))",
+          "legendFormat": "p95 {{outcome}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum by (le, outcome) (rate(reservation_processor_duration_ms_bucket{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\"}[5m])))",
+          "legendFormat": "p99 {{outcome}}",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Reservation Processor Latency p50/p95/p99",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
+      "id": 17,
+      "panels": [],
+      "title": "Saturation",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "A" },
+            "properties": [{ "id": "unit", "value": "suffix: vCPU" }]
+          },
+          {
+            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "properties": [{ "id": "unit", "value": "percent" }]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 35 },
+      "id": 18,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum by (aws_ecs_service_name) (ecs_task_cpu_reserved{aws_ecs_service_name=\"movie-reservation-service\",cloud_region=\"eu-central-1\"})",
+          "legendFormat": "reserved",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum by (aws_ecs_service_name) (ecs_task_cpu_utilized{aws_ecs_service_name=\"movie-reservation-service\",cloud_region=\"eu-central-1\"})",
+          "legendFormat": "utilized",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "ECS CPU Reserved vs Utilized",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+      "fieldConfig": {
+        "defaults": { "unit": "suffix: MiB" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 35 },
+      "id": 19,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum by (aws_ecs_service_name) (ecs_task_memory_reserved{aws_ecs_service_name=\"movie-reservation-service\",cloud_region=\"eu-central-1\"})",
+          "legendFormat": "reserved",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
+          "editorMode": "code",
+          "expr": "sum by (aws_ecs_service_name) (ecs_task_memory_utilized{aws_ecs_service_name=\"movie-reservation-service\",cloud_region=\"eu-central-1\"})",
+          "legendFormat": "utilized",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "ECS Memory Reserved vs Utilized",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "fieldConfig": {
+        "defaults": { "decimals": 0, "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 35 },
+      "id": 20,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": {
+            "ClusterName": "movie-reservation-platform-aws-demo",
+            "ServiceName": "movie-reservation-service"
+          },
+          "label": "running tasks",
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "RunningTaskCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "A",
+          "region": "eu-central-1",
+          "statistic": "Average"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": {
+            "ClusterName": "movie-reservation-platform-aws-demo",
+            "ServiceName": "movie-reservation-service"
+          },
+          "label": "desired tasks",
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "DesiredTaskCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "B",
+          "region": "eu-central-1",
+          "statistic": "Average"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": {
+            "LoadBalancer": "*",
+            "TargetGroup": "*"
+          },
+          "label": "healthy ${PROP('Dim.LoadBalancer')} ${PROP('Dim.TargetGroup')}",
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "HealthyHostCount",
+          "metricQueryType": 0,
+          "namespace": "AWS/ApplicationELB",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "C",
+          "region": "eu-central-1",
+          "statistic": "Average"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": {
+            "LoadBalancer": "*",
+            "TargetGroup": "*"
+          },
+          "label": "unhealthy ${PROP('Dim.LoadBalancer')} ${PROP('Dim.TargetGroup')}",
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "UnHealthyHostCount",
+          "metricQueryType": 0,
+          "namespace": "AWS/ApplicationELB",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "D",
+          "region": "eu-central-1",
+          "statistic": "Average"
+        }
+      ],
+      "title": "ECS Service and ALB Target Health",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["aws", "ecs", "managed-observability", "movie-reservation"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Movie Reservation AWS Overview",
+  "uid": "movie-reservation-aws-overview",
+  "version": 1,
+  "weekStart": ""
+}

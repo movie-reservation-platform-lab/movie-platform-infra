@@ -25,6 +25,10 @@ slice:
   and eight curated ECS task/container CPU and memory metrics to AMP;
 - enhanced ECS Container Insights for the AWS-native task/container view;
 - a disposable AMP workspace with seven-day retention;
+- a CIDR-restricted Amazon Managed Grafana workspace, customer-managed
+  metric-read role, and one-entry access prefix list;
+- a versioned 15-panel dashboard artifact with AMP and CloudWatch import
+  inputs;
 - VPC endpoints for ECR image pull, CloudWatch log delivery, X-Ray writes, AMP
   remote write, and regional STS identity calls.
 
@@ -32,10 +36,11 @@ The stack runs the app with `COMPOSITION_PROFILE=local-fixed-user` and in-memory
 persistence. The AWS demo enables the fake in-process worker and deterministic
 failure injection so smoke traffic creates useful metric outcomes. Issue #37's
 trace path and issue #38 PR #41's CloudWatch application-metric path are
-included. The current issue #38 slice adds AMP, ECS metrics, and enhanced
-Container Insights; the final slice owns Amazon Managed Grafana. Database work
-is separate: issue #7 owns RDS and a deployment-time ECS migration `RunTask`.
-A Postgres sidecar is not planned for this stack.
+included. Issue #38 now includes the delivered AMP, ECS metrics, and enhanced
+Container Insights path; the current slice adds Amazon Managed Grafana and the
+initial metrics dashboard. Database work is separate: issue #7 owns RDS and a
+deployment-time ECS migration `RunTask`. A Postgres sidecar is not planned for
+this stack.
 
 ## Useful commands
 
@@ -47,6 +52,7 @@ npm -w ecs-infra test
 npm -w ecs-infra run validate:adot-image
 npm -w ecs-infra run validate:xray-smoke
 npm -w ecs-infra run validate:managed-metrics-smoke
+npm -w ecs-infra run validate:grafana-dashboard
 npm -w ecs-infra run cdk -- synth -c allowedIngressCidr=203.0.113.10/32
 ```
 
@@ -106,7 +112,8 @@ npm -w ecs-infra run cdk -- deploy GoldenPathDemoStack \
 Do not run `deploy` until the account, region, stack name, public ingress CIDR,
 and expected cost are clear. This stack creates a public ALB, ECS/Fargate
 service, two ECR image assets, four CloudWatch log groups, custom and enhanced
-Container Insights metrics, an AMP workspace, and six interface VPC endpoints.
+Container Insights metrics, AMP and Managed Grafana workspaces, a Grafana
+access prefix list and role, and six interface VPC endpoints.
 
 After deployment, run the deterministic trace smoke with the same explicit
 profile and Region:
@@ -145,14 +152,15 @@ npm -w ecs-infra run cdk -- destroy GoldenPathDemoStack \
   -c allowedIngressCidr=<your-public-ip>/32
 ```
 
-Confirm that the CloudFormation stack, ALB, ECS service/tasks, AMP workspace,
-VPC endpoints, and all four log groups are gone. Ingested X-Ray traces and
-historical CloudWatch metric datapoints follow their service retention; stack
-destruction stops new publication but does not delete that history immediately.
-CDK bootstrap resources are account/region-level and
-are not part of `GoldenPathDemoStack`; their S3 bucket and ECR repository remain
-for future CDK deployments and should be reviewed separately if the account is
-being fully cleaned up.
+Confirm that the CloudFormation stack, ALB, ECS service/tasks, AMP and Grafana
+workspaces, Grafana access prefix list and role, VPC endpoints, and all four log
+groups are gone. Ingested X-Ray traces and historical CloudWatch metric
+datapoints follow their service retention; stack destruction stops new
+publication but does not delete that history immediately. CDK bootstrap,
+Organizations, and IAM Identity Center resources are account/Region-level and
+are not part of `GoldenPathDemoStack`; they remain for future deployments and
+human access unless deliberately retired through a separate account-level
+procedure.
 
 ## Reference docs
 
@@ -185,7 +193,7 @@ Application metric export defaults to 30 seconds. Use
 `-c metricsExportIntervalSeconds=<5-300>` consistently across CDK commands to
 test another cadence.
 
-The current slice accepts the region-specific hourly cost of six one-AZ
+The delivered metric slices accept the region-specific hourly cost of six one-AZ
 interface endpoints after comparing the full inventory with a NAT-based
 alternative. The no-NAT decision is a deliberate checkpoint, not a rule that
 every future AWS service must receive another endpoint automatically.

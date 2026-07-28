@@ -6,6 +6,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as grafana from 'aws-cdk-lib/aws-grafana';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
@@ -17,6 +18,8 @@ import type { PlatformConfig } from './config/platform-config';
 const APP_CONTAINER_PORT = 3000;
 const APP_DOCKERFILE = 'movie-reservation-service/Dockerfile';
 const AMP_REMOTE_WRITE_ACTIONS = ['aps:RemoteWrite'];
+const AMP_QUERY_ACTIONS = ['aps:GetLabels', 'aps:GetMetricMetadata', 'aps:GetSeries', 'aps:QueryMetrics'];
+const CLOUDWATCH_METRIC_READ_ACTIONS = ['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics'];
 const STS_IDENTITY_ACTIONS = ['sts:GetCallerIdentity'];
 const XRAY_WRITE_ACTIONS = ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'];
 const RESERVATION_FAILURE_INJECTION_SALT = 'aws-demo-managed-observability';
@@ -41,8 +44,9 @@ export interface GoldenPathDemoStackProps extends cdk.StackProps {
  * - the S3, ECR, CloudWatch Logs, X-Ray, AMP, and STS endpoints required by private tasks
  * - an optional SSM Messages endpoint and task permissions for ECS Exec
  * - a disposable AMP workspace and enhanced ECS Container Insights
+ * - a CIDR-restricted Managed Grafana workspace and customer-managed metric-read role
  * - the service and ADOT image assets, log groups, task definition, ECS service, and ALB
- * - common resource tags plus ALB, CloudWatch, ECS, and AMP outputs
+ * - common resource tags plus ALB, CloudWatch, ECS, AMP, and Grafana outputs
  *
  * The backend uses the in-memory demo composition and exports OTLP/HTTP traces
  * and metrics through a nonessential ADOT sidecar. ADOT sends traces to X-Ray
@@ -136,6 +140,80 @@ export class GoldenPathDemoStack extends cdk.Stack {
     });
     ampWorkspace.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
     tagServiceResource(ampWorkspace);
+
+    // The workspace ARN is deliberately wildcarded in the trust policy to
+    // avoid a CloudFormation cycle: Grafana needs this role ARN while creating
+    // the workspace. SourceAccount and the same-account workspace ARN pattern
+    // still prevent another service or account from assuming the role.
+    const grafanaWorkspaceSourceArn = cdk.Fn.join('', [
+      'arn:',
+      cdk.Aws.PARTITION,
+      ':grafana:',
+      cdk.Aws.REGION,
+      ':',
+      cdk.Aws.ACCOUNT_ID,
+      ':/workspaces/*',
+    ]);
+    const grafanaDataAccessRole = new iam.Role(this, 'GrafanaDataAccessRole', {
+      description: 'Allows the Managed Grafana workspace to query the demo AMP and CloudWatch metrics',
+      assumedBy: new iam.ServicePrincipal('grafana.amazonaws.com', {
+        conditions: {
+          ArnLike: {
+            'aws:SourceArn': grafanaWorkspaceSourceArn,
+          },
+          StringEquals: {
+            'aws:SourceAccount': cdk.Aws.ACCOUNT_ID,
+          },
+        },
+      }),
+    });
+    const grafanaDataAccessPolicy = new iam.Policy(this, 'GrafanaDataAccessPolicy', {
+      roles: [grafanaDataAccessRole],
+      statements: [
+        new iam.PolicyStatement({
+          actions: AMP_QUERY_ACTIONS,
+          resources: [ampWorkspace.attrArn],
+        }),
+        new iam.PolicyStatement({
+          // These metric discovery/query and Region discovery APIs do not
+          // support useful resource-level scoping.
+          actions: [...CLOUDWATCH_METRIC_READ_ACTIONS, 'ec2:DescribeRegions'],
+          resources: ['*'],
+        }),
+      ],
+    });
+
+    const grafanaAccessPrefixList = new ec2.CfnPrefixList(this, 'GrafanaAccessPrefixList', {
+      addressFamily: 'IPv4',
+      entries: [
+        {
+          cidr: platformConfig.allowedIngressCidr,
+          description: 'Trusted laptop CIDR for the disposable Grafana workspace',
+        },
+      ],
+      maxEntries: 1,
+      prefixListName: `${platformConfig.platformName}-${platformConfig.environmentName}-grafana-access`,
+    });
+    tagServiceResource(grafanaAccessPrefixList);
+
+    const grafanaWorkspace = new grafana.CfnWorkspace(this, 'GrafanaWorkspace', {
+      accountAccessType: 'CURRENT_ACCOUNT',
+      authenticationProviders: ['AWS_SSO'],
+      description: 'Managed metrics dashboard for the movie reservation AWS demo',
+      name: `${platformConfig.platformName}-${platformConfig.environmentName}`,
+      networkAccessControl: {
+        prefixListIds: [grafanaAccessPrefixList.attrPrefixListId],
+        vpceIds: [],
+      },
+      permissionType: 'CUSTOMER_MANAGED',
+      roleArn: grafanaDataAccessRole.roleArn,
+    });
+    // roleArn creates a dependency on the role itself, not on its separately
+    // synthesized AWS::IAM::Policy. Wait for both before Grafana validates and
+    // starts using the customer-managed role.
+    grafanaWorkspace.node.addDependency(grafanaDataAccessPolicy);
+    grafanaWorkspace.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    tagServiceResource(grafanaWorkspace);
 
     vpc.addGatewayEndpoint('S3Endpoint', {
       service: ec2.GatewayVpcEndpointAwsService.S3,
@@ -447,6 +525,14 @@ export class GoldenPathDemoStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'AmpPrometheusEndpoint', {
       value: ampWorkspace.attrPrometheusEndpoint,
       description: 'Base Prometheus-compatible API endpoint for the AMP workspace',
+    });
+    new cdk.CfnOutput(this, 'GrafanaWorkspaceId', {
+      value: grafanaWorkspace.attrId,
+      description: 'Amazon Managed Grafana workspace ID',
+    });
+    new cdk.CfnOutput(this, 'GrafanaWorkspaceUrl', {
+      value: cdk.Fn.join('', ['https://', grafanaWorkspace.attrEndpoint]),
+      description: 'HTTPS URL for the Amazon Managed Grafana workspace',
     });
   }
 }
