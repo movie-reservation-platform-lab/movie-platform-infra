@@ -11,12 +11,10 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
-import { readDockerfileIgnorePatterns } from './assets/docker-build-context';
-import { readPackageVersion } from './assets/package-metadata';
+import { resolveApplicationImage } from './application-image';
 import type { PlatformConfig } from './config/platform-config';
 
 const APP_CONTAINER_PORT = 3000;
-const APP_DOCKERFILE = 'movie-reservation-service/Dockerfile';
 const AMP_REMOTE_WRITE_ACTIONS = ['aps:RemoteWrite'];
 const AMP_QUERY_ACTIONS = ['aps:GetLabels', 'aps:GetMetricMetadata', 'aps:GetSeries', 'aps:QueryMetrics'];
 const CLOUDWATCH_METRIC_READ_ACTIONS = ['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics'];
@@ -295,16 +293,10 @@ export class GoldenPathDemoStack extends cdk.Stack {
     cluster.node.addDependency(containerInsightsLogGroup);
 
     const repositoryRoot = path.join(__dirname, '..', '..');
-    const appImage = new ecrAssets.DockerImageAsset(this, 'AppImage', {
-      directory: repositoryRoot,
-      file: APP_DOCKERFILE,
-      exclude: readDockerfileIgnorePatterns(repositoryRoot, APP_DOCKERFILE),
-      ignoreMode: cdk.IgnoreMode.DOCKER,
-    });
+    const applicationImage = resolveApplicationImage(this);
     const adotImage = new ecrAssets.DockerImageAsset(this, 'AdotImage', {
       directory: path.join(repositoryRoot, 'ecs-infra', 'adot-collector'),
     });
-    const serviceVersion = readPackageVersion(path.join(repositoryRoot, 'movie-reservation-service', 'package.json'));
     const cloudWatchApplicationMetricsNamespace =
       `GoldenPath/${platformConfig.environmentName}/${platformConfig.serviceName}`;
 
@@ -367,7 +359,7 @@ export class GoldenPathDemoStack extends cdk.Stack {
 
     const appContainer = taskDefinition.addContainer('AppContainer', {
       containerName: platformConfig.serviceName,
-      image: ecs.ContainerImage.fromDockerImageAsset(appImage),
+      image: applicationImage.image,
       essential: true,
       cpu: 384,
       memoryLimitMiB: 640,
@@ -380,7 +372,7 @@ export class GoldenPathDemoStack extends cdk.Stack {
         HOST: '0.0.0.0',
         NODE_ENV: 'development',
         LOG_LEVEL: 'info',
-        SERVICE_VERSION: serviceVersion,
+        SERVICE_VERSION: applicationImage.serviceVersion,
         COMPOSITION_PROFILE: 'local-fixed-user',
         RESERVATION_WORKER_MODE: 'fake-in-process',
         RESERVATION_FAILURE_INJECTION_MODE: 'stable-random-unexpected-error',

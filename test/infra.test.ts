@@ -2,6 +2,7 @@ import * as path from 'node:path';
 
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
+import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 
 import { readDockerfileIgnorePatterns } from '../lib/assets/docker-build-context';
 import { readPackageVersion } from '../lib/assets/package-metadata';
@@ -43,16 +44,18 @@ interface SynthesizedContainerDefinition {
   readonly StopTimeout?: number;
 }
 
-function synthesizeTemplate(context: PlatformConfigContext = {}) {
+function createStack(context: PlatformConfigContext = {}) {
   const app = new cdk.App();
-  const stack = new GoldenPathDemoStack(app, 'TestStack', {
+  return new GoldenPathDemoStack(app, 'TestStack', {
     platformConfig: resolvePlatformConfig({
       allowedIngressCidr: '203.0.113.10/32',
       ...context,
     }),
   });
+}
 
-  return Template.fromStack(stack);
+function synthesizeTemplate(context: PlatformConfigContext = {}) {
+  return Template.fromStack(createStack(context));
 }
 
 function findResources(templateToSearch: Template, resourceType: string): SynthesizedResource[] {
@@ -89,6 +92,10 @@ test('isolates the app image asset from sibling workspaces', () => {
   expect(ignoreStrategy.ignores(path.join(REPOSITORY_ROOT, 'ecs-infra/package.json'))).toBe(true);
   expect(ignoreStrategy.ignores(path.join(REPOSITORY_ROOT, 'movie-reservation-web/package.json'))).toBe(true);
   expect(ignoreStrategy.ignores(path.join(REPOSITORY_ROOT, 'docs/plans/ecs-adot-managed-observability.md'))).toBe(true);
+});
+
+test('resolves the local application image as the existing AppImage asset', () => {
+  expect(createStack().node.tryFindChild('AppImage')).toBeInstanceOf(ecrAssets.DockerImageAsset);
 });
 
 test('reads the service version from structured package metadata', () => {
