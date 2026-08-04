@@ -1,0 +1,110 @@
+# Project AI Guidance
+
+This repository is the standalone AWS CDK infrastructure repository for the
+Movie Reservation Platform Lab.
+
+The user is learning TypeScript, AWS CDK, ECS/Fargate, observability, and
+platform engineering. Understanding is part of the deliverable: keep
+explanations concrete, tie them to actual files, and explain tradeoffs instead
+of hiding them behind broad abstractions.
+
+## Repository Layout
+
+- `bin/`: CDK app entrypoint.
+- `lib/`: stack, configuration boundary, and infrastructure helpers.
+- `adot-collector/`: repository-owned ADOT collector Docker image asset.
+- `grafana/dashboards/`: dashboard artifacts for managed observability.
+- `scripts/`: local validation and post-deploy smoke tooling.
+- `test/`: Jest tests using CDK assertions and script self-tests.
+- `.ai/`: source of truth for AI guidance, rules, skills, and review agents.
+  `AGENTS.md` is generated from this folder by `.ai/sync.sh`.
+
+## Dev Environment Tips
+
+- Use `npm`, not pnpm or yarn.
+- This is a standalone package, not an npm workspace.
+- Run commands from this repository root.
+- Check `package.json` before inventing commands or assuming tooling.
+- Read existing docs and source before asking questions the repository can answer.
+
+## Build And Test Commands
+
+- Install dependencies: `npm ci`
+- Build: `npm run build`
+- Tests: `npm test`
+- ADOT image validation: `npm run validate:adot-image`
+- X-Ray smoke-tool self-test: `npm run validate:xray-smoke`
+- Managed-metrics smoke-tool self-test: `npm run validate:managed-metrics-smoke`
+- Grafana dashboard validation: `npm run validate:grafana-dashboard`
+- Digest-pinned synth contract: `npm run synth:ecr-contract`
+- Full local CI equivalent: `npm run ci`
+- CDK commands: `npm run cdk -- <args>`
+
+Run the narrowest useful check while iterating, then run the relevant full check
+before handing work back.
+
+## Code And Architecture Conventions
+
+- Prefer small, incremental changes that fit the existing CDK structure.
+- Do not over-engineer early abstractions; extract patterns only after the
+  duplication or boundary is real.
+- Keep untrusted CDK context handling inside `lib/config/platform-config.ts`.
+- Keep stack construction in `lib/infra-stack.ts` readable enough to map CDK
+  constructs to synthesized CloudFormation resources.
+- Application repositories publish immutable artifacts. This repository consumes
+  image references pinned by digest and must not build sibling application
+  source during synth or deployment.
+- Use explicit, readable TypeScript types when they improve clarity.
+- Distinguish compile-time TypeScript safety from runtime validation at CDK
+  context and script boundaries.
+
+## Planning Guidance
+
+- For non-trivial infrastructure, deployment, observability, IAM, networking,
+  or repository-boundary changes, plan before implementing.
+- Use the `principal-engineer-planner` skill for ambiguous, cross-cutting,
+  risky, or design-heavy work.
+- Prefer the smallest design that satisfies the requirements and fits existing
+  repository conventions.
+
+## Testing Guidance
+
+- Add or update tests for behavior changes.
+- Infra tests use Jest and CDK assertions.
+- Shell smoke tooling should have syntax checks and self-tests where practical.
+- Digest-pinned synth should stay offline with `--no-lookups` in CI.
+- After moving files or changing imports, run build and tests for this package.
+
+## Security And Operations
+
+- Do not commit secrets, credentials, tokens, local `.env` values, or generated
+  cloud state.
+- Treat IAM, networking, public exposure, image provenance, logging, and
+  teardown as explicit design decisions.
+- Do not deploy, destroy, promote, or mutate AWS resources without explicit user
+  instruction.
+- Keep AWS environments disposable and cost-aware until the platform promotion
+  model is intentionally introduced.
+
+## Documentation And Review
+
+- Update docs for architecture decisions, operations, deployment workflow,
+  repository contracts, or developer workflow changes.
+- For documentation-only changes, inspect the relevant diff. Do not run builds
+  or tests unless the changed docs are tied to commands or repository checks.
+- PR or review summaries should explain what changed, why it changed, and how
+  it was verified.
+
+## Curated Technology Resources
+
+Prefer these project-approved sources over generic tutorials:
+
+| Technology | Purpose | Preferred sources |
+| --- | --- | --- |
+| TypeScript + Node.js | CDK language/runtime | [TypeScript Handbook](https://www.typescriptlang.org/docs/), [TSConfig Reference](https://www.typescriptlang.org/tsconfig/), [Node.js Learn](https://nodejs.org/learn) |
+| Jest + CDK assertions | Infrastructure tests | [Jest docs](https://jestjs.io/docs/getting-started), [CDK testing docs](https://docs.aws.amazon.com/cdk/v2/guide/testing.html) |
+| AWS CDK + Constructs | Infrastructure as code | [CDK v2 guide](https://docs.aws.amazon.com/cdk/v2/guide/home.html), [CDK best practices](https://docs.aws.amazon.com/cdk/v2/guide/best-practices.html), [CDK API reference](https://docs.aws.amazon.com/cdk/api/v2/) |
+| ECS/Fargate/ALB | Primary AWS deployment target | [ECS guide](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/Welcome.html), [Fargate guide](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html), [ECS load balancing](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-load-balancing.html) |
+| Docker | ADOT collector image asset | [Docker build best practices](https://docs.docker.com/build/building/best-practices/) |
+| GitHub Actions | Repository CI automation | [GitHub Actions docs](https://docs.github.com/en/actions) |
+| OpenTelemetry | Traces, metrics, and collector configuration | [OTel concepts](https://opentelemetry.io/docs/concepts/), [OTel Collector](https://opentelemetry.io/docs/collector/) |

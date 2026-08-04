@@ -292,10 +292,10 @@ export class GoldenPathDemoStack extends cdk.Stack {
     });
     cluster.node.addDependency(containerInsightsLogGroup);
 
-    const repositoryRoot = path.join(__dirname, '..', '..');
+    const repositoryRoot = process.cwd();
     const applicationImage = resolveApplicationImage(this, platformConfig.applicationImage);
     const adotImage = new ecrAssets.DockerImageAsset(this, 'AdotImage', {
-      directory: path.join(repositoryRoot, 'ecs-infra', 'adot-collector'),
+      directory: path.join(repositoryRoot, 'adot-collector'),
     });
     const cloudWatchApplicationMetricsNamespace =
       `GoldenPath/${platformConfig.environmentName}/${platformConfig.serviceName}`;

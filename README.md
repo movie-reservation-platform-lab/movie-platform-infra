@@ -1,182 +1,161 @@
-# ECS Infra
+# Movie Platform Infra
 
-AWS CDK app for the golden-path ECS demo environment.
+Standalone AWS CDK infrastructure for the Movie Reservation Platform Lab AWS
+demo.
 
-For one-time AWS account access and bootstrap setup plus the complete local
-synth, deploy, verification, teardown, and cost-control procedure, see the
-[local AWS CDK deployment runbook](../docs/operations/aws-cdk-local-deployment.md).
+This repository owns platform infrastructure only. Application repositories
+build, test, and publish immutable artifacts; this CDK app consumes application
+images by private ECR digest and does not build sibling repository source during
+synth or deployment.
 
-The current stack is `GoldenPathDemoStack`. It models the first backend-only ECS
-slice:
+## Current Stack
+
+The current stack is `GoldenPathDemoStack`. It models the first AWS demo
+reservation workload:
 
 - public Application Load Balancer;
-- VPC public and isolated subnet groups spanning two Availability Zones;
-- private isolated Fargate task and interface endpoints pinned to one workload
-  Availability Zone;
+- two-AZ VPC with public and isolated subnet groups;
+- private isolated Fargate task pinned to one workload Availability Zone;
 - no NAT Gateway;
-- platform-scoped ECS application cluster named
-  `movie-reservation-platform-aws-demo`;
-- CDK Docker image assets for `movie-reservation-service` and the repository-owned
-  ADOT collector;
-- separate one-week CloudWatch log groups for the app, collector, EMF
-  application metrics, and enhanced Container Insights performance events;
-- nonessential ADOT sidecar receiving OTLP/HTTP on task loopback and exporting
-  traces to X-Ray, the ten existing application metrics to CloudWatch and AMP,
-  and eight curated ECS task/container CPU and memory metrics to AMP;
-- enhanced ECS Container Insights for the AWS-native task/container view;
-- a disposable AMP workspace with seven-day retention;
-- a CIDR-restricted Amazon Managed Grafana workspace, customer-managed
-  metric-read role, and one-entry access prefix list;
-- a versioned 15-panel dashboard artifact with AMP and CloudWatch import
-  inputs;
-- VPC endpoints for ECR image pull, CloudWatch log delivery, X-Ray writes, AMP
-  remote write, and regional STS identity calls.
+- ECS cluster named `movie-reservation-platform-aws-demo`;
+- imported digest-pinned reservation service image from private ECR;
+- repository-owned ADOT collector Docker image asset;
+- one-week CloudWatch log groups for app logs, collector logs, application
+  metrics, and enhanced Container Insights performance events;
+- ADOT sidecar exporting traces to X-Ray and application/ECS metrics to
+  CloudWatch and AMP;
+- disposable AMP workspace and CIDR-restricted Amazon Managed Grafana workspace;
+- VPC endpoints for ECR image pull, CloudWatch Logs, X-Ray, AMP remote write,
+  and STS.
 
-The stack runs the app with `COMPOSITION_PROFILE=local-fixed-user` and in-memory
-persistence. The AWS demo enables the fake in-process worker and deterministic
-failure injection so smoke traffic creates useful metric outcomes. Issue #37's
-trace path and issue #38 PR #41's CloudWatch application-metric path are
-included. Issue #38 now includes the delivered AMP, ECS metrics, and enhanced
-Container Insights path; the current slice adds Amazon Managed Grafana and the
-initial metrics dashboard. Database work is separate: issue #7 owns RDS and a
-deployment-time ECS migration `RunTask`. A Postgres sidecar is not planned for
-this stack.
+The stack still runs the reservation service with
+`COMPOSITION_PROFILE=local-fixed-user` for the disposable demo. Database,
+multi-service topology, frontend hosting, MCP services, promotion automation,
+and environment manifests are separate follow-up slices.
 
-## Useful commands
+## Useful Commands
 
-Run commands from the repository root:
+Run commands from this repository root:
 
 ```bash
-npm -w ecs-infra run build
-npm -w ecs-infra test
-npm -w ecs-infra run validate:adot-image
-npm -w ecs-infra run validate:xray-smoke
-npm -w ecs-infra run validate:managed-metrics-smoke
-npm -w ecs-infra run validate:grafana-dashboard
-npm -w ecs-infra run cdk -- synth -c allowedIngressCidr=203.0.113.10/32
+npm ci
+npm run build
+npm test
+npm run validate:adot-image
+npm run validate:xray-smoke
+npm run validate:managed-metrics-smoke
+npm run validate:grafana-dashboard
+npm run synth:ecr-contract
+npm run ci
 ```
 
-The collector Dockerfile pins the official Public ECR ADOT `v0.48.0` image at
-multi-architecture digest
-`sha256:9b28046359054b414f4ba76056ba4e8cffda2d53fbcee06171d7eeecd71326c3`,
-verified on 2026-07-18. That release does not expose a standalone config
-validation subcommand, so `validate:adot-image` proves the exact baked config by
-starting the pinned collector and reaching its bundled `/healthcheck` binary.
-Successful startup also proves the referenced OTLP and ECS container-metrics
-receivers, memory limiter, filter/resource/attributes/batch processors,
-X-Ray/EMF/Prometheus remote-write exporters, SigV4 authentication, and health
-extension are present.
+`npm run synth:ecr-contract` uses a fake account, fake repository, and all-zero
+digest with `--no-lookups`. It proves the CDK app accepts an immutable image
+contract offline; it does not prove the image exists in AWS.
 
-For a real deploy, replace `203.0.113.10/32` with your current public IP CIDR.
-That context value controls which source IP range can reach the public ALB on
-HTTP port 80. The configuration boundary rejects `0.0.0.0/0`; the current demo
-must not expose the listener to the entire internet.
+## Application Image Contract
 
-The VPC topology and workload placement are intentionally not CDK context
-options. The VPC spans two Availability Zones because an internet-facing ALB
-requires that shape. The single Fargate task and each interface endpoint use
-one selected workload subnet to keep the disposable demo cheaper. Cross-zone
-load balancing is explicitly enabled so both ALB nodes can route to that target.
-A production-shaped deployment should place workloads and endpoints in at
-least two Availability Zones.
+Standalone synth/deploy requires both application image inputs:
 
-## CDK workflow
+```bash
+npm run cdk -- synth \
+  -c allowedIngressCidr=203.0.113.10/32 \
+  -c applicationImageReference=111111111111.dkr.ecr.eu-central-1.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
+  -c applicationServiceVersion=<release-id>
+```
 
-CDK has three separate steps that are easy to blur together:
+The image reference must be a private ECR URI pinned by `sha256` digest. Mutable
+tags such as `latest` or `1.2.3` are rejected. In ECR image mode,
+`CDK_DEFAULT_ACCOUNT` and `CDK_DEFAULT_REGION` must match the registry account
+and Region encoded in the image URI.
+
+## CDK Workflow
+
+CDK has three separate steps:
 
 - `synth` runs the TypeScript app and writes a CloudFormation template to
-  `ecs-infra/cdk.out`.
-- `bootstrap` prepares one AWS account and region for CDK deployments by
-  creating the CDK toolkit resources, including asset storage.
+  `cdk.out`.
+- `bootstrap` prepares one AWS account and Region for CDK deployments by
+  creating CDK toolkit resources, including asset storage.
 - `deploy` publishes assets, creates a CloudFormation change set, and applies it
-  to the selected AWS account and region.
+  to the selected AWS account and Region.
 
-Use this order for the first real deployment:
+Use this order for a real deployment:
 
 ```bash
 aws sts get-caller-identity
 
-npm -w ecs-infra run cdk -- bootstrap aws://<account-id>/<region> \
-  -c allowedIngressCidr=<your-public-ip>/32
+npm run cdk -- bootstrap aws://<account-id>/<region> \
+  -c allowedIngressCidr=<your-public-ip>/32 \
+  -c applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
+  -c applicationServiceVersion=<release-id>
 
-npm -w ecs-infra run cdk -- synth \
-  -c allowedIngressCidr=<your-public-ip>/32
+npm run cdk -- synth \
+  -c allowedIngressCidr=<your-public-ip>/32 \
+  -c applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
+  -c applicationServiceVersion=<release-id>
 
-npm -w ecs-infra run cdk -- diff \
-  -c allowedIngressCidr=<your-public-ip>/32
+npm run cdk -- diff \
+  -c allowedIngressCidr=<your-public-ip>/32 \
+  -c applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
+  -c applicationServiceVersion=<release-id>
 
-npm -w ecs-infra run cdk -- deploy GoldenPathDemoStack \
-  -c allowedIngressCidr=<your-public-ip>/32
+npm run cdk -- deploy GoldenPathDemoStack \
+  -c allowedIngressCidr=<your-public-ip>/32 \
+  -c applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
+  -c applicationServiceVersion=<release-id>
 ```
 
-Do not run `deploy` until the account, region, stack name, public ingress CIDR,
-and expected cost are clear. This stack creates a public ALB, ECS/Fargate
-service, two ECR image assets, four CloudWatch log groups, custom and enhanced
-Container Insights metrics, AMP and Managed Grafana workspaces, a Grafana
-access prefix list and role, and six interface VPC endpoints.
+Do not run `deploy` until the account, Region, stack name, ingress CIDR,
+selected application digest, and expected cost are clear. This stack creates a
+public ALB, ECS/Fargate service, an ADOT Docker image asset, CloudWatch log
+groups, custom and enhanced Container Insights metrics, AMP and Managed Grafana
+workspaces, a Grafana access prefix list and role, and interface VPC endpoints.
 
-After deployment, run the deterministic trace smoke with the same explicit
-profile and Region:
+For a real deploy, replace `203.0.113.10/32` with your current public IP CIDR.
+The configuration boundary rejects `0.0.0.0/0`; the current demo must not expose
+the listener to the entire internet.
+
+## Smoke Tooling
+
+After deployment, run the deterministic trace smoke with the same AWS profile
+and Region:
 
 ```bash
 AWS_PROFILE=<profile> AWS_REGION=<region> \
-  npm -w ecs-infra run smoke:xray -- --report /tmp/xray-smoke.json
+  npm run smoke:xray -- --report /tmp/xray-smoke.json
 ```
 
-The report includes the generated W3C `traceparent` and converted X-Ray trace
-ID so the exact request can be inspected without broad time-window searches.
-
-Install `awscurl` once on the laptop, then run the managed-metrics smoke
-separately:
+Install `awscurl` once on the laptop, then run the managed-metrics smoke:
 
 ```bash
 AWS_PROFILE=<profile> AWS_REGION=<region> \
-  npm -w ecs-infra run smoke:managed-metrics -- \
-  --report /tmp/managed-metrics-smoke.json
+  npm run smoke:managed-metrics -- --report /tmp/managed-metrics-smoke.json
 ```
 
-It generates bounded reservation traffic, requires both confirmed and
-failed/rejected outcomes, and then proves:
+## Teardown
 
-- `graphql_operation_total` is queryable from both CloudWatch and AMP;
-- all eight allowlisted ECS task/container CPU and memory metrics are present
-  in AMP with the expected stable label contract and without task/container
-  identity labels;
-- task/container CPU and memory utilization are present through enhanced
-  Container Insights in CloudWatch.
-
-After testing, destroy the stack with the same required context boundary:
+Destroy the stack with the same required context boundary:
 
 ```bash
-npm -w ecs-infra run cdk -- destroy GoldenPathDemoStack \
-  -c allowedIngressCidr=<your-public-ip>/32
+npm run cdk -- destroy GoldenPathDemoStack \
+  -c allowedIngressCidr=<your-public-ip>/32 \
+  -c applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
+  -c applicationServiceVersion=<release-id>
 ```
 
 Confirm that the CloudFormation stack, ALB, ECS service/tasks, AMP and Grafana
-workspaces, Grafana access prefix list and role, VPC endpoints, and all four log
-groups are gone. Ingested X-Ray traces and historical CloudWatch metric
-datapoints follow their service retention; stack destruction stops new
-publication but does not delete that history immediately. CDK bootstrap,
-Organizations, and IAM Identity Center resources are account/Region-level and
-are not part of `GoldenPathDemoStack`; they remain for future deployments and
-human access unless deliberately retired through a separate account-level
-procedure.
+workspaces, Grafana access prefix list and role, VPC endpoints, and log groups
+are gone. CDK bootstrap, Organizations, and IAM Identity Center resources are
+account/Region-level and are not part of `GoldenPathDemoStack`.
 
-## Reference docs
-
-- AWS CDK Developer Guide: https://docs.aws.amazon.com/cdk/v2/guide/home.html
-- AWS CDK API Reference: https://docs.aws.amazon.com/cdk/api/v2/
-- AWS CDK best practices: https://docs.aws.amazon.com/cdk/v2/guide/best-practices.html
-- AWS CDK bootstrapping: https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping.html
-- AWS CDK testing: https://docs.aws.amazon.com/cdk/v2/guide/testing.html
-- ECS construct library: https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ecs-readme.html
-- ECS patterns library: https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ecs_patterns-readme.html
-
-Optional context:
+## Optional Context
 
 ```bash
-npm -w ecs-infra run cdk -- synth \
+npm run cdk -- synth \
   -c allowedIngressCidr=203.0.113.10/32 \
+  -c applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
+  -c applicationServiceVersion=<release-id> \
   -c enableEcsExec=true
 ```
 
@@ -185,15 +164,15 @@ npm -w ecs-infra run cdk -- synth \
 message channels used by Exec. It is off by default to avoid the additional
 endpoint cost.
 
-The human or automation invoking `aws ecs execute-command` also needs separate
-operator-side IAM permission such as `ecs:ExecuteCommand`. This stack does not
-grant permissions to your AWS identity.
-
 Application metric export defaults to 30 seconds. Use
 `-c metricsExportIntervalSeconds=<5-300>` consistently across CDK commands to
 test another cadence.
 
-The delivered metric slices accept the region-specific hourly cost of six one-AZ
-interface endpoints after comparing the full inventory with a NAT-based
-alternative. The no-NAT decision is a deliberate checkpoint, not a rule that
-every future AWS service must receive another endpoint automatically.
+## Reference Docs
+
+- AWS CDK Developer Guide: https://docs.aws.amazon.com/cdk/v2/guide/home.html
+- AWS CDK API Reference: https://docs.aws.amazon.com/cdk/api/v2/
+- AWS CDK best practices: https://docs.aws.amazon.com/cdk/v2/guide/best-practices.html
+- AWS CDK bootstrapping: https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping.html
+- AWS CDK testing: https://docs.aws.amazon.com/cdk/v2/guide/testing.html
+- ECS Developer Guide: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/Welcome.html

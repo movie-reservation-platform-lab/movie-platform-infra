@@ -1,0 +1,3 @@
+type: rule
+description: "Apply when explaining code, proposing changes, or teaching TypeScript and AWS CDK concepts in this repository."
+alwaysApply: true

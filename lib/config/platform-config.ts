@@ -1,31 +1,25 @@
 /**
  * Validated application-image input consumed by the image resolver.
  *
- * The discriminant makes partial ECR configuration unrepresentable after the
- * CDK context boundary: local mode carries no external artifact data, while
- * ECR mode carries every parsed value required to import an immutable image.
+ * The CDK context boundary carries every parsed value required to import an
+ * immutable externally built application image.
  */
-export type ApplicationImageConfig =
-  | {
-      /** Build the application from the repository-owned Docker context. */
-      readonly kind: 'local-docker-asset';
-    }
-  | {
-      /** Deploy an existing private ECR image rather than building application source. */
-      readonly kind: 'ecr-image';
-      /** Complete, trimmed ECR URI supplied by the caller for traceability. */
-      readonly imageReference: string;
-      /** Twelve-digit AWS account parsed from the ECR registry hostname. */
-      readonly registryAccount: string;
-      /** AWS Region parsed from the ECR registry hostname. */
-      readonly registryRegion: string;
-      /** Repository path parsed from the ECR URI. */
-      readonly repositoryName: string;
-      /** Immutable `sha256:<64-hex-characters>` image digest. */
-      readonly imageDigest: string;
-      /** Opaque release identifier exposed to the service and telemetry. */
-      readonly serviceVersion: string;
-    };
+export interface ApplicationImageConfig {
+  /** Deploy an existing private ECR image rather than building application source. */
+  readonly kind: 'ecr-image';
+  /** Complete, trimmed ECR URI supplied by the caller for traceability. */
+  readonly imageReference: string;
+  /** Twelve-digit AWS account parsed from the ECR registry hostname. */
+  readonly registryAccount: string;
+  /** AWS Region parsed from the ECR registry hostname. */
+  readonly registryRegion: string;
+  /** Repository path parsed from the ECR URI. */
+  readonly repositoryName: string;
+  /** Immutable `sha256:<64-hex-characters>` image digest. */
+  readonly imageDigest: string;
+  /** Opaque release identifier exposed to the service and telemetry. */
+  readonly serviceVersion: string;
+}
 
 /** Concrete AWS account and Region selected for the CDK stack. */
 export interface DeploymentTarget {
@@ -50,7 +44,7 @@ export interface PlatformConfig {
   readonly environmentName: 'aws-demo';
   /** Trusted IPv4 CIDR allowed to reach the public load balancer. */
   readonly allowedIngressCidr: string;
-  /** Validated local-build or immutable-ECR image selection. */
+  /** Validated immutable-ECR image selection. */
   readonly applicationImage: ApplicationImageConfig;
   /** Number of Availability Zones used when defining the VPC. */
   readonly vpcMaxAzs: 2;
@@ -118,8 +112,8 @@ function parseAllowedIngressCidr(value: unknown): string {
 }
 
 /**
- * Selects local mode when both artifact inputs are absent, otherwise validates
- * the complete ECR pair and returns parsed fields safe for internal use.
+ * Validates the required immutable ECR pair and returns parsed fields safe for
+ * internal use.
  *
  * Validation is deliberately offline: it proves syntax and target matching,
  * not that the repository or digest exists in AWS.
@@ -131,21 +125,15 @@ function parseApplicationImageConfig(
   const imageReferenceIsPresent = context.applicationImageReference !== undefined;
   const serviceVersionIsPresent = context.applicationServiceVersion !== undefined;
 
-  if (!imageReferenceIsPresent && !serviceVersionIsPresent) {
-    return {
-      kind: 'local-docker-asset',
-    };
-  }
-
   if (!imageReferenceIsPresent) {
     throw new Error(
-      'CDK context value "applicationImageReference" is required when "applicationServiceVersion" is supplied.',
+      'CDK context value "applicationImageReference" is required. Supply a private ECR image URI pinned by digest.',
     );
   }
 
   if (!serviceVersionIsPresent) {
     throw new Error(
-      'CDK context value "applicationServiceVersion" is required when "applicationImageReference" is supplied.',
+      'CDK context value "applicationServiceVersion" is required. Supply the release identifier for the image.',
     );
   }
 
@@ -284,8 +272,9 @@ function parseIntegerInRange(
 /**
  * Validates all untrusted CDK inputs once and returns the complete stack config.
  *
- * Local image mode permits an environment-agnostic target. ECR image mode
- * additionally requires a concrete target matching the supplied registry.
+ * The standalone infrastructure repository consumes immutable external
+ * application artifacts. It requires a concrete target matching the supplied
+ * private ECR registry.
  */
 export function resolvePlatformConfig(
   context: PlatformConfigContext,

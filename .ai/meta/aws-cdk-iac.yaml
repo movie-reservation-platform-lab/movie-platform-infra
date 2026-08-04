@@ -1,0 +1,3 @@
+type: skill
+skillName: aws-cdk-iac
+description: "Use when designing, implementing, reviewing, or explaining AWS CDK infrastructure in this standalone repo, including construct choices, CloudFormation output, networking, IAM, ECS/Fargate, asset publishing, tests, synth/deploy workflow, and CDK best practices."

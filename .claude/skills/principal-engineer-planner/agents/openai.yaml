@@ -1,0 +1,7 @@
+interface:
+  display_name: "Principal Engineer Planner"
+  short_description: "Plan complex engineering work before coding"
+  default_prompt: "Use $principal-engineer-planner to inspect the repo, clarify requirements, compare alternatives, and produce an implementation plan."
+
+policy:
+  allow_implicit_invocation: true
