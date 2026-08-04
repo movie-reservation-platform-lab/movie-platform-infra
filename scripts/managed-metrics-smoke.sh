@@ -257,12 +257,13 @@ started_ms="$(node -e 'process.stdout.write(String(Date.now()))')"
 temporary_directory=''
 
 emit_report() {
-  local ended_at ended_ms duration_ms
+  local ended_at ended_ms duration_ms serialized_report
   ended_at="$(node -e 'process.stdout.write(new Date().toISOString())')"
   ended_ms="$(node -e 'process.stdout.write(String(Date.now()))')"
   duration_ms="$((ended_ms - started_ms))"
 
-  REPORT_RESULT="${result}" \
+  serialized_report="$(
+    REPORT_RESULT="${result}" \
     REPORT_FAILURE_STAGE="${failure_stage}" \
     REPORT_STACK_NAME="${stack_name}" \
     REPORT_REGION="${AWS_REGION:-}" \
@@ -281,9 +282,7 @@ emit_report() {
     REPORT_STARTED_AT="${started_at}" \
     REPORT_ENDED_AT="${ended_at}" \
     REPORT_DURATION_MS="${duration_ms}" \
-    REPORT_PATH="${report_path}" \
     node -e '
-const fs = require("node:fs");
 const report = {
   result: process.env.REPORT_RESULT,
   failure_stage: process.env.REPORT_FAILURE_STAGE || null,
@@ -309,12 +308,13 @@ const report = {
   ended_at: process.env.REPORT_ENDED_AT,
   duration_ms: Number(process.env.REPORT_DURATION_MS),
 };
-const serializedReport = `${JSON.stringify(report)}\n`;
-process.stdout.write(serializedReport);
-if (process.env.REPORT_PATH) {
-  fs.writeFileSync(process.env.REPORT_PATH, serializedReport, { encoding: "utf8", flag: "w" });
-}
+process.stdout.write(JSON.stringify(report));
 '
+  )"
+  printf '%s\n' "${serialized_report}"
+  if [[ -n "${report_path}" ]]; then
+    printf '%s\n' "${serialized_report}" >"${report_path}"
+  fi
 }
 
 cleanup() {

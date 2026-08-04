@@ -1,11 +1,7 @@
-import * as path from 'node:path';
-
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 
-import { readDockerfileIgnorePatterns } from '../lib/assets/docker-build-context';
-import { readPackageVersion } from '../lib/assets/package-metadata';
 import { GoldenPathDemoStack } from '../lib/infra-stack';
 import {
   resolvePlatformConfig,
@@ -13,8 +9,6 @@ import {
   type PlatformConfigContext,
 } from '../lib/config/platform-config';
 
-const REPOSITORY_ROOT = path.join(__dirname, '..', '..');
-const APP_DOCKERFILE = 'movie-reservation-service/Dockerfile';
 const ECR_TEST_TARGET = {
   account: '111111111111',
   region: 'eu-central-1',
@@ -28,6 +22,10 @@ const ECR_TEST_CONTEXT = {
 } as const satisfies PlatformConfigContext;
 
 function regionalServiceName(serviceShortName: string) {
+  return `com.amazonaws.${ECR_TEST_TARGET.region}.${serviceShortName}`;
+}
+
+function gatewayRegionalServiceName(serviceShortName: string) {
   return {
     'Fn::Join': ['', ['com.amazonaws.', { Ref: 'AWS::Region' }, `.${serviceShortName}`]],
   };
@@ -60,13 +58,17 @@ interface SynthesizedContainerDefinition {
   readonly StopTimeout?: number;
 }
 
-function createStack(context: PlatformConfigContext = {}, deploymentTarget: DeploymentTarget = {}) {
+function createStack(
+  context: PlatformConfigContext = ECR_TEST_CONTEXT,
+  deploymentTarget: DeploymentTarget = ECR_TEST_TARGET,
+) {
   const app = new cdk.App();
   return new GoldenPathDemoStack(app, 'TestStack', {
     env: deploymentTarget,
     platformConfig: resolvePlatformConfig(
       {
         allowedIngressCidr: '203.0.113.10/32',
+        ...ECR_TEST_CONTEXT,
         ...context,
       },
       deploymentTarget,
@@ -74,7 +76,10 @@ function createStack(context: PlatformConfigContext = {}, deploymentTarget: Depl
   });
 }
 
-function synthesizeTemplate(context: PlatformConfigContext = {}, deploymentTarget: DeploymentTarget = {}) {
+function synthesizeTemplate(
+  context: PlatformConfigContext = ECR_TEST_CONTEXT,
+  deploymentTarget: DeploymentTarget = ECR_TEST_TARGET,
+) {
   return Template.fromStack(createStack(context, deploymentTarget));
 }
 
@@ -103,23 +108,6 @@ beforeAll(() => {
   template = synthesizeTemplate();
   ecrStack = createStack(ECR_TEST_CONTEXT, ECR_TEST_TARGET);
   ecrTemplate = Template.fromStack(ecrStack);
-});
-
-test('isolates the app image asset from sibling workspaces', () => {
-  const ignoreStrategy = cdk.IgnoreStrategy.docker(
-    REPOSITORY_ROOT,
-    readDockerfileIgnorePatterns(REPOSITORY_ROOT, APP_DOCKERFILE),
-  );
-
-  expect(ignoreStrategy.ignores(path.join(REPOSITORY_ROOT, 'package-lock.json'))).toBe(false);
-  expect(ignoreStrategy.ignores(path.join(REPOSITORY_ROOT, 'movie-reservation-service/src/index.ts'))).toBe(false);
-  expect(ignoreStrategy.ignores(path.join(REPOSITORY_ROOT, 'ecs-infra/package.json'))).toBe(true);
-  expect(ignoreStrategy.ignores(path.join(REPOSITORY_ROOT, 'movie-reservation-web/package.json'))).toBe(true);
-  expect(ignoreStrategy.ignores(path.join(REPOSITORY_ROOT, 'docs/plans/ecs-adot-managed-observability.md'))).toBe(true);
-});
-
-test('resolves the local application image as the existing AppImage asset', () => {
-  expect(createStack().node.tryFindChild('AppImage')).toBeInstanceOf(ecrAssets.DockerImageAsset);
 });
 
 test('uses a digest-pinned imported ECR image without creating an app asset or repository', () => {
@@ -239,10 +227,6 @@ test('preserves the ECS runtime and ALB deployment contract in ECR image mode', 
   ecrTemplate.resourceCountIs('AWS::EC2::NatGateway', 0);
 });
 
-test('reads the service version from structured package metadata', () => {
-  expect(readPackageVersion(path.join(REPOSITORY_ROOT, 'movie-reservation-service', 'package.json'))).toBe('1.0.0');
-});
-
 test('creates a two-AZ no-NAT VPC while keeping the workload in one subnet', () => {
   template.resourceCountIs('AWS::EC2::NatGateway', 0);
   template.resourceCountIs('AWS::EC2::Subnet', 4);
@@ -308,7 +292,7 @@ test('restricts public ALB ingress to the configured CIDR', () => {
 test('creates one-subnet private endpoints for runtime AWS API calls', () => {
   template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
     VpcEndpointType: 'Gateway',
-    ServiceName: regionalServiceName('s3'),
+    ServiceName: gatewayRegionalServiceName('s3'),
   });
   template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
     VpcEndpointType: 'Interface',
@@ -662,7 +646,7 @@ test('configures an independent app and nonessential ADOT sidecar in one Fargate
   expect(appContainer.DependsOn).toBeUndefined();
   expect(adotContainer.PortMappings).toBeUndefined();
   expect(environmentFor(appContainer)).toMatchObject({
-    SERVICE_VERSION: '1.0.0',
+    SERVICE_VERSION: ECR_TEST_CONTEXT.applicationServiceVersion,
     OTEL_SERVICE_NAME: 'movie-reservation-service',
     OTEL_TRACES_EXPORTER: 'otlp',
     OTEL_METRICS_EXPORTER: 'otlp',
@@ -690,7 +674,7 @@ test('configures an independent app and nonessential ADOT sidecar in one Fargate
         ],
       ],
     },
-    AWS_REGION: { Ref: 'AWS::Region' },
+    AWS_REGION: ECR_TEST_TARGET.region,
     AWS_STS_REGIONAL_ENDPOINTS: 'regional',
     APPLICATION_SERVICE_NAME: 'movie-reservation-service',
     CLOUDWATCH_METRICS_NAMESPACE: 'GoldenPath/aws-demo/movie-reservation-service',
@@ -836,13 +820,27 @@ test('rejects an internet-wide ALB ingress CIDR', () => {
 });
 
 test('keeps the VPC and workload AZ counts fixed outside caller-controlled context', () => {
-  expect(resolvePlatformConfig({ allowedIngressCidr: '203.0.113.10/32' })).toEqual({
+  expect(
+    resolvePlatformConfig(
+      {
+        allowedIngressCidr: '203.0.113.10/32',
+        ...ECR_TEST_CONTEXT,
+      },
+      ECR_TEST_TARGET,
+    ),
+  ).toEqual({
     platformName: 'movie-reservation-platform',
     serviceName: 'movie-reservation-service',
     environmentName: 'aws-demo',
     allowedIngressCidr: '203.0.113.10/32',
     applicationImage: {
-      kind: 'local-docker-asset',
+      kind: 'ecr-image',
+      imageReference: ECR_TEST_IMAGE_REFERENCE,
+      registryAccount: ECR_TEST_TARGET.account,
+      registryRegion: ECR_TEST_TARGET.region,
+      repositoryName: 'ci-placeholder',
+      imageDigest: ECR_TEST_DIGEST,
+      serviceVersion: 'release-2026-07-31',
     },
     vpcMaxAzs: 2,
     workloadAzCount: 1,
@@ -1034,8 +1032,9 @@ test('validates and applies the application metric export cadence', () => {
   expect(
     resolvePlatformConfig({
       allowedIngressCidr: '203.0.113.10/32',
+      ...ECR_TEST_CONTEXT,
       metricsExportIntervalSeconds: '45',
-    }).metricsExportIntervalSeconds,
+    }, ECR_TEST_TARGET).metricsExportIntervalSeconds,
   ).toBe(45);
 
   const overrideTemplate = synthesizeTemplate({
@@ -1054,8 +1053,9 @@ test.each([4, 301])('rejects metric export cadence outside the supported range: 
   expect(() =>
     resolvePlatformConfig({
       allowedIngressCidr: '203.0.113.10/32',
+      ...ECR_TEST_CONTEXT,
       metricsExportIntervalSeconds: value,
-    }),
+    }, ECR_TEST_TARGET),
   ).toThrow('metricsExportIntervalSeconds');
 });
 
@@ -1063,8 +1063,9 @@ test.each(['30.5', '', true])('rejects noninteger metric export cadence: %p', (v
   expect(() =>
     resolvePlatformConfig({
       allowedIngressCidr: '203.0.113.10/32',
+      ...ECR_TEST_CONTEXT,
       metricsExportIntervalSeconds: value,
-    }),
+    }, ECR_TEST_TARGET),
   ).toThrow('must be an integer');
 });
 

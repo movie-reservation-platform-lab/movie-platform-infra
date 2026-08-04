@@ -158,7 +158,7 @@ function runSmoke(
   envOverrides: Readonly<Record<string, string | undefined>> = {},
   extraArguments: readonly string[] = [],
 ) {
-  const env: NodeJS.ProcessEnv = {
+  const env: NodeJS.ProcessEnv = withNodeOnPath({
     ...process.env,
     PATH: `${fixture.directory}:${process.env.PATH ?? ''}`,
     AWS_PROFILE: 'test-profile',
@@ -167,7 +167,7 @@ function runSmoke(
     XRAY_SMOKE_POLL_INTERVAL_SECONDS: '1',
     CURL_MARKER: fixture.curlMarker,
     ...envOverrides,
-  };
+  });
   for (const [key, value] of Object.entries(envOverrides)) {
     if (value === undefined) {
       delete env[key];
@@ -178,6 +178,13 @@ function runSmoke(
     encoding: 'utf8',
     env,
   });
+}
+
+function withNodeOnPath(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    PATH: `${path.dirname(process.execPath)}:${env.PATH ?? ''}`,
+  };
 }
 
 function parseReport(stdout: string): SmokeReport {
