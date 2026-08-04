@@ -14,8 +14,10 @@
     "validate:grafana-dashboard": "bash -n scripts/validate-grafana-dashboard.sh && bash scripts/validate-grafana-dashboard.sh",
     "smoke:xray": "bash scripts/xray-smoke.sh",
     "smoke:managed-metrics": "bash scripts/managed-metrics-smoke.sh",
+    "synth:local-contract": "cdk synth --no-lookups -c allowedIngressCidr=203.0.113.10/32",
+    "synth:ecr-contract": "AWS_REGION=eu-central-1 CDK_DEFAULT_ACCOUNT=111111111111 CDK_DEFAULT_REGION=eu-central-1 cdk synth --no-lookups -c allowedIngressCidr=203.0.113.10/32 -c applicationImageReference=111111111111.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder@sha256:0000000000000000000000000000000000000000000000000000000000000000 -c applicationServiceVersion=ci-contract-test",
     "cdk": "cdk",
-    "ci": "npm run build && npm test && npm run validate:adot-image && npm run validate:xray-smoke && npm run validate:managed-metrics-smoke && npm run validate:grafana-dashboard && npm run cdk -- synth -c allowedIngressCidr=203.0.113.10/32"
+    "ci": "npm run build && npm test && npm run validate:adot-image && npm run validate:xray-smoke && npm run validate:managed-metrics-smoke && npm run validate:grafana-dashboard && npm run synth:local-contract && npm run synth:ecr-contract"
   },
   "devDependencies": {
     "@types/jest": "^30",

@@ -293,7 +293,7 @@ export class GoldenPathDemoStack extends cdk.Stack {
     cluster.node.addDependency(containerInsightsLogGroup);
 
     const repositoryRoot = path.join(__dirname, '..', '..');
-    const applicationImage = resolveApplicationImage(this);
+    const applicationImage = resolveApplicationImage(this, platformConfig.applicationImage);
     const adotImage = new ecrAssets.DockerImageAsset(this, 'AdotImage', {
       directory: path.join(repositoryRoot, 'ecs-infra', 'adot-collector'),
     });

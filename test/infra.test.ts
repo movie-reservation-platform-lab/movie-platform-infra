@@ -7,10 +7,25 @@ import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import { readDockerfileIgnorePatterns } from '../lib/assets/docker-build-context';
 import { readPackageVersion } from '../lib/assets/package-metadata';
 import { GoldenPathDemoStack } from '../lib/infra-stack';
-import { resolvePlatformConfig, type PlatformConfigContext } from '../lib/config/platform-config';
+import {
+  resolvePlatformConfig,
+  type DeploymentTarget,
+  type PlatformConfigContext,
+} from '../lib/config/platform-config';
 
 const REPOSITORY_ROOT = path.join(__dirname, '..', '..');
 const APP_DOCKERFILE = 'movie-reservation-service/Dockerfile';
+const ECR_TEST_TARGET = {
+  account: '111111111111',
+  region: 'eu-central-1',
+} as const satisfies DeploymentTarget;
+const ECR_TEST_DIGEST = `sha256:${'a'.repeat(64)}`;
+const ECR_TEST_IMAGE_REFERENCE =
+  `${ECR_TEST_TARGET.account}.dkr.ecr.${ECR_TEST_TARGET.region}.amazonaws.com/ci-placeholder@${ECR_TEST_DIGEST}`;
+const ECR_TEST_CONTEXT = {
+  applicationImageReference: ECR_TEST_IMAGE_REFERENCE,
+  applicationServiceVersion: 'release-2026-07-31',
+} as const satisfies PlatformConfigContext;
 
 function regionalServiceName(serviceShortName: string) {
   return {
@@ -27,6 +42,7 @@ interface SynthesizedResource {
 
 interface SynthesizedContainerDefinition {
   readonly Name: string;
+  readonly Image?: unknown;
   readonly Cpu?: number;
   readonly Memory?: number;
   readonly Essential?: boolean;
@@ -44,18 +60,22 @@ interface SynthesizedContainerDefinition {
   readonly StopTimeout?: number;
 }
 
-function createStack(context: PlatformConfigContext = {}) {
+function createStack(context: PlatformConfigContext = {}, deploymentTarget: DeploymentTarget = {}) {
   const app = new cdk.App();
   return new GoldenPathDemoStack(app, 'TestStack', {
-    platformConfig: resolvePlatformConfig({
-      allowedIngressCidr: '203.0.113.10/32',
-      ...context,
-    }),
+    env: deploymentTarget,
+    platformConfig: resolvePlatformConfig(
+      {
+        allowedIngressCidr: '203.0.113.10/32',
+        ...context,
+      },
+      deploymentTarget,
+    ),
   });
 }
 
-function synthesizeTemplate(context: PlatformConfigContext = {}) {
-  return Template.fromStack(createStack(context));
+function synthesizeTemplate(context: PlatformConfigContext = {}, deploymentTarget: DeploymentTarget = {}) {
+  return Template.fromStack(createStack(context, deploymentTarget));
 }
 
 function findResources(templateToSearch: Template, resourceType: string): SynthesizedResource[] {
@@ -76,9 +96,13 @@ function policyActions(action: string | string[]): string[] {
 }
 
 let template: Template;
+let ecrStack: GoldenPathDemoStack;
+let ecrTemplate: Template;
 
 beforeAll(() => {
   template = synthesizeTemplate();
+  ecrStack = createStack(ECR_TEST_CONTEXT, ECR_TEST_TARGET);
+  ecrTemplate = Template.fromStack(ecrStack);
 });
 
 test('isolates the app image asset from sibling workspaces', () => {
@@ -96,6 +120,123 @@ test('isolates the app image asset from sibling workspaces', () => {
 
 test('resolves the local application image as the existing AppImage asset', () => {
   expect(createStack().node.tryFindChild('AppImage')).toBeInstanceOf(ecrAssets.DockerImageAsset);
+});
+
+test('uses a digest-pinned imported ECR image without creating an app asset or repository', () => {
+  expect(ecrStack.node.tryFindChild('AppImage')).toBeUndefined();
+  expect(ecrStack.node.tryFindChild('ApplicationImageRepository')).toBeDefined();
+  expect(ecrStack.node.tryFindChild('AdotImage')).toBeInstanceOf(ecrAssets.DockerImageAsset);
+  ecrTemplate.resourceCountIs('AWS::ECR::Repository', 0);
+
+  const appContainer = findTaskContainers(ecrTemplate).find(({ Name }) => Name === 'movie-reservation-service');
+  expect(appContainer).toBeDefined();
+  expect(JSON.stringify(appContainer?.Image)).toContain(ECR_TEST_TARGET.account);
+  expect(JSON.stringify(appContainer?.Image)).toContain(ECR_TEST_TARGET.region);
+  expect(JSON.stringify(appContainer?.Image)).toContain('/ci-placeholder');
+  expect(JSON.stringify(appContainer?.Image)).toContain(ECR_TEST_DIGEST);
+  if (appContainer === undefined) {
+    throw new Error('expected ECR-backed application container');
+  }
+  expect(environmentFor(appContainer)).toMatchObject({
+    SERVICE_VERSION: 'release-2026-07-31',
+  });
+});
+
+test('grants imported ECR pull access to the execution role but not the application task role', () => {
+  const policies = findResources(ecrTemplate, 'AWS::IAM::Policy');
+  const executionRolePolicy = policies.find((policy) =>
+    String(policy.Properties?.PolicyName).includes('ExecutionRoleDefaultPolicy'),
+  );
+  const taskRolePolicy = policies.find((policy) =>
+    String(policy.Properties?.PolicyName).includes('TaskRoleDefaultPolicy'),
+  );
+  expect(executionRolePolicy).toBeDefined();
+  expect(taskRolePolicy).toBeDefined();
+  const executionRolePolicyDocument = executionRolePolicy?.Properties?.PolicyDocument as {
+    readonly Statement: Array<{
+      readonly Action: string | string[];
+      readonly Effect: string;
+      readonly Resource: unknown;
+    }>;
+  };
+  const authorizationStatement = executionRolePolicyDocument.Statement.find(({ Action }) =>
+    policyActions(Action).includes('ecr:GetAuthorizationToken'),
+  );
+  const repositoryPullStatement = executionRolePolicyDocument.Statement.find(
+    ({ Action, Resource }) =>
+      policyActions(Action).includes('ecr:BatchGetImage') &&
+      JSON.stringify(Resource).includes('repository/ci-placeholder'),
+  );
+
+  expect(authorizationStatement).toMatchObject({
+    Effect: 'Allow',
+    Resource: '*',
+  });
+  expect(new Set(policyActions(repositoryPullStatement?.Action ?? []))).toEqual(
+    new Set(['ecr:BatchCheckLayerAvailability', 'ecr:GetDownloadUrlForLayer', 'ecr:BatchGetImage']),
+  );
+  expect(repositoryPullStatement).toMatchObject({
+    Effect: 'Allow',
+  });
+  expect(JSON.stringify(taskRolePolicy?.Properties?.PolicyDocument)).not.toContain('ecr:');
+});
+
+test('preserves the ECS runtime and ALB deployment contract in ECR image mode', () => {
+  ecrTemplate.hasResourceProperties('AWS::ECS::TaskDefinition', {
+    Cpu: '512',
+    Memory: '1024',
+    ContainerDefinitions: Match.arrayWith([
+      Match.objectLike({
+        Name: 'movie-reservation-service',
+        Essential: true,
+        Cpu: 384,
+        Memory: 640,
+        PortMappings: Match.arrayWith([
+          Match.objectLike({
+            ContainerPort: 3000,
+            Protocol: 'tcp',
+          }),
+        ]),
+        Environment: Match.arrayWith([
+          Match.objectLike({
+            Name: 'SERVICE_VERSION',
+            Value: 'release-2026-07-31',
+          }),
+          Match.objectLike({
+            Name: 'OTEL_SERVICE_NAME',
+            Value: 'movie-reservation-service',
+          }),
+        ]),
+      }),
+      Match.objectLike({
+        Name: 'adot-collector',
+        Essential: false,
+      }),
+    ]),
+  });
+  ecrTemplate.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+    HealthCheckPath: '/health',
+    Port: 3000,
+    Protocol: 'HTTP',
+  });
+  ecrTemplate.hasResourceProperties('AWS::ECS::Service', {
+    DeploymentConfiguration: Match.objectLike({
+      MaximumPercent: 200,
+      MinimumHealthyPercent: 100,
+    }),
+    DesiredCount: 1,
+    EnableExecuteCommand: false,
+  });
+  const service = findResources(ecrTemplate, 'AWS::ECS::Service')[0];
+  const networkConfiguration = service.Properties?.NetworkConfiguration as {
+    readonly AwsvpcConfiguration: {
+      readonly AssignPublicIp: string;
+      readonly Subnets: unknown[];
+    };
+  };
+  expect(networkConfiguration.AwsvpcConfiguration.AssignPublicIp).toBe('DISABLED');
+  expect(networkConfiguration.AwsvpcConfiguration.Subnets).toHaveLength(1);
+  ecrTemplate.resourceCountIs('AWS::EC2::NatGateway', 0);
 });
 
 test('reads the service version from structured package metadata', () => {
@@ -700,11 +841,193 @@ test('keeps the VPC and workload AZ counts fixed outside caller-controlled conte
     serviceName: 'movie-reservation-service',
     environmentName: 'aws-demo',
     allowedIngressCidr: '203.0.113.10/32',
+    applicationImage: {
+      kind: 'local-docker-asset',
+    },
     vpcMaxAzs: 2,
     workloadAzCount: 1,
     enableEcsExec: false,
     metricsExportIntervalSeconds: 30,
   });
+});
+
+test('resolves and trims a matching digest-pinned ECR image contract', () => {
+  expect(
+    resolvePlatformConfig(
+      {
+        allowedIngressCidr: '203.0.113.10/32',
+        applicationImageReference: `  ${ECR_TEST_IMAGE_REFERENCE}  `,
+        applicationServiceVersion: '  release-candidate+build.17  ',
+      },
+      ECR_TEST_TARGET,
+    ).applicationImage,
+  ).toEqual({
+    kind: 'ecr-image',
+    imageReference: ECR_TEST_IMAGE_REFERENCE,
+    registryAccount: ECR_TEST_TARGET.account,
+    registryRegion: ECR_TEST_TARGET.region,
+    repositoryName: 'ci-placeholder',
+    imageDigest: ECR_TEST_DIGEST,
+    serviceVersion: 'release-candidate+build.17',
+  });
+});
+
+test.each([
+  {
+    context: {
+      applicationImageReference: ECR_TEST_IMAGE_REFERENCE,
+    },
+    missingKey: 'applicationServiceVersion',
+  },
+  {
+    context: {
+      applicationServiceVersion: 'release-candidate',
+    },
+    missingKey: 'applicationImageReference',
+  },
+])('rejects a partial application image contract missing $missingKey', ({ context, missingKey }) => {
+  expect(() =>
+    resolvePlatformConfig(
+      {
+        allowedIngressCidr: '203.0.113.10/32',
+        ...context,
+      },
+      ECR_TEST_TARGET,
+    ),
+  ).toThrow(missingKey);
+});
+
+test.each([
+  {
+    key: 'applicationImageReference',
+    context: {
+      applicationImageReference: '   ',
+      applicationServiceVersion: 'release-candidate',
+    },
+  },
+  {
+    key: 'applicationServiceVersion',
+    context: {
+      applicationImageReference: ECR_TEST_IMAGE_REFERENCE,
+      applicationServiceVersion: '',
+    },
+  },
+])('rejects a blank $key', ({ context, key }) => {
+  expect(() =>
+    resolvePlatformConfig(
+      {
+        allowedIngressCidr: '203.0.113.10/32',
+        ...context,
+      },
+      ECR_TEST_TARGET,
+    ),
+  ).toThrow(`"${key}" must be a non-empty string`);
+});
+
+test.each([
+  ['mutable latest tag', `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder:latest`],
+  ['mutable version tag', `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder:1.2.3`],
+  ['bare digest', ECR_TEST_DIGEST],
+  ['bare repository', `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder`],
+  [
+    'malformed account',
+    `11111111111.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder@${ECR_TEST_DIGEST}`,
+  ],
+  [
+    'malformed Region',
+    `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central.amazonaws.com/ci-placeholder@${ECR_TEST_DIGEST}`,
+  ],
+  [
+    'malformed repository',
+    `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central-1.amazonaws.com/Invalid_Repository@${ECR_TEST_DIGEST}`,
+  ],
+  [
+    'short digest',
+    `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder@sha256:${'a'.repeat(63)}`,
+  ],
+  [
+    'long digest',
+    `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder@sha256:${'a'.repeat(65)}`,
+  ],
+])('rejects a %s application image reference', (_caseName, applicationImageReference) => {
+  expect(() =>
+    resolvePlatformConfig(
+      {
+        allowedIngressCidr: '203.0.113.10/32',
+        applicationImageReference,
+        applicationServiceVersion: 'release-candidate',
+      },
+      ECR_TEST_TARGET,
+    ),
+  ).toThrow('"applicationImageReference" must be a complete private ECR image URI');
+});
+
+test.each([
+  ['one-character repository', 'a'],
+  ['repository longer than 256 characters', 'a'.repeat(257)],
+])('rejects a %s', (_caseName, repositoryName) => {
+  expect(() =>
+    resolvePlatformConfig(
+      {
+        allowedIngressCidr: '203.0.113.10/32',
+        applicationImageReference:
+          `${ECR_TEST_TARGET.account}.dkr.ecr.${ECR_TEST_TARGET.region}.amazonaws.com/` +
+          `${repositoryName}@${ECR_TEST_DIGEST}`,
+        applicationServiceVersion: 'release-candidate',
+      },
+      ECR_TEST_TARGET,
+    ),
+  ).toThrow('must contain an ECR repository name from 2 through 256 characters');
+});
+
+test.each([
+  ['missing account', { region: ECR_TEST_TARGET.region }, 'CDK_DEFAULT_ACCOUNT'],
+  ['invalid account', { account: 'not-an-account', region: ECR_TEST_TARGET.region }, 'CDK_DEFAULT_ACCOUNT'],
+  ['missing Region', { account: ECR_TEST_TARGET.account }, 'CDK_DEFAULT_REGION'],
+  ['invalid Region', { account: ECR_TEST_TARGET.account, region: 'Europe' }, 'CDK_DEFAULT_REGION'],
+] satisfies Array<[string, DeploymentTarget, string]>)(
+  'rejects ECR mode with a %s deployment target',
+  (_caseName, deploymentTarget, expectedMessage) => {
+    expect(() =>
+      resolvePlatformConfig(
+        {
+          allowedIngressCidr: '203.0.113.10/32',
+          ...ECR_TEST_CONTEXT,
+        },
+        deploymentTarget,
+      ),
+    ).toThrow(expectedMessage);
+  },
+);
+
+test('rejects an ECR registry account that differs from the deployment target', () => {
+  expect(() =>
+    resolvePlatformConfig(
+      {
+        allowedIngressCidr: '203.0.113.10/32',
+        ...ECR_TEST_CONTEXT,
+      },
+      {
+        account: '222222222222',
+        region: ECR_TEST_TARGET.region,
+      },
+    ),
+  ).toThrow('must match deployment account');
+});
+
+test('rejects an ECR registry Region that differs from the deployment target', () => {
+  expect(() =>
+    resolvePlatformConfig(
+      {
+        allowedIngressCidr: '203.0.113.10/32',
+        ...ECR_TEST_CONTEXT,
+      },
+      {
+        account: ECR_TEST_TARGET.account,
+        region: 'us-east-1',
+      },
+    ),
+  ).toThrow('must match deployment Region');
 });
 
 test('validates and applies the application metric export cadence', () => {
