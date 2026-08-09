@@ -16,6 +16,10 @@ of hiding them behind broad abstractions.
 - `grafana/dashboards/`: dashboard artifacts for managed observability.
 - `scripts/`: local validation and post-deploy smoke tooling.
 - `test/`: Jest tests using CDK assertions and script self-tests.
+- `docs/plans/`: issue-level implementation plans and review notes.
+- `docs/architecture/`: durable infrastructure design notes and topology.
+- `docs/operations/`: deployment runbooks, teardown, smoke checks, and
+  troubleshooting.
 - `.ai/`: source of truth for AI guidance, rules, skills, and review agents.
   `AGENTS.md` is generated from this folder by `.ai/sync.sh`.
 
@@ -66,6 +70,7 @@ before handing work back.
   risky, or design-heavy work.
 - Prefer the smallest design that satisfies the requirements and fits existing
   repository conventions.
+- Save implementation plans under `docs/plans/`.
 
 ## Testing Guidance
 
