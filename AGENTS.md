@@ -131,6 +131,7 @@ Read the relevant skill file from `.ai/skills/` when the task matches its descri
 - **aws-cdk-iac**: Use when designing, implementing, reviewing, or explaining AWS CDK infrastructure in this standalone repo, including construct choices, CloudFormation output, networking, IAM, ECS/Fargate, asset publishing, tests, synth/deploy workflow, and CDK best practices. (read `.ai/skills/aws-cdk-iac/SKILL.md`)
 - **infra-testing**: Use when creating, refactoring, reviewing, or explaining Jest/CDK assertion tests, shell smoke-tool self-tests, dashboard validation, and offline synth contracts in this infrastructure repository. (read `.ai/skills/infra-testing/SKILL.md`)
 - **principal-engineer-planner**: Use before implementation to inspect the repository, clarify requirements, compare alternatives, identify risks, and produce an implementation-ready plan. (read `.ai/skills/principal-engineer-planner/SKILL.md`)
+- **programming-kb**: Use to retrieve focused local programming, backend architecture, system design, and implementation knowledge from /home/patex1987/Documents/programming_kb before broad internet search; validate externally when the user asks or the knowledge may be stale. (read `.ai/skills/programming-kb/SKILL.md`)
 - **typescript**: Use when designing or refactoring TypeScript types, function signatures, modules, and application structure. (read `.ai/skills/typescript/SKILL.md`)
 
 ## AI Review Agents
