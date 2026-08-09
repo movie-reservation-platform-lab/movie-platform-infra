@@ -42,8 +42,8 @@ export interface PlatformConfig {
   readonly serviceName: 'movie-reservation-service';
   /** Deployment-environment identifier for this disposable AWS demo. */
   readonly environmentName: 'aws-demo';
-  /** Trusted IPv4 CIDR allowed to reach the public load balancer. */
-  readonly allowedIngressCidr: string;
+  /** Customer-managed IPv4 prefix list allowed to reach public demo surfaces. */
+  readonly allowedIngressPrefixListId: string;
   /** Validated immutable-ECR image selection. */
   readonly applicationImage: ApplicationImageConfig;
   /** Number of Availability Zones used when defining the VPC. */
@@ -62,8 +62,8 @@ export interface PlatformConfig {
  * the typed configuration is passed into the stack.
  */
 export interface PlatformConfigContext {
-  /** Required IPv4 CIDR accepted from `-c allowedIngressCidr=...`. */
-  readonly allowedIngressCidr?: unknown;
+  /** Required EC2 prefix list ID accepted from `-c allowedIngressPrefixListId=...`. */
+  readonly allowedIngressPrefixListId?: unknown;
   /** Optional complete private ECR URI; must be paired with a service version. */
   readonly applicationImageReference?: unknown;
   /** Optional opaque release identifier; must be paired with an ECR URI. */
@@ -84,31 +84,38 @@ const PRIVATE_ECR_IMAGE_REFERENCE_PATTERN =
 /** Offline syntax checks for concrete CDK deployment targets. */
 const AWS_ACCOUNT_PATTERN = /^\d{12}$/;
 const AWS_REGION_PATTERN = /^[a-z]{2}(?:-[a-z0-9]+)+-\d$/;
+const EC2_PREFIX_LIST_ID_PATTERN = /^pl-(?:[0-9a-f]{8}|[0-9a-f]{17})$/;
 
 /** Returns a trimmed required CDK context string or fails at the boundary. */
-function parseRequiredString(value: unknown, key: string): string {
+function parseRequiredString(value: unknown, key: string, exampleValue: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new Error(`CDK context value "${key}" is required. Example: -c ${key}=203.0.113.10/32`);
+    throw new Error(`CDK context value "${key}" is required. Example: -c ${key}=${exampleValue}`);
   }
 
   return value.trim();
 }
 
 /**
- * Resolves the public ALB ingress boundary and rejects internet-wide access.
+ * Resolves the public ingress allowlist boundary.
  *
- * Full CIDR syntax is validated later by the CDK networking construct.
+ * This deliberately validates only offline syntax. Whether the prefix list is
+ * customer-managed, IPv4, and populated with trusted entries is an AWS-side
+ * contract documented in the runbook.
  */
-function parseAllowedIngressCidr(value: unknown): string {
-  const cidr = parseRequiredString(value, 'allowedIngressCidr');
+function parseAllowedIngressPrefixListId(value: unknown): string {
+  const prefixListId = parseRequiredString(
+    value,
+    'allowedIngressPrefixListId',
+    'pl-0123456789abcdef0',
+  );
 
-  if (cidr === '0.0.0.0/0') {
+  if (!EC2_PREFIX_LIST_ID_PATTERN.test(prefixListId)) {
     throw new Error(
-      'CDK context value "allowedIngressCidr" must not be 0.0.0.0/0. Use your current public IP with a /32 mask.',
+      'CDK context value "allowedIngressPrefixListId" must start with pl- and contain exactly 8 or 17 lowercase hexadecimal characters.',
     );
   }
 
-  return cidr;
+  return prefixListId;
 }
 
 /**
@@ -284,7 +291,7 @@ export function resolvePlatformConfig(
     platformName: 'movie-reservation-platform',
     serviceName: 'movie-reservation-service',
     environmentName: 'aws-demo',
-    allowedIngressCidr: parseAllowedIngressCidr(context.allowedIngressCidr),
+    allowedIngressPrefixListId: parseAllowedIngressPrefixListId(context.allowedIngressPrefixListId),
     applicationImage: parseApplicationImageConfig(context, deploymentTarget),
     vpcMaxAzs: 2,
     workloadAzCount: 1,
