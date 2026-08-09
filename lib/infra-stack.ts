@@ -37,12 +37,12 @@ export interface GoldenPathDemoStackProps extends cdk.StackProps {
  *
  * The stack provisions:
  * - a two-AZ VPC without a NAT gateway
- * - public subnets for a CIDR-restricted Application Load Balancer
+ * - public subnets for a prefix-list-restricted Application Load Balancer
  * - one selected isolated workload subnet for the Fargate service
  * - the S3, ECR, CloudWatch Logs, X-Ray, AMP, and STS endpoints required by private tasks
  * - an optional SSM Messages endpoint and task permissions for ECS Exec
  * - a disposable AMP workspace and enhanced ECS Container Insights
- * - a CIDR-restricted Managed Grafana workspace and customer-managed metric-read role
+ * - a prefix-list-restricted Managed Grafana workspace and customer-managed metric-read role
  * - the service and ADOT image assets, log groups, task definition, ECS service, and ALB
  * - common resource tags plus ALB, CloudWatch, ECS, AMP, and Grafana outputs
  *
@@ -104,9 +104,9 @@ export class GoldenPathDemoStack extends cdk.Stack {
     });
     tagServiceResource(albSecurityGroup);
     albSecurityGroup.addIngressRule(
-      ec2.Peer.ipv4(platformConfig.allowedIngressCidr),
+      ec2.Peer.prefixList(platformConfig.allowedIngressPrefixListId),
       ec2.Port.tcp(80),
-      'Demo HTTP access restricted by explicit source CIDR',
+      'Demo HTTP access restricted by customer-managed prefix list',
     );
 
     const serviceSecurityGroup = new ec2.SecurityGroup(this, 'ServiceSecurityGroup', {
@@ -181,26 +181,13 @@ export class GoldenPathDemoStack extends cdk.Stack {
       ],
     });
 
-    const grafanaAccessPrefixList = new ec2.CfnPrefixList(this, 'GrafanaAccessPrefixList', {
-      addressFamily: 'IPv4',
-      entries: [
-        {
-          cidr: platformConfig.allowedIngressCidr,
-          description: 'Trusted laptop CIDR for the disposable Grafana workspace',
-        },
-      ],
-      maxEntries: 1,
-      prefixListName: `${platformConfig.platformName}-${platformConfig.environmentName}-grafana-access`,
-    });
-    tagServiceResource(grafanaAccessPrefixList);
-
     const grafanaWorkspace = new grafana.CfnWorkspace(this, 'GrafanaWorkspace', {
       accountAccessType: 'CURRENT_ACCOUNT',
       authenticationProviders: ['AWS_SSO'],
       description: 'Managed metrics dashboard for the movie reservation AWS demo',
       name: `${platformConfig.platformName}-${platformConfig.environmentName}`,
       networkAccessControl: {
-        prefixListIds: [grafanaAccessPrefixList.attrPrefixListId],
+        prefixListIds: [platformConfig.allowedIngressPrefixListId],
         vpceIds: [],
       },
       permissionType: 'CUSTOMER_MANAGED',
