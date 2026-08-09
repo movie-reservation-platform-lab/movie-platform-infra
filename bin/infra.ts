@@ -12,7 +12,7 @@ const deploymentTarget = {
 
 const platformConfig = resolvePlatformConfig(
   {
-    allowedIngressPrefixListId: app.node.tryGetContext('allowedIngressPrefixListId'),
+    allowedIngressCidr: app.node.tryGetContext('allowedIngressCidr'),
     applicationImageReference: app.node.tryGetContext('applicationImageReference'),
     applicationServiceVersion: app.node.tryGetContext('applicationServiceVersion'),
     enableEcsExec: app.node.tryGetContext('enableEcsExec'),

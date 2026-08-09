@@ -67,7 +67,7 @@ function createStack(
     env: deploymentTarget,
     platformConfig: resolvePlatformConfig(
       {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+        allowedIngressCidr: '203.0.113.10/32',
         ...ECR_TEST_CONTEXT,
         ...context,
       },
@@ -275,19 +275,17 @@ test('names the application cluster and enables enhanced Container Insights', ()
   expect(cluster.DependsOn).toEqual(expect.arrayContaining([expect.stringContaining('ContainerInsightsLogGroup')]));
 });
 
-test('restricts public ALB ingress to the configured prefix list', () => {
+test('restricts public ALB ingress to the configured CIDR', () => {
   template.hasResourceProperties('AWS::EC2::SecurityGroup', {
     GroupDescription: 'Allows restricted HTTP ingress to the public demo ALB',
-  });
-  template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
-    Description: 'Demo HTTP access restricted by customer-managed prefix list',
-    FromPort: 80,
-    GroupId: {
-      'Fn::GetAtt': [Match.stringLikeRegexp('AlbSecurityGroup'), 'GroupId'],
-    },
-    IpProtocol: 'tcp',
-    SourcePrefixListId: 'pl-0123456789abcdef0',
-    ToPort: 80,
+    SecurityGroupIngress: Match.arrayWith([
+      Match.objectLike({
+        CidrIp: '203.0.113.10/32',
+        FromPort: 80,
+        IpProtocol: 'tcp',
+        ToPort: 80,
+      }),
+    ]),
   });
 });
 
@@ -497,13 +495,28 @@ test('grants Grafana only the planned AMP and CloudWatch metric reads', () => {
   expect(renderedGrafanaPolicy).not.toContain('"Action":"*"');
 });
 
-test('restricts the Managed Grafana workspace to the configured prefix list and Identity Center', () => {
+test('restricts the Managed Grafana workspace to the configured CIDR and Identity Center', () => {
+  template.hasResourceProperties('AWS::EC2::PrefixList', {
+    AddressFamily: 'IPv4',
+    Entries: [
+      {
+        Cidr: '203.0.113.10/32',
+        Description: 'Trusted laptop CIDR for the disposable Grafana workspace',
+      },
+    ],
+    MaxEntries: 1,
+    PrefixListName: 'movie-reservation-platform-aws-demo-grafana-access',
+  });
   template.hasResourceProperties('AWS::Grafana::Workspace', {
     AccountAccessType: 'CURRENT_ACCOUNT',
     AuthenticationProviders: ['AWS_SSO'],
     Name: 'movie-reservation-platform-aws-demo',
     NetworkAccessControl: {
-      PrefixListIds: ['pl-0123456789abcdef0'],
+      PrefixListIds: [
+        {
+          'Fn::GetAtt': [Match.stringLikeRegexp('GrafanaAccessPrefixList'), 'PrefixListId'],
+        },
+      ],
       VpceIds: [],
     },
     PermissionType: 'CUSTOMER_MANAGED',
@@ -753,7 +766,7 @@ test('does not introduce deferred databases, alarms, or public-network resources
   template.resourceCountIs('AWS::EC2::NatGateway', 0);
   template.resourceCountIs('AWS::APS::Workspace', 1);
   template.resourceCountIs('AWS::Grafana::Workspace', 1);
-  template.resourceCountIs('AWS::EC2::PrefixList', 0);
+  template.resourceCountIs('AWS::EC2::PrefixList', 1);
   template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
   template.resourceCountIs('AWS::RDS::DBInstance', 0);
 
@@ -796,59 +809,21 @@ test('adds ECS Exec wiring only when enabled', () => {
   expect(JSON.stringify(template.toJSON())).not.toContain('ssmmessages:CreateControlChannel');
 });
 
-test('requires allowedIngressPrefixListId at the config boundary', () => {
-  expect(() => resolvePlatformConfig({})).toThrow('allowedIngressPrefixListId');
+test('requires allowedIngressCidr at the config boundary', () => {
+  expect(() => resolvePlatformConfig({})).toThrow('allowedIngressCidr');
 });
 
-test.each([
-  '0.0.0.0/0',
-  '203.0.113.10/32',
-  'vpce-0123456789abcdef0',
-  'pl-not-hex',
-  'pl-012345678',
-  'pl-0123456789abcdef',
-  'pl-0123456789ABCDEF0',
-])(
-  'rejects a malformed ingress prefix list ID: %s',
-  (allowedIngressPrefixListId) => {
-    expect(() => resolvePlatformConfig({ allowedIngressPrefixListId })).toThrow(
-      '"allowedIngressPrefixListId" must start with pl- and contain exactly 8 or 17 lowercase hexadecimal characters',
-    );
-  },
-);
-
-test.each(['pl-0123abcd', 'pl-0123456789abcdef0'])(
-  'accepts a valid ingress prefix list ID: %s',
-  (allowedIngressPrefixListId) => {
-    expect(
-      resolvePlatformConfig(
-        {
-          allowedIngressPrefixListId,
-          ...ECR_TEST_CONTEXT,
-        },
-        ECR_TEST_TARGET,
-      ).allowedIngressPrefixListId,
-    ).toBe(allowedIngressPrefixListId);
-  },
-);
-
-test('trims the configured ingress prefix list ID', () => {
-  expect(
-    resolvePlatformConfig(
-      {
-        allowedIngressPrefixListId: '  pl-0123456789abcdef0  ',
-        ...ECR_TEST_CONTEXT,
-      },
-      ECR_TEST_TARGET,
-    ).allowedIngressPrefixListId,
-  ).toBe('pl-0123456789abcdef0');
+test('rejects an internet-wide ALB ingress CIDR', () => {
+  expect(() => resolvePlatformConfig({ allowedIngressCidr: '0.0.0.0/0' })).toThrow(
+    'allowedIngressCidr" must not be 0.0.0.0/0',
+  );
 });
 
 test('keeps the VPC and workload AZ counts fixed outside caller-controlled context', () => {
   expect(
     resolvePlatformConfig(
       {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+        allowedIngressCidr: '203.0.113.10/32',
         ...ECR_TEST_CONTEXT,
       },
       ECR_TEST_TARGET,
@@ -857,7 +832,7 @@ test('keeps the VPC and workload AZ counts fixed outside caller-controlled conte
     platformName: 'movie-reservation-platform',
     serviceName: 'movie-reservation-service',
     environmentName: 'aws-demo',
-    allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+    allowedIngressCidr: '203.0.113.10/32',
     applicationImage: {
       kind: 'ecr-image',
       imageReference: ECR_TEST_IMAGE_REFERENCE,
@@ -878,7 +853,7 @@ test('resolves and trims a matching digest-pinned ECR image contract', () => {
   expect(
     resolvePlatformConfig(
       {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+        allowedIngressCidr: '203.0.113.10/32',
         applicationImageReference: `  ${ECR_TEST_IMAGE_REFERENCE}  `,
         applicationServiceVersion: '  release-candidate+build.17  ',
       },
@@ -912,7 +887,7 @@ test.each([
   expect(() =>
     resolvePlatformConfig(
       {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+        allowedIngressCidr: '203.0.113.10/32',
         ...context,
       },
       ECR_TEST_TARGET,
@@ -939,7 +914,7 @@ test.each([
   expect(() =>
     resolvePlatformConfig(
       {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+        allowedIngressCidr: '203.0.113.10/32',
         ...context,
       },
       ECR_TEST_TARGET,
@@ -976,7 +951,7 @@ test.each([
   expect(() =>
     resolvePlatformConfig(
       {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+        allowedIngressCidr: '203.0.113.10/32',
         applicationImageReference,
         applicationServiceVersion: 'release-candidate',
       },
@@ -992,7 +967,7 @@ test.each([
   expect(() =>
     resolvePlatformConfig(
       {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+        allowedIngressCidr: '203.0.113.10/32',
         applicationImageReference:
           `${ECR_TEST_TARGET.account}.dkr.ecr.${ECR_TEST_TARGET.region}.amazonaws.com/` +
           `${repositoryName}@${ECR_TEST_DIGEST}`,
@@ -1014,7 +989,7 @@ test.each([
     expect(() =>
       resolvePlatformConfig(
         {
-          allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+          allowedIngressCidr: '203.0.113.10/32',
           ...ECR_TEST_CONTEXT,
         },
         deploymentTarget,
@@ -1027,7 +1002,7 @@ test('rejects an ECR registry account that differs from the deployment target', 
   expect(() =>
     resolvePlatformConfig(
       {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+        allowedIngressCidr: '203.0.113.10/32',
         ...ECR_TEST_CONTEXT,
       },
       {
@@ -1042,7 +1017,7 @@ test('rejects an ECR registry Region that differs from the deployment target', (
   expect(() =>
     resolvePlatformConfig(
       {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+        allowedIngressCidr: '203.0.113.10/32',
         ...ECR_TEST_CONTEXT,
       },
       {
@@ -1056,7 +1031,7 @@ test('rejects an ECR registry Region that differs from the deployment target', (
 test('validates and applies the application metric export cadence', () => {
   expect(
     resolvePlatformConfig({
-      allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+      allowedIngressCidr: '203.0.113.10/32',
       ...ECR_TEST_CONTEXT,
       metricsExportIntervalSeconds: '45',
     }, ECR_TEST_TARGET).metricsExportIntervalSeconds,
@@ -1077,7 +1052,7 @@ test('validates and applies the application metric export cadence', () => {
 test.each([4, 301])('rejects metric export cadence outside the supported range: %s', (value) => {
   expect(() =>
     resolvePlatformConfig({
-      allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+      allowedIngressCidr: '203.0.113.10/32',
       ...ECR_TEST_CONTEXT,
       metricsExportIntervalSeconds: value,
     }, ECR_TEST_TARGET),
@@ -1087,7 +1062,7 @@ test.each([4, 301])('rejects metric export cadence outside the supported range: 
 test.each(['30.5', '', true])('rejects noninteger metric export cadence: %p', (value) => {
   expect(() =>
     resolvePlatformConfig({
-      allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+      allowedIngressCidr: '203.0.113.10/32',
       ...ECR_TEST_CONTEXT,
       metricsExportIntervalSeconds: value,
     }, ECR_TEST_TARGET),
