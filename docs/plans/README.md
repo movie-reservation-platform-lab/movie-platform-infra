@@ -81,6 +81,9 @@ Unit tests, CDK assertions, synth contracts, script checks, and smoke tests.
 
 ## Current Planning Priorities
 
+- [Standalone-Account Identity Center And Grafana Access Bootstrap](./standalone-account-identity-center-bootstrap.md):
+  establish the approved identity, preflight, lifecycle, testing, and staged
+  release contract for issue #14 before implementation begins.
 - [Prefix List Ingress Allowlist](./prefix-list-ingress-allowlist.md): replace
   changing CIDR context with one externally owned list shared by the ALB and
   Managed Grafana.
