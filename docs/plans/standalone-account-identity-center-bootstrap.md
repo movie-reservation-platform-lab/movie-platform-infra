@@ -35,6 +35,25 @@ translate it into implementation and release work.
 | 18. Existing draft | Treat every current change as unapproved evidence; retain only work reconciled with this plan and review it as new. |
 | 19. PR structure | Use four sequential PRs: plan; bootstrap runbook/navigation; preflight/tests/CI; deployment/lifecycle/release integration. Then run the separately approved rehearsal. |
 
+### PR 3 implementation refinement
+
+On 2026-08-18, the operator approved replacing the Bash draft with TypeScript
+and clarified that deployment scaffolding is an automation building block, not
+CDK application or business code. The preflight therefore lives under
+`automation/aws-account-preflight/` with its own TypeScript and Jest
+configuration. The root infrastructure build and test suite exclude it; the
+aggregate CI command invokes its separate typecheck, behavior tests, and
+self-test explicitly. If ownership later moves to a dedicated automation
+repository, the source, configuration, tests, and CI gate move together.
+
+During the PR 3 code review, the operator then approved the maintainability
+refinement: use Node's standard `parseArgs`, replace the bespoke pseudo-conf
+grammar with a JSON target manifest plus explicit runtime validation, split the
+implementation by runtime boundary, narrow the public CLI seam, and move the
+fake AWS executable into a dedicated test fixture. These changes preserve the
+approved identity, privacy, and release-gate contract while making the target
+format portable to a future Python, TypeScript, or Rust owner.
+
 Consolidated plan approval does not approve the existing draft wholesale,
 authorize AWS mutations, or skip per-PR review.
 
@@ -119,9 +138,10 @@ unintended administrator access.
 - `README.md` and the deployment runbook already state that Organizations and
   IAM Identity Center are external account prerequisites that survive stack
   teardown, but neither explains how to create or verify them.
-- The repository's shell smoke helpers use `set -euo pipefail`, explicit
-  `AWS_PROFILE`/`AWS_REGION`, deterministic `--self-test` paths, and Jest
-  fixtures with stub executables. The new preflight should follow that pattern.
+- The repository's shell smoke helpers establish useful fail-closed,
+  deterministic self-test, and stub-executable patterns. The preflight retains
+  those behaviors in an isolated TypeScript automation boundary rather than
+  extending the CDK application or its infrastructure test suite.
 - `package.json` exposes validation commands and combines them in `npm run ci`.
   There is no account-preflight command today.
 - The working tree began clean on `main`; no remote issue #14 branch or pull
@@ -129,7 +149,7 @@ unintended administrator access.
   `issue-14-identity-center-grafana-bootstrap`.
 
 Draft reconciliation found useful structure but several now-rejected
-contracts. The current script/tests take four exported target variables and
+contracts. The draft Bash script/tests take four exported target variables and
 print the full account and generated role; the runbook and deployment docs
 teach the same environment-variable flow. They must move to the private target
 file and redacted output. The runbook currently stops with persistent Grafana
@@ -250,28 +270,33 @@ metrics.
 
 ### Executable preflight contract
 
-Add `scripts/aws-account-preflight.sh`, exposed as `npm run preflight:aws`.
+Add the isolated TypeScript building block under
+`automation/aws-account-preflight/`, exposed as `npm run preflight:aws`.
 Read the independent target expectation from
-`${XDG_CONFIG_HOME:-$HOME/.config}/movie-platform/aws-target.conf` by default.
+`${XDG_CONFIG_HOME:-$HOME/.config}/movie-platform/aws-target.json` by default.
 Allow `MOVIE_PLATFORM_AWS_TARGET_FILE` to select another absolute file later,
 for example when a member workload account is introduced. The file uses this
-strict placeholder-only shape:
+strict JSON placeholder-only shape:
 
-```text
-PROFILE=movie-platform-demo
-REGION=eu-central-1
-ACCOUNT_ID=<12-digit-account-id>
-EXPECTED_ROLE_NAME=AWSReservedSSO_AdministratorAccess_<generated-suffix>
+```json
+{
+  "profile": "movie-platform-demo",
+  "region": "eu-central-1",
+  "accountId": "<12-digit-account-id>",
+  "expectedRoleName": "AWSReservedSSO_AdministratorAccess_<generated-suffix>"
+}
 ```
 
 The runbook creates the containing directory and file manually with
-operator-only permissions. The script must read it without `source`/`eval`,
-reject unknown, missing, or duplicate keys, require a regular operator-owned
-file with no group/other access, and never print its contents. Keeping this
-expectation separate from `~/.aws/config` preserves the independent comparison
-that makes the preflight useful.
+operator-only permissions. The building block must parse it as inert data,
+reject non-object JSON, unknown or missing keys, wrong runtime types, and
+invalid values; require a regular operator-owned file with no group/other
+access; and never print its contents. `JSON.parse` owns syntax while the target
+validator converts `unknown` into the TypeScript `AwsTarget` contract. Keeping
+this expectation separate from `~/.aws/config` preserves the independent
+comparison that makes the preflight useful.
 
-The script will:
+The building block will:
 
 1. validate all inputs locally and require AWS CLI v2;
 2. reject explicit AWS access-key/session-token environment variables;
@@ -297,11 +322,21 @@ mutation group.
 
 ### Testability and documentation integration
 
-- Add `--self-test` for pure role-ARN parsing/validation without AWS access.
-- Add Jest process tests using a stub `aws` executable to prove input failures
-  happen before STS, mismatches fail closed, IAM-user credentials are rejected,
-  and neither success nor failure output reveals full account/role/session
-  identifiers.
+- Parse `--help` and `--self-test` with Node's standard `parseArgs`; do not add a
+  third-party CLI framework for two boolean options.
+- Add `--self-test` for pure JSON-target and role-ARN validation without AWS
+  access.
+- Add a separate Jest automation suite using a stub `aws` executable to prove
+  input failures happen before STS, mismatches fail closed, IAM-user
+  credentials are rejected, and neither success nor failure output reveals
+  full account/role/session identifiers. Keep the Bash stub in a dedicated test
+  fixture instead of embedding it in TypeScript. The root infrastructure Jest
+  suite must not discover or run these tests.
+- Keep the implementation readable by separating CLI, target schema,
+  filesystem trust, AWS CLI, orchestration, self-test, and executable-entrypoint
+  responsibilities while exposing only the CLI seam to black-box tests.
+- Add a building-block-specific TypeScript configuration and exclude the
+  automation tree from the root infrastructure build.
 - Add `validate:aws-account-preflight` and include it in `npm run ci`.
 - Link the account bootstrap runbook from `docs/operations/README.md`,
   `docs/README.md`, `README.md`, and the existing deployment runbook.
@@ -318,13 +353,13 @@ mutation group.
   regression test, and the current runbook already demonstrates that merely
   printing caller identity is weaker than failing closed.
 - Decision: rejected. Keep explanatory commands in the runbook, but put the
-  deploy gate in a deterministic script.
+  deploy gate in a deterministic automation building block.
 
 ### Alternative B: Manual account bootstrap plus tested read-only preflight
 
 - Pros: respects the persistent/disposable lifecycle boundary, avoids root API
-  keys, keeps secrets out of Git, is testable offline, and fits current shell
-  tooling.
+  keys, keeps secrets out of Git, is testable offline, and uses the existing
+  TypeScript toolchain without coupling to the CDK application.
 - Cons: account bootstrap and Grafana assignment remain deliberate manual
   tasks; an operator can still bypass the documented preflight.
 - Decision: recommended for this one-account learning/demo slice.
@@ -351,14 +386,14 @@ mutation group.
 
 - New command: `npm run preflight:aws`.
 - New validation command: `npm run validate:aws-account-preflight`.
-- New local target-file contract with `PROFILE`, `REGION`, `ACCOUNT_ID`, and
-  `EXPECTED_ROLE_NAME`; optional environment override:
+- New local JSON target-file contract with `profile`, `region`, `accountId`,
+  and `expectedRoleName`; optional environment override:
   `MOVIE_PLATFORM_AWS_TARGET_FILE`.
 - `REGION` is deliberately constrained to `eu-central-1` for this demo.
 - The profile must be an AWS CLI v2 SSO token-provider profile with no static
   access keys.
-- No TypeScript, CDK context, CloudFormation, application API, event, database,
-  dashboard schema, or deployed-resource contract changes.
+- No CDK application module, CDK context, CloudFormation, application API,
+  event, database, dashboard schema, or deployed-resource contract changes.
 
 ## 9. Data Model / Persistence Changes
 
@@ -448,8 +483,8 @@ Treat any free trial as a temporary discount, not as the cost model.
 2. Deliver PR 1 containing only this design record and its plan index entry.
 3. Deliver PR 2 containing the manual bootstrap runbook and navigation links;
    review every command's intent, lifecycle, source, and placeholders.
-4. Deliver PR 3 containing the strict target-file parser and live read-only
-   preflight together with fake-CLI tests and package/CI commands.
+4. Deliver PR 3 containing the JSON target validation boundary and live
+   read-only preflight together with fake-CLI tests and package/CI commands.
 5. Deliver PR 4 integrating the preflight, lifecycle table, and two-gate
    release checklist into the normal deployment documentation.
 6. After each PR passes its scoped checks and all four merge, stop. Obtain
@@ -460,19 +495,22 @@ run real `aws`, `cdk bootstrap`, `cdk deploy`, or `cdk destroy` during Gate 1.
 
 ## 13. Testing Strategy
 
-- Shell syntax: `bash -n scripts/aws-account-preflight.sh`.
-- Pure self-test: role ARN parsing and expected-role validation without AWS
-  credentials.
-- Jest process tests: stub AWS CLI v2 profile/config and STS responses, then
-  assert fail-closed behavior and sanitized success output.
+- Automation typecheck: compile only the preflight building block with its own
+  TypeScript configuration and no emitted JavaScript.
+- Pure self-test: JSON target parsing, role ARN parsing, and expected-role
+  validation without AWS credentials.
+- Separate Jest automation tests: execute the TypeScript CLI boundary with a
+  dedicated stub AWS CLI fixture providing profile/config and STS responses,
+  then assert fail-closed behavior and sanitized success output.
 - Security regression: set access-key environment variables or profile values
   and prove STS is not called.
 - Output-privacy regression: exercise success and mismatch paths and prove only
   the permitted redacted fields appear; there is no full-identity verbose mode.
 - Contract regression: use fake account `111111111111`, fake profile, fake
   Identity Center role suffix, and fake session values only.
-- Repository build/test: ensure the TypeScript tests compile and all existing
-  infrastructure assertions remain unchanged.
+- Repository build/test separation: prove `npm run build` and `npm test` cover
+  the CDK repository without discovering automation source/tests, while the
+  explicit automation commands typecheck and test the building block.
 - Full offline CI: confirm no AWS credentials or live lookups are needed.
 - Manual acceptance, only after explicit operator approval: perform SSO login,
   preflight, first deployment, temporary Grafana Admin data-source setup,
@@ -490,7 +528,8 @@ Expected local verification:
 
 ```bash
 npm run validate:aws-account-preflight
-npm test -- --runInBand test/aws-account-preflight.test.ts
+npm run typecheck:automation
+npm run test:automation -- --runInBand
 npm run build
 npm test -- --runInBand
 npm run ci
@@ -509,7 +548,7 @@ and can pass on its own.
 | --- | --- | --- | --- |
 | 1. Approved design record | Establish scope and decisions without implementation | This condensed plan and `docs/plans/README.md` only | Documentation diff, links, placeholders, and decision-log review |
 | 2. Manual bootstrap runbook | Review persistent account operations independently from executable code | `docs/operations/standalone-account-access-bootstrap.md` plus documentation navigation links | Command intent review, official-source links, lifecycle/cost accuracy, no real identity values |
-| 3. Tested preflight contract | Land the scaffolding only with the tests that protect it | `scripts/aws-account-preflight.sh`, `test/aws-account-preflight.test.ts`, and `package.json` | Script syntax/self-test, focused Jest tests, build, full tests, and offline CI |
+| 3. Tested preflight contract | Land an isolated automation building block with the tests that protect it | `automation/aws-account-preflight/`, `package.json`, root `tsconfig.json`, and this approved-plan refinement | Separate TypeScript typecheck/Jest/self-test, root build/test exclusion, and offline CI |
 | 4. Deployment and release integration | Wire the approved preflight and lifecycle into normal operations | `docs/operations/aws-cdk-deployment.md`, remaining `README.md` integration, and the release checklist | Documentation diff, command ordering, links, full offline CI, and secret/identity-value scan |
 
 Before creating these PRs, reconcile the current draft file by file against the
@@ -597,8 +636,8 @@ applications, permission sets, and recovery consequences are understood.
 | Identity Center is enabled in the wrong Region/type | High | Low | Verify account/Region first; select organization instance explicitly; document that instance migration is disruptive |
 | Grafana login is confused with data-source access | Medium | Medium | Document and verify human assignment, temporary Admin/final Editor role, network gate, and IAM data-access role independently |
 | Real identity/account values are committed or leaked in logs | High | Low | Use placeholders/fakes, keep target values in the dedicated local file, redact every output path, and inspect the diff with targeted secret/value searches |
-| Documentation drifts as AWS consoles evolve | Medium | Medium | Link official AWS docs, keep executable comparisons in the script, and mark live console verification as required |
-| Application tests pass while deployment scaffolding is broken | High | Medium | Keep script self-tests and process-level contract tests in CI; require a supervised live rehearsal; move tests with the scaffold if repository ownership changes |
+| Documentation drifts as AWS consoles evolve | Medium | Medium | Link official AWS docs, keep comparisons executable in the building block, and mark live console verification as required |
+| Infrastructure tests pass while isolated deployment scaffolding is broken | High | Medium | Run the separate automation typecheck, self-test, and behavior suite as explicit CI gates; require a supervised live rehearsal; move those gates with the building block if repository ownership changes |
 | Operator bypasses the standalone preflight | High | Medium | Put it immediately before every documented mutation group; consider a universal deployment wrapper in a later workflow issue |
 
 ## 16. Done Criteria
@@ -616,6 +655,8 @@ applications, permission sets, and recovery consequences are understood.
   approved redacted profile/Region/permission-set/account-last-four summary.
 - Offline self-tests and Jest fixture tests cover success and important failure
   modes without AWS credentials.
+- The TypeScript automation source and tests remain outside the CDK application,
+  root build, and infrastructure Jest suite, with their own explicit CI gate.
 - `npm run ci` includes the new validation and passes.
 - The lifecycle table clearly distinguishes account prerequisites, CDK
   bootstrap, externally owned foundation resources, and disposable stack
@@ -670,13 +711,30 @@ Constraints:
   config file, parse it as data without source/eval, and emit only the approved
   redacted output.
 - Keep the preflight and all of its tests together in PR 3.
-- Update only the files assigned to the current PR in the Gate 1 table.
+- Keep the automation source and tests out of the root CDK application and
+  infrastructure test suite; run them through separate package commands.
 
 Relevant files/modules:
 - docs/operations/standalone-account-access-bootstrap.md
-- scripts/aws-account-preflight.sh
-- test/aws-account-preflight.test.ts
+- automation/aws-account-preflight/src/cli.ts
+- automation/aws-account-preflight/src/index.ts
+- automation/aws-account-preflight/src/main.ts
+- automation/aws-account-preflight/src/preflight.ts
+- automation/aws-account-preflight/src/aws-cli.ts
+- automation/aws-account-preflight/src/target-file.ts
+- automation/aws-account-preflight/src/target-schema.ts
+- automation/aws-account-preflight/src/self-test.ts
+- automation/aws-account-preflight/src/preflight-error.ts
+- automation/aws-account-preflight/test/cli.test.ts
+- automation/aws-account-preflight/test/target-file.test.ts
+- automation/aws-account-preflight/test/preflight.test.ts
+- automation/aws-account-preflight/test/test-support.ts
+- automation/aws-account-preflight/test/fixtures/aws-stub.sh
+- automation/aws-account-preflight/tsconfig.json
+- automation/aws-account-preflight/jest.config.cjs
+- automation/aws-account-preflight/README.md
 - package.json
+- tsconfig.json
 - README.md
 - docs/README.md
 - docs/operations/README.md
@@ -684,7 +742,8 @@ Relevant files/modules:
 
 Expected verification commands:
 - npm run validate:aws-account-preflight
-- npm test -- --runInBand test/aws-account-preflight.test.ts
+- npm run typecheck:automation
+- npm run test:automation -- --runInBand
 - npm run build
 - npm test -- --runInBand
 - npm run ci

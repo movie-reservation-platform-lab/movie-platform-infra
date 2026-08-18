@@ -271,7 +271,7 @@ Create the file without overwriting an existing one:
 ```bash
 target_config_root="${XDG_CONFIG_HOME:-${HOME}/.config}"
 target_config_dir="${target_config_root}/movie-platform"
-target_config_file="${target_config_dir}/aws-target.conf"
+target_config_file="${target_config_dir}/aws-target.json"
 
 umask 077
 mkdir -p "${target_config_dir}"
@@ -280,19 +280,22 @@ chmod 600 "${target_config_file}"
 vi "${target_config_file}"
 ```
 
-Enter exactly four unquoted key/value records:
+Enter exactly one JSON object. Keep the account ID quoted because it is an
+identifier, not a number used for arithmetic:
 
-```text
-PROFILE=movie-platform-demo
-REGION=eu-central-1
-ACCOUNT_ID=<12-digit-account-id>
-EXPECTED_ROLE_NAME=AWSReservedSSO_AdministratorAccess_<16-hex-suffix>
+```json
+{
+  "profile": "movie-platform-demo",
+  "region": "eu-central-1",
+  "accountId": "<12-digit-account-id>",
+  "expectedRoleName": "AWSReservedSSO_AdministratorAccess_<16-hex-suffix>"
+}
 ```
 
 Do not `source` this file: PR 3 parses it as inert data and rejects unknown,
-missing, or duplicate keys and unsafe permissions. It defaults to this XDG path
-and supports `MOVIE_PLATFORM_AWS_TARGET_FILE` as an explicit future override
-for another account target. Do not create a repository `.env` copy.
+missing, wrongly typed, or invalid fields and unsafe permissions. It defaults
+to this XDG path and supports `MOVIE_PLATFORM_AWS_TARGET_FILE` as an explicit
+future override for another account target. Do not create a repository copy.
 
 Reference: [Configure IAM Identity Center authentication for the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html).
 
