@@ -12,11 +12,15 @@
     "validate:xray-smoke": "bash -n scripts/xray-smoke.sh && bash scripts/xray-smoke.sh --self-test",
     "validate:managed-metrics-smoke": "bash -n scripts/managed-metrics-smoke.sh && bash scripts/managed-metrics-smoke.sh --self-test",
     "validate:grafana-dashboard": "bash -n scripts/validate-grafana-dashboard.sh && bash scripts/validate-grafana-dashboard.sh",
+    "typecheck:automation": "tsc --project automation/aws-account-preflight/tsconfig.json",
+    "test:automation": "jest --config automation/aws-account-preflight/jest.config.cjs",
+    "validate:aws-account-preflight": "npm run typecheck:automation && npm run test:automation -- --runInBand && npm run preflight:aws -- --self-test",
+    "preflight:aws": "ts-node --project automation/aws-account-preflight/tsconfig.json automation/aws-account-preflight/src/main.ts",
     "smoke:xray": "bash scripts/xray-smoke.sh",
     "smoke:managed-metrics": "bash scripts/managed-metrics-smoke.sh",
     "synth:ecr-contract": "AWS_REGION=eu-central-1 CDK_DEFAULT_ACCOUNT=111111111111 CDK_DEFAULT_REGION=eu-central-1 cdk synth --no-lookups -c allowedIngressPrefixListId=pl-0123456789abcdef0 -c applicationImageReference=111111111111.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder@sha256:0000000000000000000000000000000000000000000000000000000000000000 -c applicationServiceVersion=ci-contract-test",
     "cdk": "cdk",
-    "ci": "npm run build && npm test && npm run validate:adot-image && npm run validate:xray-smoke && npm run validate:managed-metrics-smoke && npm run validate:grafana-dashboard && npm run synth:ecr-contract"
+    "ci": "npm run build && npm test && npm run validate:adot-image && npm run validate:xray-smoke && npm run validate:managed-metrics-smoke && npm run validate:grafana-dashboard && npm run validate:aws-account-preflight && npm run synth:ecr-contract"
   },
   "devDependencies": {
     "@types/jest": "^30",
