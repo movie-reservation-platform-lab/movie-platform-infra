@@ -10,8 +10,9 @@ this folder holds durable design, planning, and operations material.
   non-trivial infrastructure changes.
 - `architecture/`: durable infrastructure design notes, stack boundaries,
   resource topology, and contract decisions.
-- `operations/`: deployment runbooks, teardown, smoke checks, troubleshooting,
-  and manual AWS prerequisites.
+- [`operations/`](./operations/): deployment runbooks, teardown, smoke checks,
+  troubleshooting, and manual AWS prerequisites, including the
+  [standalone-account access bootstrap](./operations/standalone-account-access-bootstrap.md).
 
 ## Documentation Ownership
 

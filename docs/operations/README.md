@@ -5,6 +5,9 @@ infrastructure repository.
 
 ## Runbooks
 
+- [Standalone-Account Identity Center And Grafana Access Bootstrap](./standalone-account-access-bootstrap.md):
+  persistent Organization/Identity Center prerequisites, MFA-backed operator
+  access, and the temporary-Admin-to-Editor Grafana workflow.
 - [AWS CDK Deployment Runbook](./aws-cdk-deployment.md)
 
 ## Operational Rules
