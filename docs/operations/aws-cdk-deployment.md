@@ -4,6 +4,12 @@ This runbook deploys `GoldenPathDemoStack` from a developer workstation into an
 AWS account, verifies the infrastructure contract, and removes the deployed
 resources afterward.
 
+Complete the
+[standalone-account access bootstrap](./standalone-account-access-bootstrap.md)
+before the first deployment. During an approved rehearsal, use the
+[AWS demo release checklist](./aws-demo-release-checklist.md) as the controlling
+sequence; this runbook supplies the detailed CDK commands.
+
 The stack is a learning/demo environment, not a production deployment. It
 creates resources that incur charges while they exist, including a Fargate task,
 an Application Load Balancer, interface VPC endpoints, CloudWatch logs and
@@ -13,6 +19,8 @@ metrics, an AMP workspace, and an Amazon Managed Grafana workspace.
 
 | Phase | Where it runs | What it does |
 | --- | --- | --- |
+| Account access bootstrap | AWS console plus workstation | Creates the persistent Organization, IAM Identity Center operator, MFA, account assignment, CLI profile, and private target file described by the separate bootstrap runbook. |
+| Account preflight | Workstation plus read-only AWS CLI calls | Proves that the pinned SSO profile, Region, account, permission set, and live role all match before a group of mutations. It changes no AWS resources. |
 | `synth` | Workstation | Executes the TypeScript CDK app and writes CloudFormation and asset metadata under `cdk.out/`. It changes no AWS resources. |
 | `bootstrap` | Workstation CLI plus AWS CloudFormation | Once per account/Region, creates the CDK toolkit resources used to publish assets and deploy stacks. |
 | `diff` | Workstation CLI plus AWS CloudFormation | Compares the synthesized template with the deployed stack. |
@@ -26,7 +34,11 @@ and CloudFormation owns the deployed resource lifecycle.
 
 Every real deploy needs:
 
-- AWS account ID and Region.
+- The dedicated `movie-platform-demo` IAM Identity Center profile and a valid
+  SSO session.
+- The private `aws-target.json` created by the account bootstrap runbook, which
+  pins the exact account, `eu-central-1`, permission set, and generated role.
+- AWS account ID and Region for explicit CDK targeting.
 - Customer-managed IPv4 prefix list ID for ALB and Grafana access.
 - Digest-pinned private ECR image reference for the reservation service.
 - Application service version or release identifier.
@@ -35,24 +47,50 @@ Every real deploy needs:
 Example context:
 
 ```bash
-export AWS_PROFILE=movie-reservation-platform-cdk
+export AWS_PROFILE=movie-platform-demo
 export AWS_REGION=eu-central-1
-export AWS_ACCOUNT_ID=123456789012
+export AWS_ACCOUNT_ID='<12-digit-account-id>'
 export ALLOWED_INGRESS_PREFIX_LIST_ID=pl-0123456789abcdef0
 export APPLICATION_IMAGE_REFERENCE="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest>"
-export APPLICATION_SERVICE_VERSION=<release-id>
+export APPLICATION_SERVICE_VERSION='<release-id>'
 ```
+
+The account ID, generated role name, and other real identity values belong in
+the operator-owned target file or local shell only. Do not commit them.
+
+## Account, Region, And Role Preflight
+
+Start or refresh the dedicated SSO session, then run the repository gate:
+
+```bash
+aws sso login --profile movie-platform-demo
+npm run preflight:aws
+```
+
+The preflight reads the private target file and uses read-only AWS CLI calls to
+validate the exact SSO profile, `eu-central-1`, account, permission set, and
+generated IAM Identity Center role. It rejects static or alternate credential
+providers and prints only a redacted result.
+
+One pass covers only a short, uninterrupted group of related operations. Rerun
+it before prefix-list changes, `cdk bootstrap`, `cdk deploy`, and `cdk destroy`,
+and after any renewed SSO session or target/profile change. If it fails or is
+unavailable, stop rather than substituting a raw identity printout.
 
 ## Prefix List Setup
 
 Create the customer-managed IPv4 prefix list outside the stack:
 
 ```bash
+npm run preflight:aws
+
 aws ec2 create-managed-prefix-list \
+  --profile "$AWS_PROFILE" \
+  --region "$AWS_REGION" \
   --prefix-list-name movie-reservation-platform-aws-demo-ingress \
   --address-family IPv4 \
   --max-entries 10 \
-  --entries Cidr=<your-public-ip>/32,Description=developer-laptop
+  --entries 'Cidr=<your-public-ip>/32,Description=developer-laptop'
 ```
 
 `MaxEntries=10` supports up to ten distinct source CIDRs. Because the ALB
@@ -65,14 +103,20 @@ small and check the security-group quota before resizing it.
 To add another trusted `/32`, read the current version and modify the list:
 
 ```bash
+npm run preflight:aws
+
 aws ec2 describe-managed-prefix-lists \
+  --profile "$AWS_PROFILE" \
+  --region "$AWS_REGION" \
   --filters Name=prefix-list-name,Values=movie-reservation-platform-aws-demo-ingress \
   --query 'PrefixLists[0].{PrefixListId:PrefixListId,Version:Version}'
 
 aws ec2 modify-managed-prefix-list \
+  --profile "$AWS_PROFILE" \
+  --region "$AWS_REGION" \
   --prefix-list-id "$ALLOWED_INGRESS_PREFIX_LIST_ID" \
-  --current-version <version> \
-  --add-entries Cidr=<new-public-ip>/32,Description=<operator-or-location>
+  --current-version '<version>' \
+  --add-entries 'Cidr=<new-public-ip>/32,Description=<operator-or-location>'
 ```
 
 Do not add `0.0.0.0/0`. Prefix list entries change who can reach the ALB and
@@ -88,16 +132,18 @@ With the intended AWS profile and Region exported, inspect the exact configured
 ID before `cdk diff` or `cdk deploy`:
 
 ```bash
-aws sts get-caller-identity \
-  --query '{Account:Account,Arn:Arn}' \
-  --output table
+npm run preflight:aws
 
 aws ec2 describe-managed-prefix-lists \
+  --profile "$AWS_PROFILE" \
+  --region "$AWS_REGION" \
   --prefix-list-ids "$ALLOWED_INGRESS_PREFIX_LIST_ID" \
   --query 'PrefixLists[0].{Id:PrefixListId,Owner:OwnerId,Family:AddressFamily,State:State,MaxEntries:MaxEntries,Version:Version}' \
   --output table
 
 aws ec2 get-managed-prefix-list-entries \
+  --profile "$AWS_PROFILE" \
+  --region "$AWS_REGION" \
   --prefix-list-id "$ALLOWED_INGRESS_PREFIX_LIST_ID" \
   --query 'Entries[*].{CIDR:Cidr,Description:Description}' \
   --output table
@@ -124,8 +170,10 @@ Install dependencies and run the offline checks:
 
 ```bash
 npm ci
+npm run validate:aws-account-preflight
 npm run build
-npm test
+npm run test:cdk
+npm run test:tooling
 npm run validate:adot-image
 npm run validate:xray-smoke
 npm run validate:managed-metrics-smoke
@@ -133,17 +181,23 @@ npm run validate:grafana-dashboard
 npm run synth:ecr-contract
 ```
 
+`npm run ci` runs this ordered, credential-free repository suite as one local
+convenience command. In GitHub Actions, automation, CDK assertions, repository
+tooling, and synth are separate checks so failures keep their ownership
+boundary. The synth contract itself is offline and uses `--no-lookups`; package
+installation and the pinned ADOT base-image download can still require internet
+access.
+
 `npm run synth:ecr-contract` uses fake account and digest values with
 `--no-lookups`. It verifies the CDK contract offline; it does not prove that the
 image or prefix list exists in AWS.
 
 ## Bootstrap, Diff, And Deploy
 
-Verify the caller before any AWS mutation. This complements, but does not
-replace, the prefix-list preflight above:
+Pass the account preflight immediately before bootstrapping:
 
 ```bash
-aws sts get-caller-identity --profile "$AWS_PROFILE"
+npm run preflight:aws
 ```
 
 Bootstrap the account/Region once:
@@ -170,9 +224,12 @@ npm run cdk -- diff \
 ```
 
 Deploy only after account, Region, prefix list, application digest, expected
-cost, and teardown plan are clear:
+cost, teardown plan, and synthesized diff are clear. Because deploy is a new
+mutation group after review, rerun the preflight first:
 
 ```bash
+npm run preflight:aws
+
 npm run cdk -- deploy GoldenPathDemoStack \
   -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
   -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
@@ -198,6 +255,8 @@ Managed metrics smoke requires `awscurl` for SigV4-signed AMP queries.
 Destroy the stack with the same context boundary:
 
 ```bash
+npm run preflight:aws
+
 npm run cdk -- destroy GoldenPathDemoStack \
   -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
   -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
@@ -209,4 +268,8 @@ Grafana workspace, Grafana role, VPC endpoints, and log groups are gone.
 
 The customer-managed prefix list, CDK bootstrap stack, Organizations, and IAM
 Identity Center resources are account/Region-level prerequisites and are not
-part of `GoldenPathDemoStack`.
+part of `GoldenPathDemoStack`. Preserve them after routine demo teardown. Then
+complete the access bootstrap runbook's
+[first-rehearsal exit gate](./standalone-account-access-bootstrap.md#phase-9-first-rehearsal-exit-gate),
+including replacement of the temporary `AdministratorAccess` assignment before
+a second workload deployment.

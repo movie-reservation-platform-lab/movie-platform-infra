@@ -40,8 +40,10 @@ Run commands from this repository root:
 
 ```bash
 npm ci
+npm run validate:aws-account-preflight
 npm run build
-npm test
+npm run test:cdk
+npm run test:tooling
 npm run validate:adot-image
 npm run validate:xray-smoke
 npm run validate:managed-metrics-smoke
@@ -50,9 +52,35 @@ npm run synth:ecr-contract
 npm run ci
 ```
 
+`npm test` remains the convenience command for all CDK and repository-tooling
+Jest tests under `test/`. The account-preflight automation has its own
+TypeScript and Jest configuration, so CI validates it separately and before
+CDK or tooling tests.
+
 `npm run synth:ecr-contract` uses a fake account, fake repository, and all-zero
 digest with `--no-lookups`. It proves the CDK app accepts an immutable image
 contract offline; it does not prove the image exists in AWS.
+
+## AWS Operator Access
+
+Before a real AWS deployment, complete the
+[standalone-account access bootstrap](docs/operations/standalone-account-access-bootstrap.md).
+It creates the dedicated MFA-backed `movie-platform-demo` Identity Center
+profile and the private target file used by the read-only safety gate.
+
+```bash
+export AWS_PROFILE=movie-platform-demo
+export AWS_REGION=eu-central-1
+
+aws sso login --profile "$AWS_PROFILE"
+npm run preflight:aws
+```
+
+The preflight must pass before each short group of AWS mutations. Keep real
+account and role values in the operator-owned JSON target outside Git. Follow
+the detailed [deployment runbook](docs/operations/aws-cdk-deployment.md), and
+use the [two-gate release checklist](docs/operations/aws-demo-release-checklist.md)
+for the first approved rehearsal.
 
 ## Application Image Contract
 
@@ -61,8 +89,8 @@ Standalone synth/deploy requires both application image inputs:
 ```bash
 npm run cdk -- synth \
   -c allowedIngressPrefixListId=pl-0123456789abcdef0 \
-  -c applicationImageReference=111111111111.dkr.ecr.eu-central-1.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
-  -c applicationServiceVersion=<release-id>
+  -c 'applicationImageReference=111111111111.dkr.ecr.eu-central-1.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest>' \
+  -c 'applicationServiceVersion=<release-id>'
 ```
 
 The image reference must be a private ECR URI pinned by `sha256` digest. Mutable
@@ -80,24 +108,34 @@ in the target account and Region, then pass its ID with
 Example creation for one trusted `/32`:
 
 ```bash
+npm run preflight:aws
+
 aws ec2 create-managed-prefix-list \
+  --profile "$AWS_PROFILE" \
+  --region "$AWS_REGION" \
   --prefix-list-name movie-reservation-platform-aws-demo-ingress \
   --address-family IPv4 \
   --max-entries 10 \
-  --entries Cidr=<your-public-ip>/32,Description=developer-laptop
+  --entries 'Cidr=<your-public-ip>/32,Description=developer-laptop'
 ```
 
 To add another trusted `/32`, read the current version and modify the list:
 
 ```bash
+npm run preflight:aws
+
 aws ec2 describe-managed-prefix-lists \
+  --profile "$AWS_PROFILE" \
+  --region "$AWS_REGION" \
   --filters Name=prefix-list-name,Values=movie-reservation-platform-aws-demo-ingress \
   --query 'PrefixLists[0].{PrefixListId:PrefixListId,Version:Version}'
 
 aws ec2 modify-managed-prefix-list \
-  --prefix-list-id <prefix-list-id> \
-  --current-version <version> \
-  --add-entries Cidr=<new-public-ip>/32,Description=<operator-or-location>
+  --profile "$AWS_PROFILE" \
+  --region "$AWS_REGION" \
+  --prefix-list-id "$ALLOWED_INGRESS_PREFIX_LIST_ID" \
+  --current-version '<version>' \
+  --add-entries 'Cidr=<new-public-ip>/32,Description=<operator-or-location>'
 ```
 
 Updating prefix list entries changes who can reach the ALB and Grafana without
@@ -118,27 +156,37 @@ CDK has three separate steps:
 Use this order for a real deployment:
 
 ```bash
-aws sts get-caller-identity
+export AWS_PROFILE=movie-platform-demo
+export AWS_REGION=eu-central-1
+export AWS_ACCOUNT_ID='<12-digit-account-id>'
+export ALLOWED_INGRESS_PREFIX_LIST_ID=pl-0123456789abcdef0
+export APPLICATION_IMAGE_REFERENCE="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest>"
+export APPLICATION_SERVICE_VERSION='<release-id>'
 
-npm run cdk -- bootstrap aws://<account-id>/<region> \
-  -c allowedIngressPrefixListId=<prefix-list-id> \
-  -c applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
-  -c applicationServiceVersion=<release-id>
+aws sso login --profile "$AWS_PROFILE"
+npm run preflight:aws
+
+npm run cdk -- bootstrap "aws://$AWS_ACCOUNT_ID/$AWS_REGION" \
+  -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
+  -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
+  -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
 
 npm run cdk -- synth \
-  -c allowedIngressPrefixListId=<prefix-list-id> \
-  -c applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
-  -c applicationServiceVersion=<release-id>
+  -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
+  -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
+  -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
 
 npm run cdk -- diff \
-  -c allowedIngressPrefixListId=<prefix-list-id> \
-  -c applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
-  -c applicationServiceVersion=<release-id>
+  -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
+  -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
+  -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
+
+npm run preflight:aws
 
 npm run cdk -- deploy GoldenPathDemoStack \
-  -c allowedIngressPrefixListId=<prefix-list-id> \
-  -c applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
-  -c applicationServiceVersion=<release-id>
+  -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
+  -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
+  -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
 ```
 
 Do not run `deploy` until the account, Region, stack name, ingress prefix list,
@@ -160,14 +208,14 @@ After deployment, run the deterministic trace smoke with the same AWS profile
 and Region:
 
 ```bash
-AWS_PROFILE=<profile> AWS_REGION=<region> \
+AWS_PROFILE="$AWS_PROFILE" AWS_REGION="$AWS_REGION" \
   npm run smoke:xray -- --report /tmp/xray-smoke.json
 ```
 
 Install `awscurl` once on the laptop, then run the managed-metrics smoke:
 
 ```bash
-AWS_PROFILE=<profile> AWS_REGION=<region> \
+AWS_PROFILE="$AWS_PROFILE" AWS_REGION="$AWS_REGION" \
   npm run smoke:managed-metrics -- --report /tmp/managed-metrics-smoke.json
 ```
 
@@ -176,25 +224,29 @@ AWS_PROFILE=<profile> AWS_REGION=<region> \
 Destroy the stack with the same required context boundary:
 
 ```bash
+npm run preflight:aws
+
 npm run cdk -- destroy GoldenPathDemoStack \
-  -c allowedIngressPrefixListId=<prefix-list-id> \
-  -c applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
-  -c applicationServiceVersion=<release-id>
+  -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
+  -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
+  -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
 ```
 
 Confirm that the CloudFormation stack, ALB, ECS service/tasks, AMP and Grafana
 workspaces, Grafana role, VPC endpoints, and log groups are gone. The
 customer-managed prefix list, CDK bootstrap, Organizations, and IAM Identity
 Center resources are account/Region-level and are not part of
-`GoldenPathDemoStack`.
+`GoldenPathDemoStack`. Follow the bootstrap runbook's first-rehearsal exit gate
+to replace and remove the temporary `AdministratorAccess` assignment before a
+second workload deployment.
 
 ## Optional Context
 
 ```bash
 npm run cdk -- synth \
   -c allowedIngressPrefixListId=pl-0123456789abcdef0 \
-  -c applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest> \
-  -c applicationServiceVersion=<release-id> \
+  -c 'applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest>' \
+  -c 'applicationServiceVersion=<release-id>' \
   -c enableEcsExec=true
 ```
 

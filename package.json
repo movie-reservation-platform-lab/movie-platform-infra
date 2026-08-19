@@ -8,6 +8,8 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
+    "test:cdk": "jest --runInBand --runTestsByPath test/infra.test.ts",
+    "test:tooling": "jest --runInBand --runTestsByPath test/xray-smoke.test.ts test/managed-metrics-smoke.test.ts",
     "validate:adot-image": "bash scripts/validate-adot-image.sh",
     "validate:xray-smoke": "bash -n scripts/xray-smoke.sh && bash scripts/xray-smoke.sh --self-test",
     "validate:managed-metrics-smoke": "bash -n scripts/managed-metrics-smoke.sh && bash scripts/managed-metrics-smoke.sh --self-test",
@@ -20,7 +22,7 @@
     "smoke:managed-metrics": "bash scripts/managed-metrics-smoke.sh",
     "synth:ecr-contract": "AWS_REGION=eu-central-1 CDK_DEFAULT_ACCOUNT=111111111111 CDK_DEFAULT_REGION=eu-central-1 cdk synth --no-lookups -c allowedIngressPrefixListId=pl-0123456789abcdef0 -c applicationImageReference=111111111111.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder@sha256:0000000000000000000000000000000000000000000000000000000000000000 -c applicationServiceVersion=ci-contract-test",
     "cdk": "cdk",
-    "ci": "npm run build && npm test && npm run validate:adot-image && npm run validate:xray-smoke && npm run validate:managed-metrics-smoke && npm run validate:grafana-dashboard && npm run validate:aws-account-preflight && npm run synth:ecr-contract"
+    "ci": "npm run validate:aws-account-preflight && npm run build && npm run test:cdk && npm run test:tooling && npm run validate:adot-image && npm run validate:xray-smoke && npm run validate:managed-metrics-smoke && npm run validate:grafana-dashboard && npm run synth:ecr-contract"
   },
   "devDependencies": {
     "@types/jest": "^30",

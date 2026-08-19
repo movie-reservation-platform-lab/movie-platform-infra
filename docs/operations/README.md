@@ -9,13 +9,16 @@ infrastructure repository.
   persistent Organization/Identity Center prerequisites, MFA-backed operator
   access, and the temporary-Admin-to-Editor Grafana workflow.
 - [AWS CDK Deployment Runbook](./aws-cdk-deployment.md)
+- [AWS Demo Release Checklist](./aws-demo-release-checklist.md): the offline
+  repository gate followed by the separately approved live rehearsal.
 
 ## Operational Rules
 
 - Do not deploy, destroy, or mutate AWS resources without explicit operator
   intent.
-- Always verify the AWS account, Region, selected application image digest, and
-  ingress prefix list before deploy or destroy.
+- Require `npm run preflight:aws` before each short group of AWS mutations, and
+  verify the selected application image digest and ingress prefix list before
+  deploy or destroy.
 - Keep public CI credential-free. CI synths should use fake context and
   `--no-lookups`.
 - Treat prefix-list entry changes as access-control changes even though they do

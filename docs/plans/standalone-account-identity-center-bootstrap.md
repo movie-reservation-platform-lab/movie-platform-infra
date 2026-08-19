@@ -54,6 +54,18 @@ fake AWS executable into a dedicated test fixture. These changes preserve the
 approved identity, privacy, and release-gate contract while making the target
 format portable to a future Python, TypeScript, or Rust owner.
 
+### PR 4 implementation refinement
+
+On 2026-08-19, the operator requested that CI reflect the same repository
+boundary before release documentation is finalized. Replace the single
+`npm run ci` GitHub Actions job with an explicit dependency graph: the isolated
+automation validation runs first; only after it passes may CDK assertion tests
+and repository-tooling checks run as separate jobs; the offline CDK synth
+contract runs after both. Keep `npm test` as the local all-in-one Jest command,
+add focused package commands for CDK and tooling tests, and order the local
+`npm run ci` aggregator the same way. This refinement changes CI orchestration,
+not the tests' ownership or the deployed infrastructure contract.
+
 Consolidated plan approval does not approve the existing draft wholesale,
 authorize AWS mutations, or skip per-PR review.
 
@@ -511,6 +523,10 @@ run real `aws`, `cdk bootstrap`, `cdk deploy`, or `cdk destroy` during Gate 1.
 - Repository build/test separation: prove `npm run build` and `npm test` cover
   the CDK repository without discovering automation source/tests, while the
   explicit automation commands typecheck and test the building block.
+- GitHub Actions ordering: run the automation validation in its own prerequisite
+  job; after it succeeds, run CDK assertions and repository-tooling checks in
+  separate jobs; run the offline synth contract only after both pass. Preserve
+  the existing `infra` check name for branch-protection continuity.
 - Full offline CI: confirm no AWS credentials or live lookups are needed.
 - Manual acceptance, only after explicit operator approval: perform SSO login,
   preflight, first deployment, temporary Grafana Admin data-source setup,
@@ -549,7 +565,7 @@ and can pass on its own.
 | 1. Approved design record | Establish scope and decisions without implementation | This condensed plan and `docs/plans/README.md` only | Documentation diff, links, placeholders, and decision-log review |
 | 2. Manual bootstrap runbook | Review persistent account operations independently from executable code | `docs/operations/standalone-account-access-bootstrap.md` plus documentation navigation links | Command intent review, official-source links, lifecycle/cost accuracy, no real identity values |
 | 3. Tested preflight contract | Land an isolated automation building block with the tests that protect it | `automation/aws-account-preflight/`, `package.json`, root `tsconfig.json`, and this approved-plan refinement | Separate TypeScript typecheck/Jest/self-test, root build/test exclusion, and offline CI |
-| 4. Deployment and release integration | Wire the approved preflight and lifecycle into normal operations | `docs/operations/aws-cdk-deployment.md`, remaining `README.md` integration, and the release checklist | Documentation diff, command ordering, links, full offline CI, and secret/identity-value scan |
+| 4. Deployment and release integration | Wire the approved preflight and lifecycle into normal operations and make CI enforce the automation/CDK boundary | `.github/workflows/ci.yml`, focused `package.json` scripts, `docs/operations/aws-cdk-deployment.md`, remaining README integration, and the release checklist | Ordered job-graph review, focused checks, documentation links, full offline CI, and secret/identity-value scan |
 
 Before creating these PRs, reconcile the current draft file by file against the
 decision log. Partition it without ever landing the preflight separately from
@@ -657,6 +673,8 @@ applications, permission sets, and recovery consequences are understood.
   modes without AWS credentials.
 - The TypeScript automation source and tests remain outside the CDK application,
   root build, and infrastructure Jest suite, with their own explicit CI gate.
+- GitHub Actions runs automation before CDK assertions, reports tooling and CDK
+  failures separately, and gates offline synth on both.
 - `npm run ci` includes the new validation and passes.
 - The lifecycle table clearly distinguishes account prerequisites, CDK
   bootstrap, externally owned foundation resources, and disposable stack
@@ -715,6 +733,13 @@ Constraints:
   infrastructure test suite; run them through separate package commands.
 
 Relevant files/modules:
+- .github/workflows/ci.yml
+- package.json
+- README.md
+- docs/README.md
+- docs/operations/README.md
+- docs/operations/aws-cdk-deployment.md
+- docs/operations/aws-demo-release-checklist.md
 - docs/operations/standalone-account-access-bootstrap.md
 - automation/aws-account-preflight/src/cli.ts
 - automation/aws-account-preflight/src/index.ts
@@ -733,12 +758,7 @@ Relevant files/modules:
 - automation/aws-account-preflight/tsconfig.json
 - automation/aws-account-preflight/jest.config.cjs
 - automation/aws-account-preflight/README.md
-- package.json
 - tsconfig.json
-- README.md
-- docs/README.md
-- docs/operations/README.md
-- docs/operations/aws-cdk-deployment.md
 
 Expected verification commands:
 - npm run validate:aws-account-preflight

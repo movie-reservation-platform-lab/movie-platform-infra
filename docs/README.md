@@ -12,7 +12,8 @@ this folder holds durable design, planning, and operations material.
   resource topology, and contract decisions.
 - [`operations/`](./operations/): deployment runbooks, teardown, smoke checks,
   troubleshooting, and manual AWS prerequisites, including the
-  [standalone-account access bootstrap](./operations/standalone-account-access-bootstrap.md).
+  [standalone-account access bootstrap](./operations/standalone-account-access-bootstrap.md)
+  and [two-gate AWS demo release checklist](./operations/aws-demo-release-checklist.md).
 
 ## Documentation Ownership
 
