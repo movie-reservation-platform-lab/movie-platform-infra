@@ -15,8 +15,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  automation:
+    name: automation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate account preflight automation
+        run: npm run validate:aws-account-preflight
+
   infra:
     name: infra
+    needs: automation
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -33,5 +55,66 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run standalone infra checks
-        run: npm run ci
+      - name: Build CDK application
+        run: npm run build
+
+      - name: Run CDK assertion tests
+        run: npm run test:cdk
+
+  tooling:
+    name: tooling
+    needs: automation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run repository-tooling tests
+        run: npm run test:tooling
+
+      - name: Validate ADOT image
+        run: npm run validate:adot-image
+
+      - name: Validate X-Ray smoke tooling
+        run: npm run validate:xray-smoke
+
+      - name: Validate managed-metrics smoke tooling
+        run: npm run validate:managed-metrics-smoke
+
+      - name: Validate Grafana dashboard
+        run: npm run validate:grafana-dashboard
+
+  synth:
+    name: synth
+    needs:
+      - infra
+      - tooling
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run offline synth contract
+        run: npm run synth:ecr-contract
