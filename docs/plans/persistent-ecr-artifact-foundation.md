@@ -6,7 +6,7 @@
 >
 > Decision review completed: 2026-08-21
 >
-> Current slice: PR 1/5, plan and decisions only
+> Current slice: PR 2/5, persistent ECR foundation implementation
 
 ## 1. Summary
 
@@ -224,10 +224,12 @@ The first repository is configured as follows:
 | CloudFormation update-replacement policy | Retain |
 | Stack termination protection | Enabled at deployment |
 
-Use CDK retained-on-delete-and-replacement behavior (currently
-`RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE`) so both synthesized policies are
-intentional. The repository must not silently disappear when its stack is
-deleted or a future change would replace the resource.
+Use `RemovalPolicy.RETAIN`, which synthesizes both `DeletionPolicy: Retain` and
+`UpdateReplacePolicy: Retain` in the installed CDK version. Do not use
+`RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE` here: despite its name, it synthesizes
+`DeletionPolicy: RetainExceptOnCreate`, which is not the exact approved
+CloudFormation contract. The repository must not silently disappear when its
+stack is deleted or a future change would replace the resource.
 
 Apply these exact tags:
 
@@ -731,7 +733,7 @@ the guarded final-cleanup path.
   reviewed and approved.
 - [x] Five-PR delivery and post-merge live acceptance were reviewed and
   approved.
-- [ ] PR 2 implementation matches this plan.
+- [x] PR 2 implementation matches this plan.
 - [ ] PR 3 inspector makes no mutations.
 - [ ] PR 4 cleanup safety cases pass.
 - [ ] PR 5 establishes one controlling operations path.
@@ -739,10 +741,11 @@ the guarded final-cleanup path.
 
 ## 19. Handoff For The Next Slice
 
-After PR 1 merges, create a new worktree from the updated `main` for PR 2/5.
-Implement only the foundation entrypoint, stack, focused tests, offline synth,
-and CI wiring described above. Do not add cleanup automation, broad documentation
-rewrites, live AWS calls, or resources for the other services in PR 2.
+After PR 2 merges, create a new worktree from the updated `main` for PR 3/5.
+Implement only the read-only cleanup inspector, its isolated TypeScript package,
+injected-client tests, and automation CI wiring described above. Do not add
+destructive execution, broad documentation rewrites, live AWS calls, or
+resources for the other services in PR 3.
 
 ## 20. References
 

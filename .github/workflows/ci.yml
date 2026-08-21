@@ -58,8 +58,11 @@ jobs:
       - name: Build CDK application
         run: npm run build
 
-      - name: Run CDK assertion tests
-        run: npm run test:cdk
+      - name: Run workload CDK assertion tests
+        run: npm run test:cdk:workload
+
+      - name: Run artifact-foundation CDK assertion tests
+        run: npm run test:cdk:foundation
 
   tooling:
     name: tooling
@@ -116,5 +119,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run offline synth contract
+      - name: Run workload offline synth contract
         run: npm run synth:ecr-contract
+
+      - name: Run artifact-foundation offline synth contract
+        run: npm run synth:artifact-foundation

@@ -2,13 +2,16 @@
   "name": "movie-platform-infra",
   "version": "0.1.0",
   "bin": {
-    "movie-platform-infra": "bin/infra.js"
+    "movie-platform-infra": "bin/infra.js",
+    "movie-platform-artifact-foundation": "bin/artifact-foundation.js"
   },
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
-    "test:cdk": "jest --runInBand --runTestsByPath test/infra.test.ts",
+    "test:cdk": "npm run test:cdk:workload && npm run test:cdk:foundation",
+    "test:cdk:workload": "jest --runInBand --runTestsByPath test/infra.test.ts",
+    "test:cdk:foundation": "jest --runInBand --runTestsByPath test/artifact-foundation.test.ts",
     "test:tooling": "jest --runInBand --runTestsByPath test/xray-smoke.test.ts test/managed-metrics-smoke.test.ts",
     "validate:adot-image": "bash scripts/validate-adot-image.sh",
     "validate:xray-smoke": "bash -n scripts/xray-smoke.sh && bash scripts/xray-smoke.sh --self-test",
@@ -21,8 +24,10 @@
     "smoke:xray": "bash scripts/xray-smoke.sh",
     "smoke:managed-metrics": "bash scripts/managed-metrics-smoke.sh",
     "synth:ecr-contract": "AWS_REGION=eu-central-1 CDK_DEFAULT_ACCOUNT=111111111111 CDK_DEFAULT_REGION=eu-central-1 cdk synth --no-lookups -c allowedIngressPrefixListId=pl-0123456789abcdef0 -c applicationImageReference=111111111111.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder@sha256:0000000000000000000000000000000000000000000000000000000000000000 -c applicationServiceVersion=ci-contract-test",
+    "synth:artifact-foundation": "AWS_REGION=eu-central-1 CDK_DEFAULT_ACCOUNT=111111111111 CDK_DEFAULT_REGION=eu-central-1 cdk --app \"npx ts-node --prefer-ts-exts bin/artifact-foundation.ts\" synth ArtifactFoundationStack --no-lookups",
     "cdk": "cdk",
-    "ci": "npm run validate:aws-account-preflight && npm run build && npm run test:cdk && npm run test:tooling && npm run validate:adot-image && npm run validate:xray-smoke && npm run validate:managed-metrics-smoke && npm run validate:grafana-dashboard && npm run synth:ecr-contract"
+    "cdk:foundation": "cdk --app \"npx ts-node --prefer-ts-exts bin/artifact-foundation.ts\"",
+    "ci": "npm run validate:aws-account-preflight && npm run build && npm run test:cdk && npm run test:tooling && npm run validate:adot-image && npm run validate:xray-smoke && npm run validate:managed-metrics-smoke && npm run validate:grafana-dashboard && npm run synth:ecr-contract && npm run synth:artifact-foundation"
   },
   "devDependencies": {
     "@types/jest": "^30",
