@@ -81,6 +81,9 @@ Unit tests, CDK assertions, synth contracts, script checks, and smoke tests.
 
 ## Current Planning Priorities
 
+- [Persistent ECR Artifact Foundation](./persistent-ecr-artifact-foundation.md):
+  establish the approved persistent repository, guarded cleanup, cross-repo
+  admission boundary, testing strategy, and five-PR delivery plan for issue #12.
 - [Standalone-Account Identity Center And Grafana Access Bootstrap](./standalone-account-identity-center-bootstrap.md):
   establish the approved identity, preflight, lifecycle, testing, and staged
   release contract for issue #14 before implementation begins.
