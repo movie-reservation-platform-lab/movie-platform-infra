@@ -5,10 +5,15 @@ import {
   validateAwsAccess,
   type ValidatedAwsAccess,
 } from '../../aws-account-preflight/src';
+import { ARTIFACT_FOUNDATION_REPOSITORIES } from '../../../lib/artifact-foundation-repositories';
 import { createAwsSdkReader } from './aws-read-client';
 import { inspectArtifactFoundation } from './inspection';
 import { InspectionFailure, failInspection } from './inspection-error';
-import type { ArtifactFoundationReader, CleanupInspectionAccess } from './model';
+import type {
+  ArtifactFoundationReader,
+  ArtifactRepositoryCatalog,
+  CleanupInspectionAccess,
+} from './model';
 import { renderInspectionReport } from './report';
 
 /** Parse CLI input, wire adapters, and render the cleanup-readiness report. */
@@ -27,7 +32,11 @@ export async function runCli(
 
     const access = dependencies.validateAccess(environment);
     const reader = dependencies.createReader(access);
-    const inspection = await inspectArtifactFoundation(toInspectionAccess(access), reader);
+    const inspection = await inspectArtifactFoundation(
+      toInspectionAccess(access),
+      reader,
+      dependencies.artifactRepositoryCatalog,
+    );
     streams.stdout(renderInspectionReport(inspection));
     return 0;
   } catch (error: unknown) {
@@ -48,6 +57,7 @@ export interface CliStreams {
 export interface CliDependencies {
   readonly validateAccess: (environment: NodeJS.ProcessEnv) => ValidatedAwsAccess;
   readonly createReader: (access: ValidatedAwsAccess) => ArtifactFoundationReader;
+  readonly artifactRepositoryCatalog: ArtifactRepositoryCatalog;
 }
 
 interface CliOptions {
@@ -59,9 +69,14 @@ const PROCESS_STREAMS: CliStreams = {
   stderr: (text) => process.stderr.write(text),
 };
 
+const LOCAL_ARTIFACT_REPOSITORY_CATALOG: ArtifactRepositoryCatalog = Object.freeze({
+  listArtifactRepositories: () => ARTIFACT_FOUNDATION_REPOSITORIES,
+});
+
 const PRODUCTION_DEPENDENCIES: CliDependencies = {
   validateAccess: validateAwsAccess,
   createReader: createAwsSdkReader,
+  artifactRepositoryCatalog: LOCAL_ARTIFACT_REPOSITORY_CATALOG,
 };
 
 const CLI_OPTIONS = {
@@ -75,9 +90,10 @@ const USAGE = [
   'Usage: npm run inspect:artifact-foundation -- [--help]',
   '',
   'Checks whether final project cleanup can proceed for ArtifactFoundationStack',
-  'and its retained ECR repositories (currently only movie-reservation-service).',
+  'and the retained ECR repositories in the artifact destination catalog',
+  '(currently reservation-service -> movie-reservation-service).',
   '',
-  'The check runs the account preflight, refuses cleanup while GoldenPathDemoStack',
+  'The check runs the account preflight, refuses cleanup while MovieReservationWorkloadStack',
   'exists, inventories the exact stack/repository/images, and reports BLOCKED,',
   'READY, or NOTHING_TO_CLEAN.',
   '',
