@@ -30,7 +30,7 @@ interface ProfileConfiguration {
   readonly ssoRegion: string;
 }
 
-interface RoleIdentity {
+export interface ValidatedAwsCallerIdentity {
   readonly accountId: string;
   readonly roleName: string;
 }
@@ -50,16 +50,33 @@ export function validateAwsCliIdentity(target: AwsTarget, environment: NodeJS.Pr
   requireAwsCliV2(environment);
 
   const profile = readAndValidateProfile(target, environment);
-  const caller = readAndValidateCaller(target, environment);
+  readAndValidateCaller(target, environment);
 
-  if (caller.accountId !== target.accountId) {
+  return profile.permissionSet;
+}
+
+/**
+ * Prove that an STS response identifies the pinned Identity Center role.
+ *
+ * Both the CLI preflight and downstream SDK clients use this pure validation
+ * boundary so they enforce the same account, principal type, and role rules.
+ */
+export function validateAwsCallerIdentity(
+  target: AwsTarget,
+  accountId: string,
+  arn: string,
+): ValidatedAwsCallerIdentity {
+  const caller = roleIdentityFromStsArn(arn);
+  if (caller === undefined) {
+    fail('the caller is not an IAM Identity Center assumed-role session');
+  }
+  if (accountId !== target.accountId || caller.accountId !== target.accountId) {
     fail('the live caller account does not match the pinned target');
   }
   if (caller.roleName !== target.expectedRoleName) {
     fail('the live caller role does not match the pinned target');
   }
-
-  return profile.permissionSet;
+  return caller;
 }
 
 /**
@@ -88,6 +105,7 @@ export function runAwsIdentitySelfTest(): void {
   }
 }
 
+/** Reject environment-sourced static, role, web-identity, and container credentials. */
 function rejectCredentialEnvironment(environment: NodeJS.ProcessEnv): void {
   for (const variableName of CREDENTIAL_ENVIRONMENT_VARIABLES) {
     if ((environment[variableName] ?? '').length > 0) {
@@ -99,7 +117,7 @@ function rejectCredentialEnvironment(environment: NodeJS.ProcessEnv): void {
 function requireAwsCliV2(environment: NodeJS.ProcessEnv): void {
   const result = runAws(['--version'], environment);
   const version = `${result.stdout}${result.stderr}`.trim();
-  if (result.status !== 0 || result.error !== undefined) {
+  if (result.status !== 0) {
     fail('unable to read the AWS CLI version');
   }
   if (!version.startsWith('aws-cli/2.')) {
@@ -163,7 +181,10 @@ function readAndValidateProfile(target: AwsTarget, environment: NodeJS.ProcessEn
   return Object.freeze({ accountId, permissionSet, ssoSession, region, ssoRegion });
 }
 
-function readAndValidateCaller(target: AwsTarget, environment: NodeJS.ProcessEnv): RoleIdentity {
+function readAndValidateCaller(
+  target: AwsTarget,
+  environment: NodeJS.ProcessEnv,
+): ValidatedAwsCallerIdentity {
   const result = runAws(
     [
       'sts',
@@ -180,7 +201,7 @@ function readAndValidateCaller(target: AwsTarget, environment: NodeJS.ProcessEnv
     ],
     environment,
   );
-  if (result.status !== 0 || result.error !== undefined) {
+  if (result.status !== 0) {
     fail('STS GetCallerIdentity failed; refresh the configured SSO login');
   }
 
@@ -193,17 +214,10 @@ function readAndValidateCaller(target: AwsTarget, environment: NodeJS.ProcessEnv
     fail('STS returned an unexpected caller identity shape');
   }
 
-  const caller = roleIdentityFromStsArn(fields[1]);
-  if (caller === undefined) {
-    fail('the caller is not an IAM Identity Center assumed-role session');
-  }
-  if (fields[0] !== target.accountId || caller.accountId !== target.accountId) {
-    fail('the live caller account does not match the pinned target');
-  }
-  return caller;
+  return validateAwsCallerIdentity(target, fields[0], fields[1]);
 }
 
-function roleIdentityFromStsArn(arn: string): RoleIdentity | undefined {
+function roleIdentityFromStsArn(arn: string): ValidatedAwsCallerIdentity | undefined {
   const match = /^arn:aws:sts::([0-9]{12}):assumed-role\/([^/]+)\/([^/]+)$/.exec(arn);
   if (match === null) {
     return undefined;
@@ -227,16 +241,12 @@ function roleMatchesPermissionSet(roleName: string, permissionSet: string): bool
 
 function readProfileValue(key: string, target: AwsTarget, environment: NodeJS.ProcessEnv): string {
   const result = runAws(['configure', 'get', key, '--profile', target.profile], environment);
-  return result.status === 0 && result.error === undefined
-    ? withoutOneTrailingLineEnding(result.stdout)
-    : '';
+  return result.status === 0 ? withoutOneTrailingLineEnding(result.stdout) : '';
 }
 
 function readSsoSessionValue(key: string, ssoSession: string, environment: NodeJS.ProcessEnv): string {
   const result = runAws(['configure', 'get', '--sso-session', ssoSession, key], environment);
-  return result.status === 0 && result.error === undefined
-    ? withoutOneTrailingLineEnding(result.stdout)
-    : '';
+  return result.status === 0 ? withoutOneTrailingLineEnding(result.stdout) : '';
 }
 
 /**
