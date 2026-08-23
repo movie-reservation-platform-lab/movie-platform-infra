@@ -5,7 +5,7 @@ infrastructure repository.
 
 ## Current Stack Boundary
 
-The current CDK stack is `GoldenPathDemoStack`. It models the first
+The current CDK stack is `MovieReservationWorkloadStack`. It models the first
 production-shaped AWS demo workload:
 
 - internet-facing Application Load Balancer;

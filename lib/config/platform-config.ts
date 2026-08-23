@@ -30,7 +30,7 @@ export interface DeploymentTarget {
 }
 
 /**
- * Fully resolved infrastructure settings consumed by `GoldenPathDemoStack`.
+ * Fully resolved infrastructure settings consumed by `MovieReservationWorkloadStack`.
  *
  * Fixed literal values document deliberate Wave 2 architecture decisions and
  * keep them out of caller-controlled CDK context.

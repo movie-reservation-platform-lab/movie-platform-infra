@@ -81,7 +81,7 @@ test('writes a sanitized dual-route success report with AMP and Container Insigh
     expect(report).toMatchObject({
       result: 'success',
       failure_stage: null,
-      stack_name: 'GoldenPathDemoStack',
+      stack_name: 'MovieReservationWorkloadStack',
       region: 'eu-central-1',
       target: 'http://example.test',
       metrics_namespace: 'GoldenPath/aws-demo/movie-reservation-service',

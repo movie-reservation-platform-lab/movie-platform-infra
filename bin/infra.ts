@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { GoldenPathDemoStack } from '../lib/infra-stack';
+import { MovieReservationWorkloadStack } from '../lib/infra-stack';
 import { resolvePlatformConfig } from '../lib/config/platform-config';
 
 const app = new cdk.App();
@@ -21,7 +21,7 @@ const platformConfig = resolvePlatformConfig(
   deploymentTarget,
 );
 
-new GoldenPathDemoStack(app, 'GoldenPathDemoStack', {
+new MovieReservationWorkloadStack(app, 'MovieReservationWorkloadStack', {
   env: deploymentTarget,
   platformConfig,
 });

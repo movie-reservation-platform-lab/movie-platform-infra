@@ -6,7 +6,7 @@
 >
 > Decision review completed: 2026-08-21
 >
-> Current slice: PR 2/5, persistent ECR foundation implementation
+> Current slice: PR 3/5, read-only artifact-foundation cleanup inspector
 
 ## 1. Summary
 
@@ -36,7 +36,7 @@ each mutation group receives explicit approval.
 
 - Create one ECR repository for `movie-reservation-service` in a dedicated
   `ArtifactFoundationStack`.
-- Keep the repository available when `GoldenPathDemoStack` is routinely
+- Keep the repository available when `MovieReservationWorkloadStack` is routinely
   destroyed after a demo.
 - Make accidental foundation deletion difficult and final cleanup possible,
   explicit, inspectable, and repeatable.
@@ -50,7 +50,7 @@ each mutation group receives explicit approval.
 
 ## 3. Non-goals
 
-- Refactoring `GoldenPathDemoStack` into smaller workload stacks. Its size is a
+- Refactoring `MovieReservationWorkloadStack` into smaller workload stacks. Its size is a
   known concern and should be handled by a separate issue.
 - Creating repositories for the other five planned services.
 - Building the GHCR-to-ECR admission workflow; that belongs to the private
@@ -73,7 +73,7 @@ each mutation group receives explicit approval.
 - [`bin/infra.ts`](../../bin/infra.ts) is the only CDK entrypoint. It requires
   workload-specific context before the app can synthesize.
 - [`lib/infra-stack.ts`](../../lib/infra-stack.ts) defines the large,
-  intentionally disposable `GoldenPathDemoStack`.
+  intentionally disposable `MovieReservationWorkloadStack`.
 - [`lib/application-image.ts`](../../lib/application-image.ts) imports an ECR
   repository by name and creates an ECS image reference from an immutable
   digest. It does not create the repository.
@@ -98,7 +98,7 @@ and the operational handoff to artifact admission.
 
 - The artifact foundation and demo workload have different lifecycles and must
   be different CloudFormation stacks.
-- Routine teardown deletes `GoldenPathDemoStack` and its billable demo resources
+- Routine teardown deletes `MovieReservationWorkloadStack` and its billable demo resources
   but preserves `ArtifactFoundationStack` and `CDKToolkit`.
 - Full project cleanup can delete the artifact foundation and its images through
   a separately guarded workflow.
@@ -184,7 +184,7 @@ ECR: movie-reservation-service
 bin/infra.ts
         |
         v
-GoldenPathDemoStack
+MovieReservationWorkloadStack
         |
         v
 imports movie-reservation-service and consumes <repository-uri>@sha256:<digest>
@@ -297,7 +297,7 @@ private target-registry design replaces that boundary.
 
 Two cleanup modes must remain visibly different:
 
-1. **Routine demo teardown** destroys `GoldenPathDemoStack`. It preserves
+1. **Routine demo teardown** destroys `MovieReservationWorkloadStack`. It preserves
    `ArtifactFoundationStack`, its repository, admitted images, `CDKToolkit`, and
    account-level identity/governance.
 2. **Final project cleanup** is a guarded automation workflow for the artifact
@@ -307,7 +307,7 @@ The final-cleanup workflow must:
 
 1. Run the existing AWS account preflight for the exact SSO profile, account,
    Region, and expected role.
-2. Refuse to continue while `GoldenPathDemoStack` exists.
+2. Refuse to continue while `MovieReservationWorkloadStack` exists.
 3. Read and display the exact foundation stack, repository, image digests, tags,
    protection state, and intended operations.
 4. Default to inspection/dry-run with no mutations.
@@ -365,7 +365,7 @@ need is proven.
 
 ## 8. Alternatives Considered
 
-### 8.1 Put ECR in `GoldenPathDemoStack`
+### 8.1 Put ECR in `MovieReservationWorkloadStack`
 
 Rejected. It makes routine cost-saving teardown either delete admitted artifacts
 or retain an orphaned repository on every demo teardown. It also further grows a
@@ -551,7 +551,7 @@ Scope:
 - Reuse the account-preflight target contract.
 - Inventory the stack, protection state, repository, tags, lifecycle settings,
   and image digests.
-- Detect whether `GoldenPathDemoStack` still exists.
+- Detect whether `MovieReservationWorkloadStack` still exists.
 - Print an explicit dry-run plan and perform no mutations.
 - Add injected-client tests and a separate automation CI command/job.
 
@@ -634,7 +634,7 @@ verify it explicitly during the live rehearsal.
 
 Existing tests must continue to prove:
 
-- `GoldenPathDemoStack` creates no ECR repository;
+- `MovieReservationWorkloadStack` creates no ECR repository;
 - a full private ECR URI pinned by digest is required;
 - image account and Region match the deployment target; and
 - the ECS task execution role receives pull-only repository access.
@@ -734,18 +734,21 @@ the guarded final-cleanup path.
 - [x] Five-PR delivery and post-merge live acceptance were reviewed and
   approved.
 - [x] PR 2 implementation matches this plan.
-- [ ] PR 3 inspector makes no mutations.
+- [x] PR 3 inspector makes no mutations.
 - [ ] PR 4 cleanup safety cases pass.
 - [ ] PR 5 establishes one controlling operations path.
 - [ ] Live acceptance is explicitly approved and completed.
 
 ## 19. Handoff For The Next Slice
 
-After PR 2 merges, create a new worktree from the updated `main` for PR 3/5.
-Implement only the read-only cleanup inspector, its isolated TypeScript package,
-injected-client tests, and automation CI wiring described above. Do not add
-destructive execution, broad documentation rewrites, live AWS calls, or
-resources for the other services in PR 3.
+After PR 3 merges, create a new worktree from the updated `main` for PR 4/5.
+Add only the separately guarded execution path, exact confirmation, termination
+protection update, stack/repository deletion, waiters, recovery, and absence
+verification described above. Do not broaden the documentation rewrite, call
+live AWS during implementation, or add resources for the other services in PR 4.
+Treat `READY` as a human summary: destructive decisions must use the current
+inspected resource state and typed issue codes directly, never parse report
+prose or rely on `READY` as the only gate.
 
 ## 20. References
 

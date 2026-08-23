@@ -41,7 +41,7 @@ if [[ "${1:-}" == '--self-test' ]]; then
   exit 0
 fi
 
-stack_name="${STACK_NAME:-GoldenPathDemoStack}"
+stack_name="${STACK_NAME:-MovieReservationWorkloadStack}"
 base_url="${XRAY_SMOKE_BASE_URL:-}"
 report_path="${XRAY_SMOKE_REPORT_PATH:-}"
 timeout_seconds="${XRAY_SMOKE_TIMEOUT_SECONDS:-60}"

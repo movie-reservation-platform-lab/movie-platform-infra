@@ -1,6 +1,6 @@
 # AWS Resource Topology
 
-This page describes the AWS resources modeled by `GoldenPathDemoStack` in
+This page describes the AWS resources modeled by `MovieReservationWorkloadStack` in
 `lib/infra-stack.ts`. It is adapted from the original golden-path architecture
 docs and updated for the standalone infrastructure repository.
 

@@ -1,6 +1,6 @@
 # AWS CDK Deployment Runbook
 
-This runbook deploys `GoldenPathDemoStack` from a developer workstation into an
+This runbook deploys `MovieReservationWorkloadStack` from a developer workstation into an
 AWS account, verifies the infrastructure contract, and removes the deployed
 resources afterward.
 
@@ -25,7 +25,7 @@ metrics, an AMP workspace, and an Amazon Managed Grafana workspace.
 | `bootstrap` | Workstation CLI plus AWS CloudFormation | Once per account/Region, creates the CDK toolkit resources used to publish assets and deploy stacks. |
 | `diff` | Workstation CLI plus AWS CloudFormation | Compares the synthesized template with the deployed stack. |
 | `deploy` | Workstation CLI plus AWS CloudFormation | Publishes the repository-owned ADOT asset, consumes the selected digest-pinned app image, and applies the CloudFormation change set. |
-| `destroy` | Workstation CLI plus AWS CloudFormation | Deletes resources owned by `GoldenPathDemoStack`. It does not delete the CDK bootstrap stack or customer-managed prefix list. |
+| `destroy` | Workstation CLI plus AWS CloudFormation | Deletes resources owned by `MovieReservationWorkloadStack`. It does not delete the CDK bootstrap stack or customer-managed prefix list. |
 
 The CDK code is the model, the synthesized template is the deployment contract,
 and CloudFormation owns the deployed resource lifecycle.
@@ -230,7 +230,7 @@ mutation group after review, rerun the preflight first:
 ```bash
 npm run preflight:aws
 
-npm run cdk -- deploy GoldenPathDemoStack \
+npm run cdk -- deploy MovieReservationWorkloadStack \
   -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
   -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
   -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
@@ -257,7 +257,7 @@ Destroy the stack with the same context boundary:
 ```bash
 npm run preflight:aws
 
-npm run cdk -- destroy GoldenPathDemoStack \
+npm run cdk -- destroy MovieReservationWorkloadStack \
   -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
   -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
   -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
@@ -268,7 +268,7 @@ Grafana workspace, Grafana role, VPC endpoints, and log groups are gone.
 
 The customer-managed prefix list, CDK bootstrap stack, Organizations, and IAM
 Identity Center resources are account/Region-level prerequisites and are not
-part of `GoldenPathDemoStack`. Preserve them after routine demo teardown. Then
+part of `MovieReservationWorkloadStack`. Preserve them after routine demo teardown. Then
 complete the access bootstrap runbook's
 [first-rehearsal exit gate](./standalone-account-access-bootstrap.md#phase-9-first-rehearsal-exit-gate),
 including replacement of the temporary `AdministratorAccess` assignment before

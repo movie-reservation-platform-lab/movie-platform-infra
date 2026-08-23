@@ -64,7 +64,7 @@ account IDs, role ARNs/suffixes, SSO URLs, email addresses, or session data.
 - [ ] CDK synth and diff are reviewed with the exact prefix-list ID,
       digest-pinned application image, and release identifier.
 - [ ] The preflight passes again immediately before deployment.
-- [ ] `GoldenPathDemoStack` deploys successfully, and its expected billable
+- [ ] `MovieReservationWorkloadStack` deploys successfully, and its expected billable
       resources become healthy.
 
 ### Workload and Grafana acceptance
@@ -82,7 +82,7 @@ account IDs, role ARNs/suffixes, SSO URLs, email addresses, or session data.
 ### Teardown and privilege exit gate
 
 - [ ] The preflight passes immediately before `cdk destroy`.
-- [ ] `GoldenPathDemoStack` and its ALB, ECS tasks/service, AMP workspace,
+- [ ] `MovieReservationWorkloadStack` and its ALB, ECS tasks/service, AMP workspace,
       Managed Grafana workspace and assignment, role, VPC endpoints, and log
       groups are gone.
 - [ ] The Organization, Identity Center instance, operator and MFA, local
