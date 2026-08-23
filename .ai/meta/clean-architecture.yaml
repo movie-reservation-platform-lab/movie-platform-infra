@@ -1,0 +1,3 @@
+type: skill
+skillName: clean-architecture
+description: "Use when designing or reviewing dependency direction, ports/adapters, composition roots, and SOLID boundaries in infrastructure control-plane automation; do not impose service-layer structure on straightforward CDK construct code."
