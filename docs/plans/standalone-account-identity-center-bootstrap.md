@@ -127,7 +127,7 @@ unintended administrator access.
   long-lived workstation credentials.
 - Do not manage Organizations, Identity Center instances, users, groups,
   permission sets, account assignments, or Grafana user assignments from
-  `GoldenPathDemoStack`.
+  `MovieReservationWorkloadStack`.
 - Do not change the existing Grafana workspace, data-access IAM role, network
   access, ECS service, or other CDK resources.
 - Do not deploy, destroy, bootstrap, or otherwise mutate the real AWS account as
@@ -198,7 +198,7 @@ The decision table is the normative requirement set. The implementation must:
 - provide a complete manual path from secured root bootstrap to MFA-backed CLI
   SSO and final Grafana Editor access, including the accepted single-account
   and same-phone exceptions;
-- keep persistent identity outside `GoldenPathDemoStack`, temporary privileges
+- keep persistent identity outside `MovieReservationWorkloadStack`, temporary privileges
   time-boxed, billable workload disposable, and later member-account migration
   possible;
 - add only read-only automation: a fail-closed, exact-identity preflight using
@@ -428,7 +428,7 @@ not enter the repository.
 | Temporary `AdministratorAccess` assignment | Remove after the first rehearsal | No, by policy rather than stack teardown | No direct charge, but unacceptable standing privilege |
 | Local AWS CLI profile and cached SSO session | Preserve profile; let sessions expire normally | Local only | No AWS charge |
 | CDK bootstrap and repository-external artifact/foundation resources | Preserve unless separately retired | Yes | Standard storage/request or resource charges can remain |
-| `GoldenPathDemoStack`, including Managed Grafana | Destroy promptly after each demo | No | Billable while deployed; not part of the zero-cost identity foundation |
+| `MovieReservationWorkloadStack`, including Managed Grafana | Destroy promptly after each demo | No | Billable while deployed; not part of the zero-cost identity foundation |
 
 [AWS Organizations is offered at no additional charge](https://docs.aws.amazon.com/organizations/latest/userguide/pricing.html),
 and [IAM Identity Center is available at no additional cost](https://aws.amazon.com/iam/identity-center/resources/).
@@ -620,7 +620,7 @@ rather than moved in place:
    repository. The current typed configuration intentionally requires the ECR
    registry account to equal the CDK deployment account; do not weaken that
    boundary merely to avoid republishing the artifact.
-5. Deploy a fresh `GoldenPathDemoStack` in the member account, assign the
+5. Deploy a fresh `MovieReservationWorkloadStack` in the member account, assign the
    existing Identity Center operator to the new Managed Grafana workspace, and
    repeat workload, telemetry, and access verification.
 6. Only after the member deployment passes, destroy the disposable workload

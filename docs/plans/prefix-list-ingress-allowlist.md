@@ -39,7 +39,7 @@ rollout behavior need to be explicit.
 ## 3. Non-goals
 
 - Do not create or populate the ingress prefix list in
-  `GoldenPathDemoStack`.
+  `MovieReservationWorkloadStack`.
 - Do not add S3, DynamoDB, Parameter Store, Lambda, or a custom resource as an
   indirection layer for CIDR entries.
 - Do not perform AWS lookups during synth or public CI.
@@ -141,7 +141,7 @@ before a real deployment.
 ### External lifecycle boundary
 
 Treat the prefix list as an account/Region prerequisite, similar to the CDK
-bootstrap and IAM Identity Center setup. `GoldenPathDemoStack` consumes its ID
+bootstrap and IAM Identity Center setup. `MovieReservationWorkloadStack` consumes its ID
 but does not own its creation, entries, or deletion.
 
 This boundary is intentional. Prefix-list versions change when entries change,
@@ -256,7 +256,7 @@ No application API, container, database, event, or telemetry schema changes.
 No application persistence changes.
 
 The external EC2 prefix list is mutable AWS control-plane state. Its entries and
-versions persist independently of `GoldenPathDemoStack`, and stack teardown must
+versions persist independently of `MovieReservationWorkloadStack`, and stack teardown must
 not delete it. Entry restoration uses the EC2 prefix-list version history rather
 than an application migration or database rollback.
 

@@ -2,7 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 
-import { GoldenPathDemoStack } from '../lib/infra-stack';
+import { MovieReservationWorkloadStack } from '../lib/infra-stack';
 import {
   resolvePlatformConfig,
   type DeploymentTarget,
@@ -63,7 +63,7 @@ function createStack(
   deploymentTarget: DeploymentTarget = ECR_TEST_TARGET,
 ) {
   const app = new cdk.App();
-  return new GoldenPathDemoStack(app, 'TestStack', {
+  return new MovieReservationWorkloadStack(app, 'TestStack', {
     env: deploymentTarget,
     platformConfig: resolvePlatformConfig(
       {
@@ -101,7 +101,7 @@ function policyActions(action: string | string[]): string[] {
 }
 
 let template: Template;
-let ecrStack: GoldenPathDemoStack;
+let ecrStack: MovieReservationWorkloadStack;
 let ecrTemplate: Template;
 
 beforeAll(() => {

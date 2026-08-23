@@ -108,7 +108,7 @@ test('writes a sanitized success report for the expected service segment', () =>
     expect(report).toMatchObject({
       result: 'success',
       failure_stage: null,
-      stack_name: 'GoldenPathDemoStack',
+      stack_name: 'MovieReservationWorkloadStack',
       region: 'eu-central-1',
       target: 'http://example.test',
     });

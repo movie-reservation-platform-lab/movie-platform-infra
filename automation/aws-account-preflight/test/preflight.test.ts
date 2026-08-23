@@ -28,6 +28,23 @@ test.each(CREDENTIAL_ENVIRONMENT_VARIABLES)(
   },
 );
 
+test.each(['AWS_CONFIG_FILE', 'AWS_SHARED_CREDENTIALS_FILE'])(
+  'rejects a relative %s path before invoking AWS',
+  (variableName) => {
+    const fixture = createFixture();
+
+    try {
+      const result = runFixturePreflight(fixture, { [variableName]: 'relative/aws-file' });
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(`${variableName} must be an absolute path`);
+      expect(readFileSync(fixture.awsMarker, 'utf8')).toBe('');
+    } finally {
+      fixture.cleanup();
+    }
+  },
+);
+
 test('requires AWS CLI v2 before reading profile configuration', () => {
   const fixture = createFixture();
 

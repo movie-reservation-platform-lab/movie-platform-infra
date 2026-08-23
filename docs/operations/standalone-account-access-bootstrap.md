@@ -31,7 +31,7 @@ The identity and authorization layers are deliberately separate:
 | AWS CLI SSO profile | Requests short-lived credentials | Local profile persists; sessions expire |
 | Grafana workspace assignment | Admits the operator to one workspace | Disposable with the workspace |
 | Grafana workspace role | Allows Admin, Editor, or Viewer actions inside Grafana | Temporary Admin, then Editor |
-| Grafana data-access IAM role | Lets the Grafana service query AMP and CloudWatch | Created and destroyed by `GoldenPathDemoStack` |
+| Grafana data-access IAM role | Lets the Grafana service query AMP and CloudWatch | Created and destroyed by `MovieReservationWorkloadStack` |
 
 An AWS account assignment does not grant Grafana workspace access. A Grafana
 human role does not grant the service permission to read metrics. Treating
@@ -353,7 +353,7 @@ the preflight.
 ## Phase 8: Temporary Grafana Admin, Then Editor
 
 Perform this phase only after all repository PRs have merged, the real rehearsal
-has separate approval, `GoldenPathDemoStack` is deployed, and the workspace is
+has separate approval, `MovieReservationWorkloadStack` is deployed, and the workspace is
 `ACTIVE`.
 
 1. Pass the preflight immediately before using the AWS console.
@@ -393,7 +393,7 @@ References:
 
 After the first approved deployment and teardown:
 
-1. Verify that `GoldenPathDemoStack` and its Grafana workspace are gone.
+1. Verify that `MovieReservationWorkloadStack` and its Grafana workspace are gone.
 2. Verify that the Organization, Identity Center instance, operator, MFA-backed
    access, local profile, CDK bootstrap, and declared external foundations
    remain.
@@ -418,7 +418,7 @@ attempt. Passing application tests does not waive this gate.
 | Eventual least-privilege account assignment | Preserve between demos | No |
 | AWS CLI profile and private target file | Preserve; let sessions expire normally | Local only |
 | CDK bootstrap and external artifact/foundation resources | Preserve until separately retired | No |
-| `GoldenPathDemoStack`, including Managed Grafana and its operator assignment | Destroy promptly | Yes |
+| `MovieReservationWorkloadStack`, including Managed Grafana and its operator assignment | Destroy promptly | Yes |
 
 Routine teardown must not disable IAM Identity Center, delete the Organization,
 delete the operator, or remove root recovery. Full account-prerequisite teardown

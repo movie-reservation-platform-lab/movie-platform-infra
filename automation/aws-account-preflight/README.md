@@ -49,11 +49,17 @@ The implementation is split by runtime boundary:
 - `target-schema.ts` converts untrusted JSON into a validated TypeScript shape;
 - `target-file.ts` owns path, file type, ownership, and permission checks;
 - `aws-cli.ts` owns the bounded AWS CLI/profile/STS adapter;
-- `preflight.ts` owns the short high-level safety workflow;
-- `index.ts` exports only the CLI seam used by black-box callers and tests;
+- `preflight.ts` owns the high-level safety workflow and returns a typed,
+  validated access target plus the absolute shared AWS config-file paths for
+  downstream automation;
+- `index.ts` exports the CLI plus that narrow validated-access seam;
 - `main.ts` is the executable entrypoint.
 
 The JSON target and CLI/output contracts are intentionally language-neutral.
+Downstream SDK clients must use the returned profile, Region, and config-file
+paths together; resolving those files again from ambient process state would
+break the identity guarantee.
+
 If deployment automation later moves to a dedicated building-block repository,
 move this source, its tests, its local TypeScript/Jest configuration, and its CI
 gate together. Do not move only the executable and leave its regression suite

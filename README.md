@@ -8,10 +8,18 @@ build, test, and publish immutable artifacts; this CDK app consumes application
 images by private ECR digest and does not build sibling repository source during
 synth or deployment.
 
-## Current Stack
+## Current Stacks
 
-The current stack is `GoldenPathDemoStack`. It models the first AWS demo
-reservation workload:
+The current CDK app has two lifecycle boundaries:
+
+- `ArtifactFoundationStack` owns the persistent, account-local ECR repository
+  used for admitted reservation-service image artifacts. Routine demo teardown
+  must preserve this stack and its retained repository. Cleanup inspection reads
+  an explicit artifact destination catalog; it does not discover sibling
+  repositories from the workspace.
+- `MovieReservationWorkloadStack` owns the disposable AWS demo reservation workload.
+
+`MovieReservationWorkloadStack` models:
 
 - public Application Load Balancer;
 - two-AZ VPC with public and isolated subnet groups;
@@ -41,6 +49,7 @@ Run commands from this repository root:
 ```bash
 npm ci
 npm run validate:aws-account-preflight
+npm run validate:artifact-foundation-inspector
 npm run build
 npm run test:cdk
 npm run test:tooling
@@ -49,17 +58,25 @@ npm run validate:xray-smoke
 npm run validate:managed-metrics-smoke
 npm run validate:grafana-dashboard
 npm run synth:ecr-contract
+npm run synth:artifact-foundation
 npm run ci
 ```
 
 `npm test` remains the convenience command for all CDK and repository-tooling
-Jest tests under `test/`. The account-preflight automation has its own
-TypeScript and Jest configuration, so CI validates it separately and before
-CDK or tooling tests.
+Jest tests under `test/`. The account-preflight and artifact-foundation cleanup
+automation packages have their own TypeScript and Jest configurations, so CI
+validates them separately and before CDK or tooling tests.
 
 `npm run synth:ecr-contract` uses a fake account, fake repository, and all-zero
 digest with `--no-lookups`. It proves the CDK app accepts an immutable image
 contract offline; it does not prove the image exists in AWS.
+
+`npm run validate:artifact-foundation-inspector` is credential-free. The live
+read-only cleanup-readiness check is separate:
+
+```bash
+npm run inspect:artifact-foundation
+```
 
 ## AWS Operator Access
 
@@ -183,7 +200,7 @@ npm run cdk -- diff \
 
 npm run preflight:aws
 
-npm run cdk -- deploy GoldenPathDemoStack \
+npm run cdk -- deploy MovieReservationWorkloadStack \
   -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
   -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
   -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
@@ -226,7 +243,7 @@ Destroy the stack with the same required context boundary:
 ```bash
 npm run preflight:aws
 
-npm run cdk -- destroy GoldenPathDemoStack \
+npm run cdk -- destroy MovieReservationWorkloadStack \
   -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
   -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
   -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
@@ -236,9 +253,17 @@ Confirm that the CloudFormation stack, ALB, ECS service/tasks, AMP and Grafana
 workspaces, Grafana role, VPC endpoints, and log groups are gone. The
 customer-managed prefix list, CDK bootstrap, Organizations, and IAM Identity
 Center resources are account/Region-level and are not part of
-`GoldenPathDemoStack`. Follow the bootstrap runbook's first-rehearsal exit gate
+`MovieReservationWorkloadStack`. Follow the bootstrap runbook's first-rehearsal exit gate
 to replace and remove the temporary `AdministratorAccess` assignment before a
 second workload deployment.
+
+This is routine demo teardown. It intentionally preserves
+`ArtifactFoundationStack` and the retained ECR repository. For final project
+cleanup, inspect readiness first:
+
+```bash
+npm run inspect:artifact-foundation
+```
 
 ## Optional Context
 

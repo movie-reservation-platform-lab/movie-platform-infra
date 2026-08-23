@@ -23,13 +23,13 @@ const XRAY_WRITE_ACTIONS = ['xray:PutTraceSegments', 'xray:PutTelemetryRecords']
 const RESERVATION_FAILURE_INJECTION_SALT = 'aws-demo-managed-observability';
 
 /** Input required to synthesize the current demo infrastructure stack. */
-export interface GoldenPathDemoStackProps extends cdk.StackProps {
+export interface MovieReservationWorkloadStackProps extends cdk.StackProps {
   /** Validated platform settings resolved once at the CDK application boundary. */
   readonly platformConfig: PlatformConfig;
 }
 
 /**
- * Deployment the movie reservation platform.
+ * Deploys the movie reservation platform workload.
  *
  * **Note**: This phase intentionally keeps the infrastructure in one CloudFormation
  * stack so the complete request path and its costs are easy to learn, deploy,
@@ -54,8 +54,8 @@ export interface GoldenPathDemoStackProps extends cdk.StackProps {
  * observability into separate constructs or stacks when those ownership and
  * lifecycle boundaries become useful.
  */
-export class GoldenPathDemoStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: GoldenPathDemoStackProps) {
+export class MovieReservationWorkloadStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props: MovieReservationWorkloadStackProps) {
     super(scope, id, props);
 
     const { platformConfig } = props;

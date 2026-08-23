@@ -225,7 +225,7 @@ if [[ "${1:-}" == '--self-test' ]]; then
   exit 0
 fi
 
-stack_name="${STACK_NAME:-GoldenPathDemoStack}"
+stack_name="${STACK_NAME:-MovieReservationWorkloadStack}"
 base_url="${MANAGED_METRICS_SMOKE_BASE_URL:-}"
 report_path="${MANAGED_METRICS_SMOKE_REPORT_PATH:-}"
 attempt_limit="${MANAGED_METRICS_SMOKE_ATTEMPT_LIMIT:-12}"

@@ -17,3 +17,9 @@ node_modules
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+
+# WebStorm local project state; share only portable run configurations.
+.idea/*
+!.idea/runConfigurations/
+.idea/runConfigurations/*
+!.idea/runConfigurations/*.xml

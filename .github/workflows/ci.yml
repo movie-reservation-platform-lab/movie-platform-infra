@@ -36,6 +36,9 @@ jobs:
       - name: Validate account preflight automation
         run: npm run validate:aws-account-preflight
 
+      - name: Validate artifact-foundation cleanup inspector
+        run: npm run validate:artifact-foundation-inspector
+
   infra:
     name: infra
     needs: automation
