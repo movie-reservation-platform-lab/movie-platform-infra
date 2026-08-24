@@ -251,16 +251,22 @@ function createInspectionIssue<Code extends string>(
   return Object.freeze({ code, componentId, message });
 }
 
-/** Requires the live tag map to match the configured tag set exactly. */
+/**
+ * Requires operator-managed live tags to match the configured set exactly.
+ * AWS-reserved `aws:*` tags are service metadata and are not configuration
+ * drift owned by this repository.
+ */
 function hasExactTags(
   tags: Readonly<Record<string, string>>,
   expectedTags: Readonly<Record<string, string>>,
 ): boolean {
   const expectedEntries = Object.entries(expectedTags);
-  const actualEntries = Object.entries(tags);
+  const operatorManagedEntries = Object.entries(tags).filter(
+    ([key]) => !key.startsWith('aws:'),
+  );
 
   return (
-    actualEntries.length === expectedEntries.length &&
+    operatorManagedEntries.length === expectedEntries.length &&
     expectedEntries.every(([key, value]) => tags[key] === value)
   );
 }

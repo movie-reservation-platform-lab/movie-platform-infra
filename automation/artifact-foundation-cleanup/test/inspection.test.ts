@@ -33,6 +33,47 @@ test('marks the normal protected foundation as ready after workload teardown', a
   );
 });
 
+test('ignores AWS-reserved service tags when comparing repository ownership tags', async () => {
+  const repository = {
+    ...REPOSITORY,
+    tags: {
+      ...REPOSITORY.tags,
+      'aws:cloudformation:logical-id': 'MovieReservationServiceRepository43FA75C8',
+      'aws:cloudformation:stack-name': 'ArtifactFoundationStack',
+    },
+  };
+
+  const inspection = await inspectArtifactFoundation(
+    TEST_INSPECTION_ACCESS,
+    createReader({ foundationStack: FOUNDATION_STACK, repositories: [repository] }),
+    TEST_ARTIFACT_REPOSITORY_CATALOG,
+  );
+
+  expect(inspection.warnings).toEqual([]);
+});
+
+test('reports an unexpected operator-managed repository tag as drift', async () => {
+  const repository = {
+    ...REPOSITORY,
+    tags: {
+      ...REPOSITORY.tags,
+      Owner: 'unexpected',
+    },
+  };
+
+  const inspection = await inspectArtifactFoundation(
+    TEST_INSPECTION_ACCESS,
+    createReader({ foundationStack: FOUNDATION_STACK, repositories: [repository] }),
+    TEST_ARTIFACT_REPOSITORY_CATALOG,
+  );
+
+  expect(inspection.warnings).toContainEqual({
+    code: CLEANUP_WARNING_CODES.REPOSITORY_TAGS_DRIFT,
+    componentId: RESERVATION_SERVICE_REPOSITORY_DEFINITION.componentId,
+    message: 'repository tags differ from the approved ownership tag set',
+  });
+});
+
 test('blocks cleanup while the disposable workload stack exists', async () => {
   const inspection = await inspectArtifactFoundation(
     TEST_INSPECTION_ACCESS,
