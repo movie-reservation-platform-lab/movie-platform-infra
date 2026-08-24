@@ -3,21 +3,27 @@
 This folder captures durable architecture notes for the standalone CDK
 infrastructure repository.
 
-## Current Stack Boundary
+## Current Stack Boundaries
 
-The current CDK stack is `MovieReservationWorkloadStack`. It models the first
-production-shaped AWS demo workload:
+The repository has two independent CDK applications because admitted artifacts
+and demo compute have different lifecycles:
 
-- internet-facing Application Load Balancer;
-- two-AZ VPC with public and isolated subnet groups;
-- private isolated ECS/Fargate task for the reservation API;
-- digest-pinned application image imported from private ECR;
-- repository-owned ADOT collector image asset;
-- CloudWatch logs, X-Ray traces, AMP metrics, and Managed Grafana dashboarding;
-- VPC endpoints for private AWS service access;
-- customer-managed IPv4 prefix list for ALB and Grafana ingress.
+- `ArtifactFoundationStack` owns the persistent, account-local and Region-local
+  ECR destination for admitted reservation-service images. Termination
+  protection and retain policies keep it outside routine demo teardown.
+- `MovieReservationWorkloadStack` owns the disposable, production-shaped AWS
+  demo workload:
 
-The stack intentionally does not yet own:
+  - internet-facing Application Load Balancer;
+  - two-AZ VPC with public and isolated subnet groups;
+  - private isolated ECS/Fargate task for the reservation API;
+  - digest-pinned application image imported from the foundation repository;
+  - repository-owned ADOT collector image asset;
+  - CloudWatch logs, X-Ray traces, AMP metrics, and Managed Grafana dashboarding;
+  - VPC endpoints for private AWS service access; and
+  - customer-managed IPv4 prefix list for ALB and Grafana ingress.
+
+The current applications intentionally do not yet own:
 
 - frontend S3/CloudFront hosting;
 - recommendation API, agent, or MCP ECS services;
@@ -34,7 +40,8 @@ The stack intentionally does not yet own:
 - Public CI remains credential-free. Synth contracts use fake account and image
   values with `--no-lookups`.
 - AWS environments must be disposable and cost-aware until promotion automation
-  is intentionally introduced.
+  is intentionally introduced. Routine teardown destroys the workload while
+  preserving the small artifact foundation and `CDKToolkit`.
 - Public ingress is restricted by customer-managed prefix list ID, not by
   changing CIDR context values.
 - Observability is part of the demo topology, but DORA delivery telemetry

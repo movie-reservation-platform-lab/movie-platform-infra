@@ -5,6 +5,9 @@ infrastructure repository.
 
 ## Runbooks
 
+- [AWS Artifact Foundation Runbook](./aws-artifact-foundation.md): controlling
+  path for the persistent ECR foundation, its deployment, verification,
+  admission handoff, recovery, and guarded final cleanup.
 - [Standalone-Account Identity Center And Grafana Access Bootstrap](./standalone-account-access-bootstrap.md):
   persistent Organization/Identity Center prerequisites, MFA-backed operator
   access, and the temporary-Admin-to-Editor Grafana workflow.
@@ -24,6 +27,8 @@ infrastructure repository.
 - Treat prefix-list entry changes as access-control changes even though they do
   not require a stack redeploy.
 - Destroy disposable demo stacks promptly after testing to control cost.
+- Preserve `ArtifactFoundationStack` during routine workload teardown. Use its
+  separately guarded cleanup only for explicit final project cleanup.
 
 ## Smoke Checks
 

@@ -43,8 +43,9 @@ failed data-source query.
 - AWS Organizations and IAM Identity Center have no additional service charge.
 - The local AWS CLI profile, TOTP enrollment, IAM permission sets, IAM roles,
   and STS sessions do not add a direct service charge.
-- CDK bootstrap and repository-external artifact/foundation resources survive
-  routine stack teardown and can retain normal storage or request charges.
+- `CDKToolkit` and `ArtifactFoundationStack` survive routine workload teardown;
+  the retained ECR repository can continue to incur normal storage or request
+  charges.
 - Managed Grafana currently requires at least one USD 9 Editor license per
   workspace per month. Treat any free trial as a temporary discount.
 - The deployed stack also creates billable Fargate, ALB, VPC endpoint,
@@ -395,8 +396,8 @@ After the first approved deployment and teardown:
 
 1. Verify that `MovieReservationWorkloadStack` and its Grafana workspace are gone.
 2. Verify that the Organization, Identity Center instance, operator, MFA-backed
-   access, local profile, CDK bootstrap, and declared external foundations
-   remain.
+   access, local profile, `CDKToolkit`, `ArtifactFoundationStack`, and retained
+   ECR repository remain.
 3. Design and review a least-privilege deployment permission set as separate
    follow-up work.
 4. Activate and test that replacement, update the CLI profile and private
@@ -417,7 +418,8 @@ attempt. Passing application tests does not waive this gate.
 | Temporary `AdministratorAccess` assignment | Replace and remove after first rehearsal | No; manual identity operation |
 | Eventual least-privilege account assignment | Preserve between demos | No |
 | AWS CLI profile and private target file | Preserve; let sessions expire normally | Local only |
-| CDK bootstrap and external artifact/foundation resources | Preserve until separately retired | No |
+| `CDKToolkit` | Preserve until separately retired | No |
+| `ArtifactFoundationStack` and retained ECR repositories | Preserve between demos; use guarded final cleanup only | No; separate CDK app and cleanup command |
 | `MovieReservationWorkloadStack`, including Managed Grafana and its operator assignment | Destroy promptly | Yes |
 
 Routine teardown must not disable IAM Identity Center, delete the Organization,

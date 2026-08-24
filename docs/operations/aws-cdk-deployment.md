@@ -1,12 +1,14 @@
 # AWS CDK Deployment Runbook
 
-This runbook deploys `MovieReservationWorkloadStack` from a developer workstation into an
-AWS account, verifies the infrastructure contract, and removes the deployed
-resources afterward.
+This runbook deploys the disposable `MovieReservationWorkloadStack` from a
+developer workstation into an AWS account, verifies the infrastructure
+contract, and removes the deployed workload resources afterward.
 
 Complete the
 [standalone-account access bootstrap](./standalone-account-access-bootstrap.md)
-before the first deployment. During an approved rehearsal, use the
+and deploy the persistent ECR destination through the
+[artifact-foundation runbook](./aws-artifact-foundation.md) before artifact
+admission or workload deployment. During an approved rehearsal, use the
 [AWS demo release checklist](./aws-demo-release-checklist.md) as the controlling
 sequence; this runbook supplies the detailed CDK commands.
 
@@ -21,6 +23,7 @@ metrics, an AMP workspace, and an Amazon Managed Grafana workspace.
 | --- | --- | --- |
 | Account access bootstrap | AWS console plus workstation | Creates the persistent Organization, IAM Identity Center operator, MFA, account assignment, CLI profile, and private target file described by the separate bootstrap runbook. |
 | Account preflight | Workstation plus read-only AWS CLI calls | Proves that the pinned SSO profile, Region, account, permission set, and live role all match before a group of mutations. It changes no AWS resources. |
+| Artifact foundation | Separate CDK app plus AWS CloudFormation | Creates the persistent ECR destination before admission. Its deploy and final-cleanup lifecycle is controlled by the artifact-foundation runbook. |
 | `synth` | Workstation | Executes the TypeScript CDK app and writes CloudFormation and asset metadata under `cdk.out/`. It changes no AWS resources. |
 | `bootstrap` | Workstation CLI plus AWS CloudFormation | Once per account/Region, creates the CDK toolkit resources used to publish assets and deploy stacks. |
 | `diff` | Workstation CLI plus AWS CloudFormation | Compares the synthesized template with the deployed stack. |
@@ -40,7 +43,9 @@ Every real deploy needs:
   pins the exact account, `eu-central-1`, permission set, and generated role.
 - AWS account ID and Region for explicit CDK targeting.
 - Customer-managed IPv4 prefix list ID for ALB and Grafana access.
-- Digest-pinned private ECR image reference for the reservation service.
+- A deployed `ArtifactFoundationStack` and an environments-owned admission
+  result for the selected reservation-service candidate.
+- Digest-pinned private ECR image reference produced by that admission.
 - Application service version or release identifier.
 - Operator acknowledgement of expected cost and teardown plan.
 
@@ -171,6 +176,7 @@ Install dependencies and run the offline checks:
 ```bash
 npm ci
 npm run validate:aws-account-preflight
+npm run validate:artifact-foundation-cleanup
 npm run build
 npm run test:cdk
 npm run test:tooling
@@ -179,6 +185,7 @@ npm run validate:xray-smoke
 npm run validate:managed-metrics-smoke
 npm run validate:grafana-dashboard
 npm run synth:ecr-contract
+npm run synth:artifact-foundation
 ```
 
 `npm run ci` runs this ordered, credential-free repository suite as one local
@@ -191,6 +198,23 @@ access.
 `npm run synth:ecr-contract` uses fake account and digest values with
 `--no-lookups`. It verifies the CDK contract offline; it does not prove that the
 image or prefix list exists in AWS.
+
+`npm run synth:artifact-foundation` independently proves that the persistent
+foundation can synthesize without workload context. It does not deploy or read
+AWS.
+
+## Artifact Foundation And Admission Handoff
+
+The workload must not create or manually assume an ECR destination. Follow the
+[artifact-foundation runbook](./aws-artifact-foundation.md) to deploy and verify
+`ArtifactFoundationStack`. The later private environments workflow resolves its
+outputs at runtime, admits an approved immutable candidate, and supplies the
+resulting `<repository-uri>@sha256:<digest>` as
+`$APPLICATION_IMAGE_REFERENCE`.
+
+Keep the source candidate, admitted digest, release ID, and observed running
+digest distinguishable. Do not use a mutable ECR tag or rebuild application
+source during CDK deployment.
 
 ## Bootstrap, Diff, And Deploy
 
@@ -266,10 +290,12 @@ npm run cdk -- destroy MovieReservationWorkloadStack \
 Confirm that the CloudFormation stack, ALB, ECS service/tasks, AMP workspace,
 Grafana workspace, Grafana role, VPC endpoints, and log groups are gone.
 
-The customer-managed prefix list, CDK bootstrap stack, Organizations, and IAM
-Identity Center resources are account/Region-level prerequisites and are not
-part of `MovieReservationWorkloadStack`. Preserve them after routine demo teardown. Then
-complete the access bootstrap runbook's
+`ArtifactFoundationStack`, its retained ECR repository and images, the
+customer-managed prefix list, `CDKToolkit`, Organizations, and IAM Identity
+Center are outside `MovieReservationWorkloadStack`. Preserve them after routine
+demo teardown. Final artifact cleanup is a separately approved workflow in the
+[artifact-foundation runbook](./aws-artifact-foundation.md#guarded-final-cleanup).
+Then complete the access bootstrap runbook's
 [first-rehearsal exit gate](./standalone-account-access-bootstrap.md#phase-9-first-rehearsal-exit-gate),
 including replacement of the temporary `AdministratorAccess` assignment before
 a second workload deployment.

@@ -6,7 +6,7 @@
 >
 > Decision review completed: 2026-08-21
 >
-> Current slice: PR 4/5, guarded artifact-foundation cleanup execution
+> Current slice: PR 5/5, operations and release integration
 
 ## 1. Summary
 
@@ -736,16 +736,17 @@ the guarded final-cleanup path.
 - [x] PR 2 implementation matches this plan.
 - [x] PR 3 inspector makes no mutations.
 - [x] PR 4 cleanup safety cases pass.
-- [ ] PR 5 establishes one controlling operations path.
+- [x] PR 5 establishes one controlling operations path.
 - [ ] Live acceptance is explicitly approved and completed.
 
 ## 19. Handoff For The Next Slice
 
-After PR 4 merges, create a new worktree from the updated `main` for PR 5/5.
-Add the controlling operations runbook and focused architecture, deployment,
-release-checklist, recovery, local-journal, and live-acceptance documentation
-described above. Remove directly obsolete claims, but do not call live AWS,
-admit images, deploy the workload, or broaden issue #12 during PR 5.
+After PR 5 merges, pause before AWS mutation. Follow the controlling
+artifact-foundation runbook and obtain explicit approval for each live-acceptance
+mutation group. Record only sanitized evidence in the local gitignored journal.
+Do not admit an application image or deploy the workload during issue #12
+acceptance; the final accepted state is a redeployed empty foundation ready for
+the later private environments-owned admission workflow.
 
 ## 20. References
 

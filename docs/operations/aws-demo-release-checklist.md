@@ -7,6 +7,7 @@ is a separately approved, supervised rehearsal against the real account.
 The detailed procedures remain authoritative:
 
 - [Standalone-account access bootstrap](./standalone-account-access-bootstrap.md)
+- [AWS artifact-foundation runbook](./aws-artifact-foundation.md)
 - [AWS CDK deployment runbook](./aws-cdk-deployment.md)
 
 Do not treat completion of Gate 1 as permission to start Gate 2.
@@ -16,13 +17,17 @@ Do not treat completion of Gate 1 as permission to start Gate 2.
 - [ ] PRs 1–4 from the
       [approved plan](../plans/standalone-account-identity-center-bootstrap.md)
       were reviewed and merged in order.
+- [ ] PRs 1–5 from the
+      [artifact-foundation plan](../plans/persistent-ecr-artifact-foundation.md)
+      were reviewed and merged in order.
 - [ ] The release checkout is based on the resulting `main`, with no unrelated
       local changes.
 - [ ] `npm ci` completed from the repository root.
 - [ ] `npm run ci` passed without AWS credentials or live AWS account/API
-      lookups; the offline synth contract used `--no-lookups`.
-- [ ] GitHub Actions reported the account-preflight `automation` job before the
-      `infra` and `tooling` jobs, and ran `synth` only after both passed.
+      lookups; both offline synth contracts used `--no-lookups`.
+- [ ] GitHub Actions reported the account-preflight and artifact-cleanup
+      `automation` job before the `infra` and `tooling` jobs, and ran both
+      offline synth contracts only after those jobs passed.
 - [ ] The reviewed repository diff contains no unapproved CDK deployment-
       contract change.
 - [ ] The reviewed files contain no real account ID, personal email, SSO URL,
@@ -44,6 +49,9 @@ account IDs, role ARNs/suffixes, SSO URLs, email addresses, or session data.
 ### Access foundation
 
 - [ ] Explicit approval for this real-account rehearsal is recorded.
+- [ ] The relevant controlling runbook's journal exists under `.local/`,
+      `git check-ignore` confirms it is ignored, and only sanitized outcomes
+      will be recorded there.
 - [ ] Root recovery and MFA are verified, and root is not used for routine
       deployment work.
 - [ ] The access bootstrap runbook is complete through the dedicated
@@ -56,6 +64,12 @@ account IDs, role ARNs/suffixes, SSO URLs, email addresses, or session data.
 
 - [ ] The local offline verification in the deployment runbook passes again
       from the exact release checkout.
+- [ ] `ArtifactFoundationStack` is deployed through its controlling runbook;
+      termination protection, retain policies, outputs, repository settings,
+      lifecycle rule, and ownership tags are verified.
+- [ ] The private environments workflow resolves the foundation outputs and
+      admits the exact approved GHCR candidate; sanitized evidence records the
+      source and admitted digests without committing concrete target values.
 - [ ] The preflight passes immediately before creating or changing the ingress
       prefix list; its owner, Region, IPv4 family, capacity, and reviewed `/32`
       entries are verified afterward.
@@ -85,9 +99,9 @@ account IDs, role ARNs/suffixes, SSO URLs, email addresses, or session data.
 - [ ] `MovieReservationWorkloadStack` and its ALB, ECS tasks/service, AMP workspace,
       Managed Grafana workspace and assignment, role, VPC endpoints, and log
       groups are gone.
-- [ ] The Organization, Identity Center instance, operator and MFA, local
-      profile/target, CDK bootstrap, prefix list, and declared external
-      foundations still exist and remain usable.
+- [ ] `ArtifactFoundationStack`, its admitted images, `CDKToolkit`, the ingress
+      prefix list, Organization, Identity Center instance, operator and MFA,
+      and local profile/target still exist and remain usable.
 - [ ] A separately reviewed least-privilege deployment permission set is active
       and tested; the local profile and private expected role are updated and
       the preflight passes with them.
@@ -98,3 +112,7 @@ If any checkpoint fails, stop at that checkpoint. Safely remove billable
 workload resources when possible, preserve the identity foundation unless it is
 the source of the failure, and use a focused corrective PR plus new rehearsal
 approval. The release is complete only when all Gate 2 items pass.
+
+Guarded artifact-foundation cleanup is not part of routine demo teardown. Use
+it only for separately approved project retirement or the explicit issue #12
+acceptance-and-redeploy sequence in the artifact-foundation runbook.
