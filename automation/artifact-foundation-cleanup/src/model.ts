@@ -77,6 +77,47 @@ export interface ArtifactFoundationReader {
   ) => Promise<RepositoryInspection | undefined>;
 }
 
+/** Exact live ECR identity approved for one destructive repository deletion. */
+export interface RepositoryCleanupTarget {
+  readonly componentId: string;
+  readonly registryId: string;
+  readonly name: string;
+}
+
+/** Mutating AWS operations available only to the guarded execution workflow. */
+export interface ArtifactFoundationCleaner {
+  readonly verifyIdentity: () => Promise<void>;
+  readonly disableStackTerminationProtection: (stackName: string) => Promise<void>;
+  readonly deleteStack: (stackName: string) => Promise<void>;
+  readonly waitForStackDeletion: (stackName: string) => Promise<void>;
+  readonly deleteRepository: (repository: RepositoryCleanupTarget) => Promise<void>;
+}
+
+/** Typed operations derived from current inspected state, never from report text. */
+export interface CleanupExecutionPlan {
+  readonly target: CleanupTarget;
+  readonly foundationStack?: {
+    readonly name: string;
+    readonly disableTerminationProtection: boolean;
+  };
+  readonly repositories: readonly RepositoryCleanupTarget[];
+}
+
+export const CLEANUP_EXECUTION_OUTCOME = {
+  CLEANED: 'CLEANED',
+  NOTHING_TO_CLEAN: 'NOTHING_TO_CLEAN',
+} as const;
+
+export type CleanupExecutionOutcome =
+  (typeof CLEANUP_EXECUTION_OUTCOME)[keyof typeof CLEANUP_EXECUTION_OUTCOME];
+
+/** Result emitted only after final absence verification succeeds. */
+export interface CleanupExecutionResult {
+  readonly outcome: CleanupExecutionOutcome;
+  readonly foundationStackDeleted: boolean;
+  readonly deletedRepositories: readonly RepositoryCleanupTarget[];
+}
+
 /** Stable cleanup outcomes rendered by the CLI and consumed by tests. */
 export const CLEANUP_READINESS = {
   BLOCKED: 'BLOCKED',

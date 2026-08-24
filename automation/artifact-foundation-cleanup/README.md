@@ -1,12 +1,12 @@
-# Artifact Foundation Cleanup Readiness
+# Artifact Foundation Cleanup
 
 This command answers one operator question: can final project cleanup safely
-move on to deleting the persistent artifact foundation?
+remove the persistent artifact foundation? Inspection remains the default and
+cannot change AWS. PR 4/5 adds a separately guarded execution mode.
 
-In PR 3/5 the answer is only a dry-run report. The command cannot delete or
-change AWS resources. It checks the pinned AWS target, verifies that the
-disposable workload stack is gone, inventories the foundation stack and
-configured retained ECR destinations, and prints one of three outcomes:
+The command checks the pinned AWS target, verifies that the disposable workload
+stack is gone, inventories the foundation stack and configured retained ECR
+destinations, and prints one of three outcomes:
 
 - `BLOCKED`: cleanup must not proceed, for example because `MovieReservationWorkloadStack`
   still exists or the foundation stack outputs and a configured repository do
@@ -48,32 +48,57 @@ The stable readiness values and issue-code catalog live in
 [`src/model.ts`](src/model.ts); policy code should reference that catalog rather
 than repeating serialized code strings.
 
-`READY` is a human summary, not an execution API. PR 4/5 must make destructive
-decisions from the current inspected resources and typed issue codes, not by
-parsing report prose. Configuration-drift warnings remain visible but advisory
-for this lab cleanup model.
-
-This slice imports only AWS read commands. There is no `--execute` option and no
-AWS mutation path. PR 4/5 will add separately guarded execution after another
-review.
+`READY` is a human summary, not an execution API. Execution recomputes safety
+from current inspected resources and typed issue codes; it never parses report
+prose or trusts `READY` by itself. Configuration-drift warnings remain visible
+but advisory for this lab cleanup model.
 
 Run the credential-free package checks with:
 
 ```bash
-npm run validate:artifact-foundation-inspector
+npm run validate:artifact-foundation-cleanup
 ```
 
 Print help without reading the private target or contacting AWS:
 
 ```bash
-npm run inspect:artifact-foundation -- --help
+npm run cleanup:artifact-foundation -- --help
 ```
 
 The live inspection command is deliberately not part of CI:
 
 ```bash
-npm run inspect:artifact-foundation
+npm run cleanup:artifact-foundation
 ```
+
+Run inspection first and review the exact target, blockers, warnings, resources,
+images, and printed confirmation phrase. Destructive execution then requires
+both flags in the same invocation:
+
+```bash
+npm run cleanup:artifact-foundation -- \
+  --execute \
+  --confirm "DELETE ArtifactFoundationStack AND RETAINED ECR FROM movie-platform-demo/eu-central-1/account-<last-four>"
+```
+
+Execution performs these operations in fail-closed order:
+
+1. Re-runs preflight and the read-only inspection.
+2. Requires zero blockers and the exact target-specific confirmation.
+3. Re-verifies the mutation SDK caller.
+4. Disables foundation termination protection when currently enabled.
+5. Deletes the foundation stack and waits for confirmed absence.
+6. Force-deletes each exact retained ECR repository and all its images.
+7. Re-inspects and requires the stack and configured repositories to be absent.
+
+A stack request or waiter failure stops before ECR deletion. If stack deletion
+succeeds but repository deletion fails, rerun inspection: the absent stack plus
+exact retained repository is an approved resumable state. Repository-not-found
+responses are treated as already completed.
+
+`MovieReservationWorkloadStack`, `CDKToolkit`, the ingress prefix list, and
+account-level Organizations and IAM Identity Center resources are outside the
+mutation adapter by construction.
 
 It uses the same private mode-`0600` target file as
 `automation/aws-account-preflight`. Real account identifiers and results must

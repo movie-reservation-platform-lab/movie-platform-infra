@@ -6,7 +6,7 @@
 >
 > Decision review completed: 2026-08-21
 >
-> Current slice: PR 3/5, read-only artifact-foundation cleanup inspector
+> Current slice: PR 4/5, guarded artifact-foundation cleanup execution
 
 ## 1. Summary
 
@@ -735,20 +735,17 @@ the guarded final-cleanup path.
   approved.
 - [x] PR 2 implementation matches this plan.
 - [x] PR 3 inspector makes no mutations.
-- [ ] PR 4 cleanup safety cases pass.
+- [x] PR 4 cleanup safety cases pass.
 - [ ] PR 5 establishes one controlling operations path.
 - [ ] Live acceptance is explicitly approved and completed.
 
 ## 19. Handoff For The Next Slice
 
-After PR 3 merges, create a new worktree from the updated `main` for PR 4/5.
-Add only the separately guarded execution path, exact confirmation, termination
-protection update, stack/repository deletion, waiters, recovery, and absence
-verification described above. Do not broaden the documentation rewrite, call
-live AWS during implementation, or add resources for the other services in PR 4.
-Treat `READY` as a human summary: destructive decisions must use the current
-inspected resource state and typed issue codes directly, never parse report
-prose or rely on `READY` as the only gate.
+After PR 4 merges, create a new worktree from the updated `main` for PR 5/5.
+Add the controlling operations runbook and focused architecture, deployment,
+release-checklist, recovery, local-journal, and live-acceptance documentation
+described above. Remove directly obsolete claims, but do not call live AWS,
+admit images, deploy the workload, or broaden issue #12 during PR 5.
 
 ## 20. References
 

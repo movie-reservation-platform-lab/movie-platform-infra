@@ -3,6 +3,7 @@ import { ARTIFACT_FOUNDATION_REPOSITORIES } from '../../../lib/artifact-foundati
 import {
   ARTIFACT_FOUNDATION_STACK_NAME,
   WORKLOAD_STACK_NAME,
+  type ArtifactFoundationCleaner,
   type ArtifactRepositoryCatalog,
   type ArtifactFoundationReader,
   type CleanupInspectionAccess,
@@ -100,6 +101,28 @@ export interface ReaderState {
   readonly workloadStack?: StackInspection;
   readonly foundationStack?: StackInspection;
   readonly repositories?: readonly RepositoryInspection[];
+}
+
+export function createCleaner(events: string[] = []): ArtifactFoundationCleaner {
+  return {
+    verifyIdentity: async () => {
+      events.push('cleanup-identity');
+    },
+    disableStackTerminationProtection: async (stackName) => {
+      events.push(`disable-protection:${stackName}`);
+    },
+    deleteStack: async (stackName) => {
+      events.push(`delete-stack:${stackName}`);
+    },
+    waitForStackDeletion: async (stackName) => {
+      events.push(`wait-stack:${stackName}`);
+    },
+    deleteRepository: async (repository) => {
+      events.push(
+        `delete-repository:${repository.componentId}:${repository.registryId}:${repository.name}`,
+      );
+    },
+  };
 }
 
 export function createReader(state: ReaderState): ArtifactFoundationReader {

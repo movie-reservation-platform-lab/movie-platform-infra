@@ -15,6 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Validates repository-owned operational automation before the infra and tooling
+  # jobs run, including AWS account preflight and cleanup helper checks.
   automation:
     name: automation
     runs-on: ubuntu-latest
@@ -36,9 +38,11 @@ jobs:
       - name: Validate account preflight automation
         run: npm run validate:aws-account-preflight
 
-      - name: Validate artifact-foundation cleanup inspector
-        run: npm run validate:artifact-foundation-inspector
+      - name: Validate artifact-foundation cleanup automation
+        run: npm run validate:artifact-foundation-cleanup
 
+  # Builds and tests the CDK infrastructure definitions after automation checks
+  # pass, covering both workload and artifact-foundation stacks.
   infra:
     name: infra
     needs: automation
@@ -67,6 +71,8 @@ jobs:
       - name: Run artifact-foundation CDK assertion tests
         run: npm run test:cdk:foundation
 
+  # Validates repository tooling that supports deployability and operations,
+  # including image, smoke-test, metrics, and dashboard checks.
   tooling:
     name: tooling
     needs: automation
@@ -101,6 +107,8 @@ jobs:
       - name: Validate Grafana dashboard
         run: npm run validate:grafana-dashboard
 
+  # Synthesizes offline CDK contracts only after infra and tooling checks pass,
+  # proving the repository can produce deployable CloudFormation templates.
   synth:
     name: synth
     needs:
