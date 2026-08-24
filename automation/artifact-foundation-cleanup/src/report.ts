@@ -1,9 +1,13 @@
 import type {
   ArtifactFoundationInspection,
   ArtifactRepositoryInspection,
+  CleanupExecutionPlan,
+  CleanupExecutionResult,
   InspectionIssue,
   StackInspection,
 } from './model';
+import { CLEANUP_EXECUTION_OUTCOME, CLEANUP_READINESS } from './model';
+import { buildCleanupConfirmation } from './cleanup';
 
 /** Render a stable, account-redacted dry-run report for the operator. */
 export function renderInspectionReport(inspection: ArtifactFoundationInspection): string {
@@ -25,11 +29,79 @@ export function renderInspectionReport(inspection: ArtifactFoundationInspection)
     ...renderMessages('Blockers', inspection.blockers),
     ...renderMessages('Warnings', inspection.warnings),
     `Final cleanup readiness: ${inspection.readiness}`,
+    ...renderExecutionGuidance(inspection),
     'DRY RUN: no AWS resources were changed.',
     '',
   ];
 
   return lines.join('\n');
+}
+
+/** Render the exact destructive operations immediately before execution. */
+export function renderExecutionPlan(plan: CleanupExecutionPlan): string {
+  const lines = [
+    'Artifact foundation cleanup execution plan (destructive)',
+    '',
+    `Target: ${plan.target.profile}/${plan.target.region}/account-${plan.target.accountId.slice(-4)}`,
+    'Operations:',
+  ];
+  let operationNumber = 1;
+
+  if (plan.foundationStack === undefined && plan.repositories.length === 0) {
+    lines.push('  (none; the initial inspection already proved the artifact foundation is absent)', '');
+    return lines.join('\n');
+  }
+  if (plan.foundationStack?.disableTerminationProtection === true) {
+    lines.push(
+      `  ${operationNumber}. Disable termination protection on ${plan.foundationStack.name}.`,
+    );
+    operationNumber += 1;
+  }
+  if (plan.foundationStack !== undefined) {
+    lines.push(
+      `  ${operationNumber}. Delete ${plan.foundationStack.name} and wait for confirmed absence.`,
+    );
+    operationNumber += 1;
+  }
+  for (const repository of plan.repositories) {
+    lines.push(
+      `  ${operationNumber}. Force-delete ECR repository ${repository.name} and every image it contains.`,
+    );
+    operationNumber += 1;
+  }
+  lines.push(
+    `  ${operationNumber}. Re-inspect the target and require the stack and configured repositories to be absent.`,
+    '',
+  );
+  return lines.join('\n');
+}
+
+/** Render success only after the execution workflow verifies final absence. */
+export function renderExecutionResult(result: CleanupExecutionResult): string {
+  if (result.outcome === CLEANUP_EXECUTION_OUTCOME.NOTHING_TO_CLEAN) {
+    return 'Cleanup result: NOTHING_TO_CLEAN; no AWS resources were changed.\n';
+  }
+
+  return [
+    'Cleanup result: CLEANED',
+    `  foundation stack deleted: ${result.foundationStackDeleted ? 'yes' : 'already absent'}`,
+    `  retained repositories deleted: ${result.deletedRepositories.length}`,
+    '  final absence verification: passed',
+    '',
+  ].join('\n');
+}
+
+function renderExecutionGuidance(inspection: ArtifactFoundationInspection): string[] {
+  if (inspection.readiness === CLEANUP_READINESS.BLOCKED) {
+    return ['Execution unavailable until every blocker is resolved.'];
+  }
+  if (inspection.readiness === CLEANUP_READINESS.NOTHING_TO_CLEAN) {
+    return ['No cleanup execution is required.'];
+  }
+  return [
+    'Exact execution confirmation:',
+    `  ${JSON.stringify(buildCleanupConfirmation(inspection.target))}`,
+  ];
 }
 
 function renderStack(

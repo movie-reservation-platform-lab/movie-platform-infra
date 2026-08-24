@@ -14,13 +14,13 @@ import {
   type Repository,
 } from '@aws-sdk/client-ecr';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
-import { fromIni } from '@aws-sdk/credential-providers';
 
 import {
   validateAwsCallerIdentity,
   type AwsTarget,
   type ValidatedAwsAccess,
 } from '../../aws-account-preflight/src';
+import { createPinnedAwsCredentials } from './aws-client-config';
 import { failInspection } from './inspection-error';
 import {
   type ArtifactFoundationReader,
@@ -41,14 +41,8 @@ const MAX_IMAGE_PAGES = 1_000;
  * by preflight. The ambient default credential chain is intentionally bypassed.
  */
 export function createAwsSdkReader(access: ValidatedAwsAccess): ArtifactFoundationReader {
-  const { target, configFiles } = access;
-  const credentials = fromIni({
-    profile: target.profile,
-    filepath: configFiles.credentialsFilepath,
-    configFilepath: configFiles.configFilepath,
-    clientConfig: { region: target.region },
-    ignoreCache: true,
-  });
+  const { target } = access;
+  const credentials = createPinnedAwsCredentials(access);
 
   return new AwsSdkArtifactFoundationReader(
     target,

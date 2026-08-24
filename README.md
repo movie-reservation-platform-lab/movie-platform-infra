@@ -49,7 +49,7 @@ Run commands from this repository root:
 ```bash
 npm ci
 npm run validate:aws-account-preflight
-npm run validate:artifact-foundation-inspector
+npm run validate:artifact-foundation-cleanup
 npm run build
 npm run test:cdk
 npm run test:tooling
@@ -71,11 +71,11 @@ validates them separately and before CDK or tooling tests.
 digest with `--no-lookups`. It proves the CDK app accepts an immutable image
 contract offline; it does not prove the image exists in AWS.
 
-`npm run validate:artifact-foundation-inspector` is credential-free. The live
+`npm run validate:artifact-foundation-cleanup` is credential-free. The live
 read-only cleanup-readiness check is separate:
 
 ```bash
-npm run inspect:artifact-foundation
+npm run cleanup:artifact-foundation
 ```
 
 ## AWS Operator Access
@@ -262,7 +262,7 @@ This is routine demo teardown. It intentionally preserves
 cleanup, inspect readiness first:
 
 ```bash
-npm run inspect:artifact-foundation
+npm run cleanup:artifact-foundation
 ```
 
 ## Optional Context

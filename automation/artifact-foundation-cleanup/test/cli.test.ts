@@ -1,12 +1,15 @@
 import { PreflightFailure } from '../../aws-account-preflight/src';
+import { buildCleanupConfirmation } from '../src/cleanup';
 import { runCli, type CliDependencies } from '../src';
 import {
   FOUNDATION_STACK,
   REPOSITORY,
-  TEST_ARTIFACT_REPOSITORY_CATALOG,
   TEST_ACCESS,
+  TEST_ARTIFACT_REPOSITORY_CATALOG,
   TEST_DIGEST_A,
   TEST_TARGET,
+  WORKLOAD_STACK,
+  createCleaner,
   createReader,
 } from './test-support';
 
@@ -46,27 +49,31 @@ function successfulDependencies(events: string[] = []): CliDependencies {
     },
     createReader: (access) => {
       events.push(
-        `clients:${access.target.profile}:${access.target.region}:` +
+        `reader:${access.target.profile}:${access.target.region}:` +
           `${access.configFiles.configFilepath}:${access.configFiles.credentialsFilepath}`,
       );
-      const reader = createReader({
-        foundationStack: FOUNDATION_STACK,
-        repositories: [REPOSITORY],
-      });
+      let inspectionNumber = 0;
       return {
         verifyIdentity: async () => {
-          events.push('identity');
-          return reader.verifyIdentity();
+          inspectionNumber += 1;
+          events.push(`read-identity:${inspectionNumber}`);
         },
         inspectStack: async (stackName) => {
-          events.push(`stack:${stackName}`);
-          return reader.inspectStack(stackName);
+          events.push(`stack:${inspectionNumber}:${stackName}`);
+          if (inspectionNumber > 1) {
+            return undefined;
+          }
+          return stackName === FOUNDATION_STACK.name ? FOUNDATION_STACK : undefined;
         },
         inspectRepository: async (definition) => {
-          events.push(`repository:${definition.componentId}`);
-          return reader.inspectRepository(definition);
+          events.push(`repository:${inspectionNumber}:${definition.componentId}`);
+          return inspectionNumber > 1 ? undefined : REPOSITORY;
         },
       };
+    },
+    createCleaner: (access) => {
+      events.push(`cleaner:${access.target.profile}:${access.target.region}`);
+      return createCleaner(events);
     },
     artifactRepositoryCatalog: TEST_ARTIFACT_REPOSITORY_CATALOG,
   };
@@ -75,30 +82,35 @@ function successfulDependencies(events: string[] = []): CliDependencies {
 test.each([['--help'], ['-h']])('prints help without target access for %s', async (argument) => {
   const validateAccess = jest.fn(() => TEST_ACCESS);
   const createReaderMock = jest.fn(() => createReader({}));
+  const createCleanerMock = jest.fn(() => createCleaner());
 
   const result = await run([argument], {
     validateAccess,
     createReader: createReaderMock,
+    createCleaner: createCleanerMock,
     artifactRepositoryCatalog: TEST_ARTIFACT_REPOSITORY_CATALOG,
   });
 
   expect(result.status).toBe(0);
   expect(result.stderr).toBe('');
-  expect(result.stdout).toContain('npm run inspect:artifact-foundation -- [--help]');
-  expect(result.stdout).toContain('Checks whether final project cleanup can proceed');
+  expect(result.stdout).toContain('npm run cleanup:artifact-foundation -- [--help]');
+  expect(result.stdout).toContain('--execute --confirm');
   expect(result.stdout).toContain('MovieReservationWorkloadStack');
-  expect(result.stdout).toContain('there is no --execute option');
+  expect(result.stdout).toContain('WARNING: --execute is destructive');
   expect(validateAccess).not.toHaveBeenCalled();
   expect(createReaderMock).not.toHaveBeenCalled();
+  expect(createCleanerMock).not.toHaveBeenCalled();
 });
 
-test('rejects a future execute option before preflight or client creation', async () => {
+test('requires confirmation before preflight or client creation', async () => {
   const validateAccess = jest.fn(() => TEST_ACCESS);
   const createReaderMock = jest.fn(() => createReader({}));
+  const createCleanerMock = jest.fn(() => createCleaner());
 
   const result = await run(['--execute'], {
     validateAccess,
     createReader: createReaderMock,
+    createCleaner: createCleanerMock,
     artifactRepositoryCatalog: TEST_ARTIFACT_REPOSITORY_CATALOG,
   });
 
@@ -106,13 +118,14 @@ test('rejects a future execute option before preflight or client creation', asyn
     status: 1,
     stdout: '',
     stderr:
-      'Artifact foundation inspection failed: invalid arguments; run with --help for usage\n',
+      'Artifact foundation cleanup failed: --execute requires an exact --confirm value; run the read-only check first\n',
   });
   expect(validateAccess).not.toHaveBeenCalled();
   expect(createReaderMock).not.toHaveBeenCalled();
+  expect(createCleanerMock).not.toHaveBeenCalled();
 });
 
-test('runs preflight before exact-target clients and prints a redacted dry-run report', async () => {
+test('runs preflight and read-only inspection without constructing a mutation client', async () => {
   const events: string[] = [];
 
   const result = await run([], successfulDependencies(events));
@@ -121,6 +134,7 @@ test('runs preflight before exact-target clients and prints a redacted dry-run r
   expect(result.stderr).toBe('');
   expect(result.stdout).toContain('Artifact foundation cleanup readiness check (read-only)');
   expect(result.stdout).toContain('Final cleanup readiness: READY');
+  expect(result.stdout).toContain(buildCleanupConfirmation(TEST_TARGET));
   expect(result.stdout).toContain('DRY RUN: no AWS resources were changed.');
   expect(result.stdout).toContain(TEST_DIGEST_A);
   expect(result.stdout).toContain('<account ending 1111>');
@@ -128,28 +142,104 @@ test('runs preflight before exact-target clients and prints a redacted dry-run r
   expect(result.stdout).not.toContain(TEST_TARGET.expectedRoleName);
   expect(events).toEqual([
     'preflight',
-    'clients:movie-platform-demo:eu-central-1:/test-home/.aws/config:/test-home/.aws/credentials',
-    'identity',
-    'stack:MovieReservationWorkloadStack',
-    'stack:ArtifactFoundationStack',
-    'repository:reservation-service',
+    'reader:movie-platform-demo:eu-central-1:/test-home/.aws/config:/test-home/.aws/credentials',
+    'read-identity:1',
+    'stack:1:MovieReservationWorkloadStack',
+    'stack:1:ArtifactFoundationStack',
+    'repository:1:reservation-service',
   ]);
+});
+
+test('rejects a wrong target-specific confirmation before constructing a mutation client', async () => {
+  const events: string[] = [];
+
+  const result = await run(
+    ['--execute', '--confirm', 'DELETE THE WRONG TARGET'],
+    successfulDependencies(events),
+  );
+
+  expect(result.status).toBe(1);
+  expect(result.stdout).toContain('Final cleanup readiness: READY');
+  expect(result.stderr).toContain('confirmation must exactly match');
+  expect(events).not.toContain('cleaner:movie-platform-demo:eu-central-1');
+  expect(events).not.toContain('cleanup-identity');
+});
+
+test('executes in guarded order and reports success only after final absence verification', async () => {
+  const events: string[] = [];
+
+  const result = await run(
+    ['--execute', '--confirm', buildCleanupConfirmation(TEST_TARGET)],
+    successfulDependencies(events),
+  );
+
+  expect(result.status).toBe(0);
+  expect(result.stderr).toBe('');
+  expect(result.stdout).toContain('Artifact foundation cleanup execution plan (destructive)');
+  expect(result.stdout).toContain('Force-delete ECR repository movie-reservation-service');
+  expect(result.stdout).toContain('Cleanup result: CLEANED');
+  expect(result.stdout).toContain('final absence verification: passed');
+  expect(events).toEqual([
+    'preflight',
+    'reader:movie-platform-demo:eu-central-1:/test-home/.aws/config:/test-home/.aws/credentials',
+    'read-identity:1',
+    'stack:1:MovieReservationWorkloadStack',
+    'stack:1:ArtifactFoundationStack',
+    'repository:1:reservation-service',
+    'cleaner:movie-platform-demo:eu-central-1',
+    'cleanup-identity',
+    'disable-protection:ArtifactFoundationStack',
+    'delete-stack:ArtifactFoundationStack',
+    'wait-stack:ArtifactFoundationStack',
+    'delete-repository:reservation-service:111111111111:movie-reservation-service',
+    'read-identity:2',
+    'stack:2:MovieReservationWorkloadStack',
+    'stack:2:ArtifactFoundationStack',
+    'repository:2:reservation-service',
+  ]);
+});
+
+test('blocks execution while the workload exists and makes no mutation', async () => {
+  const createCleanerMock = jest.fn(() => createCleaner());
+
+  const result = await run(
+    ['--execute', '--confirm', buildCleanupConfirmation(TEST_TARGET)],
+    {
+      validateAccess: () => TEST_ACCESS,
+      createReader: () =>
+        createReader({
+          workloadStack: WORKLOAD_STACK,
+          foundationStack: FOUNDATION_STACK,
+          repositories: [REPOSITORY],
+        }),
+      createCleaner: createCleanerMock,
+      artifactRepositoryCatalog: TEST_ARTIFACT_REPOSITORY_CATALOG,
+    },
+  );
+
+  expect(result.status).toBe(1);
+  expect(result.stdout).toContain('Final cleanup readiness: BLOCKED');
+  expect(result.stderr).toContain('WORKLOAD_STACK_PRESENT');
+  expect(createCleanerMock).not.toHaveBeenCalled();
 });
 
 test('stops on a preflight target failure before constructing SDK clients', async () => {
   const createReaderMock = jest.fn(() => createReader({}));
+  const createCleanerMock = jest.fn(() => createCleaner());
 
   const result = await run([], {
     validateAccess: () => {
       throw new PreflightFailure('the live caller account does not match the pinned target');
     },
     createReader: createReaderMock,
+    createCleaner: createCleanerMock,
     artifactRepositoryCatalog: TEST_ARTIFACT_REPOSITORY_CATALOG,
   });
 
   expect(result.status).toBe(1);
   expect(result.stderr).toContain('live caller account does not match');
   expect(createReaderMock).not.toHaveBeenCalled();
+  expect(createCleanerMock).not.toHaveBeenCalled();
 });
 
 test('does not forward unexpected SDK diagnostics or private account values', async () => {
@@ -162,6 +252,7 @@ test('does not forward unexpected SDK diagnostics or private account values', as
       },
       inspectRepository: async () => REPOSITORY,
     }),
+    createCleaner: () => createCleaner(),
     artifactRepositoryCatalog: TEST_ARTIFACT_REPOSITORY_CATALOG,
   });
 
