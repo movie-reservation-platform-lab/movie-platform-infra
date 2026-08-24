@@ -1,8 +1,9 @@
 # AWS Resource Topology
 
-This page describes the AWS resources modeled by `MovieReservationWorkloadStack` in
-`lib/infra-stack.ts`. It is adapted from the original golden-path architecture
-docs and updated for the standalone infrastructure repository.
+This page describes the persistent artifact foundation modeled by
+`ArtifactFoundationStack` and the disposable resources modeled by
+`MovieReservationWorkloadStack`. The two CDK applications are intentionally
+independent because their teardown boundaries differ.
 
 ## Runtime View
 
@@ -23,7 +24,9 @@ flowchart TB
       end
     end
 
-    ecr["Private ECR<br/>digest-pinned app image"]
+    subgraph artifactFoundation["ArtifactFoundationStack (persistent)"]
+      ecr["Private ECR<br/>retained application artifacts"]
+    end
     cdkAssetEcr["CDK asset ECR<br/>ADOT collector image"]
     cloudwatch["CloudWatch Logs + Metrics"]
     xray["AWS X-Ray"]
@@ -49,13 +52,22 @@ flowchart TB
 
 ## Resource Responsibilities
 
+### Lifecycle ownership
+
+| Resource group | Owner | Lifecycle |
+| --- | --- | --- |
+| Application artifact ECR repository | `ArtifactFoundationStack` | Persistent between demos; final cleanup only through the guarded workflow |
+| VPC, ALB, ECS, observability, workload log groups, and Grafana role | `MovieReservationWorkloadStack` | Disposable; destroy promptly after a demo |
+| CDK asset bucket and ECR repository | `CDKToolkit` | Shared account/Region deployment prerequisite; preserved |
+| Ingress prefix list and account identity/governance | External account prerequisites | Preserved; separate operating procedures |
+
 ### Network
 
-The stack creates a small VPC with public subnets for the ALB and isolated
-private subnets for Fargate workloads. There is no NAT Gateway. Private AWS API
-access is provided through VPC endpoints so the task can pull images, write
-logs, export traces, and remote-write metrics without general outbound internet
-access.
+The workload stack creates a small VPC with public subnets for the ALB and
+isolated private subnets for Fargate workloads. There is no NAT Gateway. Private
+AWS API access is provided through VPC endpoints so the task can pull images,
+write logs, export traces, and remote-write metrics without general outbound
+internet access.
 
 ### Ingress
 
@@ -93,7 +105,10 @@ selection are ready.
 
 ### Artifacts
 
-The reservation API image is imported from private ECR by immutable digest:
+`ArtifactFoundationStack` creates the `movie-reservation-service` private ECR
+repository independently of the workload. The private environments workflow
+will admit an already approved immutable candidate into that destination. The
+workload then imports the selected image by digest:
 
 ```text
 <account>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<digest>
@@ -102,8 +117,13 @@ The reservation API image is imported from private ECR by immutable digest:
 Mutable tags are not deployable selectors. Tags may appear only as human
 provenance in application or environment repositories.
 
+The foundation outputs repository name, URI, and ARN for runtime discovery; the
+concrete account-local values are not committed or connected to the workload by
+a CloudFormation cross-stack reference.
+
 The ADOT collector image is a repository-owned CDK Docker asset because it is
-part of infrastructure, not application source.
+part of infrastructure, not application source. CDK publishes it to the
+separate `CDKToolkit` asset repository during workload deployment.
 
 ### Observability
 
@@ -120,6 +140,7 @@ telemetry.
 
 - Keep public CI offline and deterministic.
 - Keep application source outside this repo.
-- Keep teardown explicit and cheap.
+- Keep teardown explicit and cheap: routine teardown removes the workload, while
+  guarded final cleanup removes the persistent artifact foundation.
 - Do not add shared-account promotion automation until the environment manifest
   and release workflow are intentionally designed.

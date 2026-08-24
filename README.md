@@ -78,6 +78,10 @@ read-only cleanup-readiness check is separate:
 npm run cleanup:artifact-foundation
 ```
 
+Follow the controlling
+[artifact-foundation runbook](docs/operations/aws-artifact-foundation.md) before
+deploying, verifying, or finally deleting the persistent foundation.
+
 ## AWS Operator Access
 
 Before a real AWS deployment, complete the
@@ -95,9 +99,34 @@ npm run preflight:aws
 
 The preflight must pass before each short group of AWS mutations. Keep real
 account and role values in the operator-owned JSON target outside Git. Follow
-the detailed [deployment runbook](docs/operations/aws-cdk-deployment.md), and
-use the [two-gate release checklist](docs/operations/aws-demo-release-checklist.md)
-for the first approved rehearsal.
+the [artifact-foundation runbook](docs/operations/aws-artifact-foundation.md)
+for the persistent ECR boundary, the detailed
+[workload deployment runbook](docs/operations/aws-cdk-deployment.md) for the
+disposable demo, and the
+[two-gate release checklist](docs/operations/aws-demo-release-checklist.md) for
+an approved rehearsal.
+
+## Artifact Foundation Workflow
+
+The foundation has its own CDK entrypoint and does not require workload context:
+
+```bash
+npm run cdk:foundation -- synth ArtifactFoundationStack --no-lookups
+npm run preflight:aws
+npm run cdk:foundation -- diff ArtifactFoundationStack
+
+npm run preflight:aws
+npm run cdk:foundation -- deploy ArtifactFoundationStack
+```
+
+The deploy command creates the persistent, termination-protected ECR
+destination. The private `movie-platform-environments` repository will later
+admit an approved immutable GHCR candidate and hand its exact ECR digest to the
+workload deployment. This repository does not build sibling application source.
+
+Routine demo teardown must not run a foundation destroy command. Final project
+cleanup uses the separate guarded workflow described in the
+[artifact-foundation runbook](docs/operations/aws-artifact-foundation.md#guarded-final-cleanup).
 
 ## Application Image Contract
 
@@ -159,9 +188,9 @@ Updating prefix list entries changes who can reach the ALB and Grafana without
 redeploying the CDK stack. Keep the list scoped to trusted `/32` entries; do
 not add `0.0.0.0/0`.
 
-## CDK Workflow
+## Workload CDK Workflow
 
-CDK has three separate steps:
+The workload CDK application has three separate steps:
 
 - `synth` runs the TypeScript app and writes a CloudFormation template to
   `cdk.out`.
@@ -259,7 +288,7 @@ second workload deployment.
 
 This is routine demo teardown. It intentionally preserves
 `ArtifactFoundationStack` and the retained ECR repository. For final project
-cleanup, inspect readiness first:
+cleanup, follow the separate controlling runbook and inspect readiness first:
 
 ```bash
 npm run cleanup:artifact-foundation

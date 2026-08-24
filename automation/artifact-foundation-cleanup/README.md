@@ -2,7 +2,11 @@
 
 This command answers one operator question: can final project cleanup safely
 remove the persistent artifact foundation? Inspection remains the default and
-cannot change AWS. PR 4/5 adds a separately guarded execution mode.
+cannot change AWS. Destructive execution is a separately guarded mode.
+
+The controlling operator sequence, lifecycle boundaries, live acceptance, and
+recovery procedure live in the
+[AWS artifact-foundation runbook](../../docs/operations/aws-artifact-foundation.md).
 
 The command checks the pinned AWS target, verifies that the disposable workload
 stack is gone, inventories the foundation stack and configured retained ECR
@@ -78,8 +82,11 @@ both flags in the same invocation:
 ```bash
 npm run cleanup:artifact-foundation -- \
   --execute \
-  --confirm "DELETE ArtifactFoundationStack AND RETAINED ECR FROM movie-platform-demo/eu-central-1/account-<last-four>"
+  --confirm "<exact phrase printed by the preceding READY inspection>"
 ```
+
+Do not invent the phrase or literally type `<last-four>`; copy the complete
+target-specific phrase printed by the read-only command.
 
 Execution performs these operations in fail-closed order:
 

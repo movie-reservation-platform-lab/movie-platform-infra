@@ -23,3 +23,6 @@ cdk.out
 !.idea/runConfigurations/
 .idea/runConfigurations/*
 !.idea/runConfigurations/*.xml
+
+# Operator-owned acceptance journals and sanitized live-AWS notes.
+/.local/
