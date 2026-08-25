@@ -1,12 +1,18 @@
 import { TextDecoder } from 'node:util';
 
-import type { ArtifactCopyRequest } from './model';
+import {
+  ARTIFACT_TRANSFER_OPERATION,
+  type ArtifactCopyRequest,
+  type ArtifactTransferOperation,
+  type ArtifactTransferRequest,
+} from './model';
 
 export const ARTIFACT_COPY_CLI_REQUEST_VERSION = 'artifact-copy-request-v1';
+export const ARTIFACT_COPY_CLI_REQUEST_VERSION_V2 = 'artifact-copy-request-v2';
 export const MAX_ARTIFACT_COPY_REQUEST_BYTES = 64 * 1024;
 
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
-const ALLOWED_FIELDS = new Set([
+const V1_ALLOWED_FIELDS = new Set([
   'requestVersion',
   'sourceReference',
   'destinationRepository',
@@ -14,15 +20,25 @@ const ALLOWED_FIELDS = new Set([
   'sourceAuthFile',
   'destinationAuthFile',
 ]);
+const V2_ALLOWED_FIELDS = new Set([...V1_ALLOWED_FIELDS, 'operation']);
 
 interface JsonObject {
   readonly [key: string]: unknown;
 }
 
-export interface ArtifactCopyCliRequest {
+export interface ArtifactCopyCliRequestV1 {
   readonly requestVersion: typeof ARTIFACT_COPY_CLI_REQUEST_VERSION;
   readonly copyRequest: ArtifactCopyRequest;
 }
+
+export interface ArtifactCopyCliRequestV2 {
+  readonly requestVersion: typeof ARTIFACT_COPY_CLI_REQUEST_VERSION_V2;
+  readonly transferRequest: ArtifactTransferRequest;
+}
+
+export type ArtifactCopyCliRequest =
+  | ArtifactCopyCliRequestV1
+  | ArtifactCopyCliRequestV2;
 
 export class ArtifactCopyCliInputFailure extends Error {
   constructor() {
@@ -56,11 +72,14 @@ export function parseArtifactCopyCliRequest(rawRequest: Buffer): ArtifactCopyCli
     failCliInput();
   }
 
+  const requestVersion = parsed.requestVersion;
+  const allowedFields = requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION
+    ? V1_ALLOWED_FIELDS
+    : requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION_V2
+      ? V2_ALLOWED_FIELDS
+      : failCliInput();
   const fields = Object.keys(parsed);
-  if (fields.some((field) => !ALLOWED_FIELDS.has(field))) {
-    failCliInput();
-  }
-  if (parsed.requestVersion !== ARTIFACT_COPY_CLI_REQUEST_VERSION) {
+  if (fields.some((field) => !allowedFields.has(field))) {
     failCliInput();
   }
 
@@ -70,16 +89,40 @@ export function parseArtifactCopyCliRequest(rawRequest: Buffer): ArtifactCopyCli
   const destinationAuthFile = readRequiredString(parsed, 'destinationAuthFile');
   const sourceAuthFile = readOptionalString(parsed, 'sourceAuthFile');
 
+  const commonRequest = {
+    sourceReference,
+    destinationRepository,
+    expectedDigest,
+    ...(sourceAuthFile === undefined ? {} : { sourceAuthFile }),
+    destinationAuthFile,
+  };
+
+  if (requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION) {
+    return Object.freeze({
+      requestVersion,
+      copyRequest: Object.freeze(commonRequest),
+    });
+  }
+  if (requestVersion !== ARTIFACT_COPY_CLI_REQUEST_VERSION_V2) {
+    failCliInput();
+  }
+
+  const operation = readOperation(parsed);
   return Object.freeze({
-    requestVersion: ARTIFACT_COPY_CLI_REQUEST_VERSION,
-    copyRequest: Object.freeze({
-      sourceReference,
-      destinationRepository,
-      expectedDigest,
-      ...(sourceAuthFile === undefined ? {} : { sourceAuthFile }),
-      destinationAuthFile,
-    }),
+    requestVersion,
+    transferRequest: Object.freeze({ ...commonRequest, operation }),
   });
+}
+
+function readOperation(object: JsonObject): ArtifactTransferOperation {
+  const operation = object.operation;
+  if (
+    operation !== ARTIFACT_TRANSFER_OPERATION.COPY_AND_VERIFY &&
+    operation !== ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING
+  ) {
+    failCliInput();
+  }
+  return operation;
 }
 
 function readRequiredString(object: JsonObject, field: string): string {

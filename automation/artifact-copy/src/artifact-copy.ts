@@ -10,8 +10,14 @@ import {
 } from './image-manifest';
 import {
   ARTIFACT_COPY_VERIFICATION_METHOD,
+  ARTIFACT_TRANSFER_OPERATION,
+  ARTIFACT_TRANSFER_OUTCOME,
+  ARTIFACT_TRANSFER_VERIFICATION_METHOD,
   type ArtifactCopyRequest,
   type ArtifactCopyVerification,
+  type ArtifactTransferRequest,
+  type ArtifactTransferVerification,
+  type ImageManifestIdentity,
   type RegistryImageClient,
 } from './model';
 
@@ -34,6 +40,54 @@ export async function copyAndVerifyArtifact(
 ): Promise<ArtifactCopyVerification> {
   const validated = validateRequest(request);
 
+  const { sourceManifest, destinationManifest } = await inspectTransfer(
+    validated,
+    client,
+    true,
+  );
+
+  return Object.freeze({
+    verificationMethod: ARTIFACT_COPY_VERIFICATION_METHOD,
+    sourceManifestDigest: sourceManifest.manifestDigest,
+    destinationManifestDigest: destinationManifest.manifestDigest,
+    configDigest: sourceManifest.configDigest,
+    layerDigests: Object.freeze([...sourceManifest.layerDigests]),
+  });
+}
+
+/** Copy or only verify an approved manifest according to the explicit v2 operation. */
+export async function transferAndVerifyArtifact(
+  request: ArtifactTransferRequest,
+  client: RegistryImageClient,
+): Promise<ArtifactTransferVerification> {
+  const validated = validateTransferRequest(request);
+  const shouldCopy = validated.operation === ARTIFACT_TRANSFER_OPERATION.COPY_AND_VERIFY;
+  const { sourceManifest, destinationManifest } = await inspectTransfer(
+    validated,
+    client,
+    shouldCopy,
+  );
+
+  return Object.freeze({
+    verificationMethod: ARTIFACT_TRANSFER_VERIFICATION_METHOD,
+    outcome: shouldCopy
+      ? ARTIFACT_TRANSFER_OUTCOME.COPIED
+      : ARTIFACT_TRANSFER_OUTCOME.ALREADY_PRESENT,
+    sourceManifestDigest: sourceManifest.manifestDigest,
+    destinationManifestDigest: destinationManifest.manifestDigest,
+    configDigest: sourceManifest.configDigest,
+    layerDigests: Object.freeze([...sourceManifest.layerDigests]),
+  });
+}
+
+async function inspectTransfer(
+  validated: ValidatedArtifactCopyRequest,
+  client: RegistryImageClient,
+  shouldCopy: boolean,
+): Promise<{
+  readonly sourceManifest: ImageManifestIdentity;
+  readonly destinationManifest: ImageManifestIdentity;
+}> {
   const sourceRawManifest = await readManifest(
     client,
     {
@@ -48,19 +102,21 @@ export async function copyAndVerifyArtifact(
     'source',
   );
 
-  try {
-    await client.copy({
-      sourceReference: validated.sourceReference,
-      destinationReference: validated.destinationCopyReference,
-      sourceAuthFile: validated.sourceAuthFile,
-      destinationAuthFile: validated.destinationAuthFile,
-    });
-  } catch {
-    failArtifactCopy(
-      ARTIFACT_COPY_FAILURE_CODE.COPY_FAILED,
-      'registry copy failed before destination verification',
-      ARTIFACT_COPY_FAILURE_STAGE.COPY,
-    );
+  if (shouldCopy) {
+    try {
+      await client.copy({
+        sourceReference: validated.sourceReference,
+        destinationReference: validated.destinationCopyReference,
+        sourceAuthFile: validated.sourceAuthFile,
+        destinationAuthFile: validated.destinationAuthFile,
+      });
+    } catch {
+      failArtifactCopy(
+        ARTIFACT_COPY_FAILURE_CODE.COPY_FAILED,
+        'registry copy failed before destination verification',
+        ARTIFACT_COPY_FAILURE_STAGE.COPY,
+      );
+    }
   }
 
   const destinationRawManifest = await readManifest(
@@ -78,13 +134,19 @@ export async function copyAndVerifyArtifact(
   );
   assertEquivalentImageManifests(sourceManifest, destinationManifest);
 
-  return Object.freeze({
-    verificationMethod: ARTIFACT_COPY_VERIFICATION_METHOD,
-    sourceManifestDigest: sourceManifest.manifestDigest,
-    destinationManifestDigest: destinationManifest.manifestDigest,
-    configDigest: sourceManifest.configDigest,
-    layerDigests: Object.freeze([...sourceManifest.layerDigests]),
-  });
+  return Object.freeze({ sourceManifest, destinationManifest });
+}
+
+function validateTransferRequest(
+  request: ArtifactTransferRequest,
+): ValidatedArtifactCopyRequest & Pick<ArtifactTransferRequest, 'operation'> {
+  if (
+    request.operation !== ARTIFACT_TRANSFER_OPERATION.COPY_AND_VERIFY &&
+    request.operation !== ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING
+  ) {
+    failInvalidInput('operation must be copy-and-verify or verify-existing');
+  }
+  return Object.freeze({ ...validateRequest(request), operation: request.operation });
 }
 
 async function readManifest(
