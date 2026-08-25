@@ -14,9 +14,19 @@ import {
 export const TEST_DIGEST_A = `sha256:${'a'.repeat(64)}`;
 export const TEST_DIGEST_B = `sha256:${'b'.repeat(64)}`;
 export const RESERVATION_SERVICE_REPOSITORY_DEFINITION = ARTIFACT_FOUNDATION_REPOSITORIES[0];
+export const RESERVATION_WEB_REPOSITORY_DEFINITION = ARTIFACT_FOUNDATION_REPOSITORIES[1];
 
 export const TEST_ARTIFACT_REPOSITORY_CATALOG = Object.freeze({
-  listArtifactRepositories: () => ARTIFACT_FOUNDATION_REPOSITORIES,
+  // Most cleanup unit tests exercise orchestration with one representative
+  // repository. The production catalog remains the full six-component list.
+  listArtifactRepositories: () => [RESERVATION_SERVICE_REPOSITORY_DEFINITION],
+} satisfies ArtifactRepositoryCatalog);
+
+export const TEST_MULTI_REPOSITORY_CATALOG = Object.freeze({
+  listArtifactRepositories: () => [
+    RESERVATION_SERVICE_REPOSITORY_DEFINITION,
+    RESERVATION_WEB_REPOSITORY_DEFINITION,
+  ],
 } satisfies ArtifactRepositoryCatalog);
 
 export const TEST_TARGET = Object.freeze({
@@ -70,6 +80,19 @@ export const FOUNDATION_STACK = Object.freeze({
   }),
 } satisfies StackInspection);
 
+export const MULTI_REPOSITORY_FOUNDATION_STACK = Object.freeze({
+  ...FOUNDATION_STACK,
+  outputs: Object.freeze({
+    ...FOUNDATION_STACK.outputs,
+    [RESERVATION_WEB_REPOSITORY_DEFINITION.outputNames.name]:
+      RESERVATION_WEB_REPOSITORY_DEFINITION.repositoryName,
+    [RESERVATION_WEB_REPOSITORY_DEFINITION.outputNames.arn]:
+      'arn:aws:ecr:eu-central-1:111111111111:repository/movie-reservation-web',
+    [RESERVATION_WEB_REPOSITORY_DEFINITION.outputNames.uri]:
+      '111111111111.dkr.ecr.eu-central-1.amazonaws.com/movie-reservation-web',
+  }),
+} satisfies StackInspection);
+
 export const WORKLOAD_STACK = Object.freeze({
   name: 'MovieReservationWorkloadStack',
   status: 'CREATE_COMPLETE',
@@ -94,6 +117,25 @@ export const REPOSITORY = Object.freeze({
   images: Object.freeze([
     Object.freeze({ digest: TEST_DIGEST_A, tags: Object.freeze(['release-1']) }),
     Object.freeze({ digest: TEST_DIGEST_B, tags: Object.freeze([]) }),
+  ]),
+} satisfies RepositoryInspection);
+
+export const WEB_REPOSITORY = Object.freeze({
+  componentId: RESERVATION_WEB_REPOSITORY_DEFINITION.componentId,
+  displayName: RESERVATION_WEB_REPOSITORY_DEFINITION.displayName,
+  artifactKind: RESERVATION_WEB_REPOSITORY_DEFINITION.artifactKind,
+  registryId: TEST_TARGET.accountId,
+  name: RESERVATION_WEB_REPOSITORY_DEFINITION.repositoryName,
+  arn: 'arn:aws:ecr:eu-central-1:111111111111:repository/movie-reservation-web',
+  uri: '111111111111.dkr.ecr.eu-central-1.amazonaws.com/movie-reservation-web',
+  tagMutability: 'IMMUTABLE',
+  tagMutabilityExclusions: Object.freeze([]),
+  scanOnPush: false,
+  encryptionType: 'AES256',
+  tags: Object.freeze({ ...RESERVATION_WEB_REPOSITORY_DEFINITION.expectedTags }),
+  lifecyclePolicyText: EXPECTED_LIFECYCLE_POLICY,
+  images: Object.freeze([
+    Object.freeze({ digest: TEST_DIGEST_A, tags: Object.freeze(['ecs-demo-sha-test']) }),
   ]),
 } satisfies RepositoryInspection);
 

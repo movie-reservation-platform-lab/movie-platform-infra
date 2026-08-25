@@ -17,7 +17,7 @@ export function resolveApplicationImage(
 ): ResolvedApplicationImage {
   const repository = ecr.Repository.fromRepositoryName(
     scope,
-    'ApplicationImageRepository',
+    `ApplicationImageRepository-${applicationImageConfig.componentId}`,
     applicationImageConfig.repositoryName,
   );
 

@@ -22,10 +22,9 @@ destinations, and prints one of three outcomes:
 The cleanup target is `ArtifactFoundationStack` plus the retained ECR
 repositories listed in
 [`../../lib/artifact-foundation-repositories.ts`](../../lib/artifact-foundation-repositories.ts).
-The current catalog has one destination:
-`reservation-service -> movie-reservation-service`. Routine demo teardown is
-different: it destroys only `MovieReservationWorkloadStack` and must preserve the
-artifact foundation.
+The current catalog has six destinations, one for each integrated demo
+application image. Routine demo teardown is different: it destroys only
+`MovieReservationWorkloadStack` and must preserve the artifact foundation.
 
 Onboarding another service is an explicit catalog and infrastructure change,
 not automatic sibling-repository discovery. The component IDs should match the

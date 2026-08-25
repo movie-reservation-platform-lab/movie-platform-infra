@@ -1,177 +1,193 @@
-/**
- * Validated application-image input consumed by the image resolver.
- *
- * The CDK context boundary carries every parsed value required to import an
- * immutable externally built application image.
- */
+/** One independently published application artifact in the temporary demo task. */
+export type ApplicationComponentId =
+  | 'reservation-service'
+  | 'reservation-web'
+  | 'reservation-agent'
+  | 'reservation-mcp'
+  | 'recommendation-mcp'
+  | 'recommendation-service';
+
+/** Validated immutable image input consumed by the ECR image resolver. */
 export interface ApplicationImageConfig {
-  /** Deploy an existing private ECR image rather than building application source. */
   readonly kind: 'ecr-image';
-  /** Complete, trimmed ECR URI supplied by the caller for traceability. */
+  readonly componentId: ApplicationComponentId;
   readonly imageReference: string;
-  /** Twelve-digit AWS account parsed from the ECR registry hostname. */
   readonly registryAccount: string;
-  /** AWS Region parsed from the ECR registry hostname. */
   readonly registryRegion: string;
-  /** Repository path parsed from the ECR URI. */
   readonly repositoryName: string;
-  /** Immutable `sha256:<64-hex-characters>` image digest. */
   readonly imageDigest: string;
-  /** Opaque release identifier exposed to the service and telemetry. */
   readonly serviceVersion: string;
 }
 
+export type ApplicationImagesConfig = Readonly<
+  Record<ApplicationComponentId, ApplicationImageConfig>
+>;
+
 /** Concrete AWS account and Region selected for the CDK stack. */
 export interface DeploymentTarget {
-  /** AWS account selected by the CDK CLI, if the stack is environment-specific. */
   readonly account?: string;
-  /** AWS Region selected by the CDK CLI, if the stack is environment-specific. */
   readonly region?: string;
 }
 
-/**
- * Fully resolved infrastructure settings consumed by `MovieReservationWorkloadStack`.
- *
- * Fixed literal values document deliberate Wave 2 architecture decisions and
- * keep them out of caller-controlled CDK context.
- */
+/** Fully validated configuration passed to the workload stack. */
 export interface PlatformConfig {
-  /** Stable platform identifier used in resource names, tags, and telemetry. */
   readonly platformName: 'movie-reservation-platform';
-  /** Stable workload identifier used in ECS and observability configuration. */
-  readonly serviceName: 'movie-reservation-service';
-  /** Deployment-environment identifier for this disposable AWS demo. */
+  readonly serviceName: 'movie-platform-demo';
   readonly environmentName: 'aws-demo';
-  /** Customer-managed IPv4 prefix list allowed to reach public demo surfaces. */
   readonly allowedIngressPrefixListId: string;
-  /** Validated immutable-ECR image selection. */
-  readonly applicationImage: ApplicationImageConfig;
-  /** Number of Availability Zones used when defining the VPC. */
+  readonly applicationImages: ApplicationImagesConfig;
   readonly vpcMaxAzs: 2;
-  /** Number of isolated workload subnets used by the ECS service. */
   readonly workloadAzCount: 1;
-  /** Whether ECS Exec and its supporting endpoint and IAM permissions are enabled. */
   readonly enableEcsExec: boolean;
-  /** Application and collector metric export interval, in seconds. */
   readonly metricsExportIntervalSeconds: number;
 }
 
-/**
- * Untrusted CDK context values accepted at the application entrypoint.
- * `resolvePlatformConfig` validates and normalizes these values once before
- * the typed configuration is passed into the stack.
- */
+/** Untrusted values accepted from CDK context at the application boundary. */
 export interface PlatformConfigContext {
-  /** Required EC2 prefix list ID accepted from `-c allowedIngressPrefixListId=...`. */
   readonly allowedIngressPrefixListId?: unknown;
-  /** Optional complete private ECR URI; must be paired with a service version. */
+  // Retain the established reservation-service keys for compatibility.
   readonly applicationImageReference?: unknown;
-  /** Optional opaque release identifier; must be paired with an ECR URI. */
   readonly applicationServiceVersion?: unknown;
-  /** Optional boolean or `"true"`/`"false"` string controlling ECS Exec. */
+  readonly reservationWebImageReference?: unknown;
+  readonly reservationWebServiceVersion?: unknown;
+  readonly reservationAgentImageReference?: unknown;
+  readonly reservationAgentServiceVersion?: unknown;
+  readonly reservationMcpImageReference?: unknown;
+  readonly reservationMcpServiceVersion?: unknown;
+  readonly recommendationMcpImageReference?: unknown;
+  readonly recommendationMcpServiceVersion?: unknown;
+  readonly recommendationServiceImageReference?: unknown;
+  readonly recommendationServiceVersion?: unknown;
   readonly enableEcsExec?: unknown;
-  /** Optional integer export interval accepted as a number or numeric string. */
   readonly metricsExportIntervalSeconds?: unknown;
 }
 
-/**
- * Accepted external-image shape for the initial contract: a standard private
- * ECR hostname, repository path, and full SHA-256 digest with no mutable tag.
- */
+interface ComponentInputDefinition {
+  readonly componentId: ApplicationComponentId;
+  readonly repositoryName: string;
+  readonly imageReferenceKey: keyof PlatformConfigContext;
+  readonly serviceVersionKey: keyof PlatformConfigContext;
+}
+
+export const APPLICATION_COMPONENT_INPUTS = [
+  {
+    componentId: 'reservation-service',
+    repositoryName: 'movie-reservation-service',
+    imageReferenceKey: 'applicationImageReference',
+    serviceVersionKey: 'applicationServiceVersion',
+  },
+  {
+    componentId: 'reservation-web',
+    repositoryName: 'movie-reservation-web',
+    imageReferenceKey: 'reservationWebImageReference',
+    serviceVersionKey: 'reservationWebServiceVersion',
+  },
+  {
+    componentId: 'reservation-agent',
+    repositoryName: 'movie-reservation-agent',
+    imageReferenceKey: 'reservationAgentImageReference',
+    serviceVersionKey: 'reservationAgentServiceVersion',
+  },
+  {
+    componentId: 'reservation-mcp',
+    repositoryName: 'movie-reservation-mcp',
+    imageReferenceKey: 'reservationMcpImageReference',
+    serviceVersionKey: 'reservationMcpServiceVersion',
+  },
+  {
+    componentId: 'recommendation-mcp',
+    repositoryName: 'movie-recommendation-mcp',
+    imageReferenceKey: 'recommendationMcpImageReference',
+    serviceVersionKey: 'recommendationMcpServiceVersion',
+  },
+  {
+    componentId: 'recommendation-service',
+    repositoryName: 'movie-recommendation-service',
+    imageReferenceKey: 'recommendationServiceImageReference',
+    serviceVersionKey: 'recommendationServiceVersion',
+  },
+] as const satisfies readonly ComponentInputDefinition[];
+
 const PRIVATE_ECR_IMAGE_REFERENCE_PATTERN =
   /^(?<registryAccount>\d{12})\.dkr\.ecr\.(?<registryRegion>[a-z]{2}(?:-[a-z0-9]+)+-\d)\.amazonaws\.com\/(?<repositoryName>(?:[a-z0-9]+(?:[._-][a-z0-9]+)*\/)*[a-z0-9]+(?:[._-][a-z0-9]+)*)@(?<imageDigest>sha256:[0-9a-fA-F]{64})$/;
-
-/** Offline syntax checks for concrete CDK deployment targets. */
 const AWS_ACCOUNT_PATTERN = /^\d{12}$/;
 const AWS_REGION_PATTERN = /^[a-z]{2}(?:-[a-z0-9]+)+-\d$/;
 const EC2_PREFIX_LIST_ID_PATTERN = /^pl-(?:[0-9a-f]{8}|[0-9a-f]{17})$/;
 
-/** Returns a trimmed required CDK context string or fails at the boundary. */
-function parseRequiredString(value: unknown, key: string, exampleValue: string): string {
+function parseRequiredString(value: unknown, key: string, exampleValue?: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new Error(`CDK context value "${key}" is required. Example: -c ${key}=${exampleValue}`);
+    const example = exampleValue === undefined ? '' : ` Example: -c ${key}=${exampleValue}`;
+    throw new Error(`CDK context value "${key}" is required.${example}`);
   }
-
   return value.trim();
 }
 
-/**
- * Resolves the public ingress allowlist boundary.
- *
- * This deliberately validates only offline syntax. Whether the prefix list is
- * customer-managed, IPv4, and populated with trusted entries is an AWS-side
- * contract documented in the runbook.
- */
 function parseAllowedIngressPrefixListId(value: unknown): string {
   const prefixListId = parseRequiredString(
     value,
     'allowedIngressPrefixListId',
     'pl-0123456789abcdef0',
   );
-
   if (!EC2_PREFIX_LIST_ID_PATTERN.test(prefixListId)) {
     throw new Error(
       'CDK context value "allowedIngressPrefixListId" must start with pl- and contain exactly 8 or 17 lowercase hexadecimal characters.',
     );
   }
-
   return prefixListId;
 }
 
-/**
- * Validates the required immutable ECR pair and returns parsed fields safe for
- * internal use.
- *
- * Validation is deliberately offline: it proves syntax and target matching,
- * not that the repository or digest exists in AWS.
- */
+function assertConcreteDeploymentTarget(deploymentTarget: DeploymentTarget): asserts deploymentTarget is {
+  readonly account: string;
+  readonly region: string;
+} {
+  if (deploymentTarget.account === undefined || !AWS_ACCOUNT_PATTERN.test(deploymentTarget.account)) {
+    throw new Error('ECR application image mode requires CDK_DEFAULT_ACCOUNT to be a concrete 12-digit AWS account.');
+  }
+  if (deploymentTarget.region === undefined || !AWS_REGION_PATTERN.test(deploymentTarget.region)) {
+    throw new Error('ECR application image mode requires CDK_DEFAULT_REGION to be a concrete AWS Region.');
+  }
+}
+
 function parseApplicationImageConfig(
   context: PlatformConfigContext,
-  deploymentTarget: DeploymentTarget,
+  deploymentTarget: { readonly account: string; readonly region: string },
+  definition: ComponentInputDefinition,
 ): ApplicationImageConfig {
-  const imageReferenceIsPresent = context.applicationImageReference !== undefined;
-  const serviceVersionIsPresent = context.applicationServiceVersion !== undefined;
-
-  if (!imageReferenceIsPresent) {
-    throw new Error(
-      'CDK context value "applicationImageReference" is required. Supply a private ECR image URI pinned by digest.',
-    );
-  }
-
-  if (!serviceVersionIsPresent) {
-    throw new Error(
-      'CDK context value "applicationServiceVersion" is required. Supply the release identifier for the image.',
-    );
-  }
-
-  const imageReference = parseNonEmptyContextString(
-    context.applicationImageReference,
-    'applicationImageReference',
+  const imageReference = parseRequiredString(
+    context[definition.imageReferenceKey],
+    definition.imageReferenceKey,
   );
-  const serviceVersion = parseNonEmptyContextString(
-    context.applicationServiceVersion,
-    'applicationServiceVersion',
+  const serviceVersion = parseRequiredString(
+    context[definition.serviceVersionKey],
+    definition.serviceVersionKey,
   );
   const match = PRIVATE_ECR_IMAGE_REFERENCE_PATTERN.exec(imageReference);
-
   if (match?.groups === undefined) {
     throw new Error(
-      'CDK context value "applicationImageReference" must be a complete private ECR image URI pinned by a sha256 digest.',
+      `CDK context value "${definition.imageReferenceKey}" must be a complete private ECR image URI pinned by a sha256 digest.`,
     );
   }
 
   const { registryAccount, registryRegion, repositoryName, imageDigest } = match.groups;
-
-  if (repositoryName.length < 2 || repositoryName.length > 256) {
+  if (repositoryName !== definition.repositoryName) {
     throw new Error(
-      'CDK context value "applicationImageReference" must contain an ECR repository name from 2 through 256 characters.',
+      `CDK context value "${definition.imageReferenceKey}" must select ECR repository "${definition.repositoryName}", received "${repositoryName}".`,
+    );
+  }
+  if (registryAccount !== deploymentTarget.account) {
+    throw new Error(
+      `ECR registry account "${registryAccount}" for "${definition.componentId}" must match deployment account "${deploymentTarget.account}".`,
+    );
+  }
+  if (registryRegion !== deploymentTarget.region) {
+    throw new Error(
+      `ECR registry Region "${registryRegion}" for "${definition.componentId}" must match deployment Region "${deploymentTarget.region}".`,
     );
   }
 
-  assertMatchingDeploymentTarget(deploymentTarget, registryAccount, registryRegion);
-
   return {
     kind: 'ecr-image',
+    componentId: definition.componentId,
     imageReference,
     registryAccount,
     registryRegion,
@@ -181,72 +197,27 @@ function parseApplicationImageConfig(
   };
 }
 
-/** Returns a trimmed, non-empty context string without applying domain rules. */
-function parseNonEmptyContextString(value: unknown, key: string): string {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new Error(`CDK context value "${key}" must be a non-empty string.`);
-  }
-
-  return value.trim();
-}
-
-/**
- * Requires ECR mode to target the same concrete account and Region encoded in
- * the registry URI, preventing accidental cross-account or cross-Region use.
- */
-function assertMatchingDeploymentTarget(
+function parseApplicationImages(
+  context: PlatformConfigContext,
   deploymentTarget: DeploymentTarget,
-  registryAccount: string,
-  registryRegion: string,
-): void {
-  const { account, region } = deploymentTarget;
-
-  if (account === undefined || !AWS_ACCOUNT_PATTERN.test(account)) {
-    throw new Error(
-      'ECR application image mode requires CDK_DEFAULT_ACCOUNT to be a concrete 12-digit AWS account.',
-    );
-  }
-
-  if (region === undefined || !AWS_REGION_PATTERN.test(region)) {
-    throw new Error('ECR application image mode requires CDK_DEFAULT_REGION to be a concrete AWS Region.');
-  }
-
-  if (registryAccount !== account) {
-    throw new Error(
-      `ECR registry account "${registryAccount}" must match deployment account "${account}".`,
-    );
-  }
-
-  if (registryRegion !== region) {
-    throw new Error(`ECR registry Region "${registryRegion}" must match deployment Region "${region}".`);
-  }
+): ApplicationImagesConfig {
+  assertConcreteDeploymentTarget(deploymentTarget);
+  return Object.fromEntries(
+    APPLICATION_COMPONENT_INPUTS.map((definition) => [
+      definition.componentId,
+      parseApplicationImageConfig(context, deploymentTarget, definition),
+    ]),
+  ) as unknown as ApplicationImagesConfig;
 }
 
-/** Parses an optional boolean context value, defaulting to `false`. */
 function parseBoolean(value: unknown, key: string): boolean {
-  if (value === undefined) {
-    return false;
-  }
-
-  if (typeof value === 'boolean') {
-    return value;
-  }
-
-  if (value === 'true') {
-    return true;
-  }
-
-  if (value === 'false') {
-    return false;
-  }
-
+  if (value === undefined) return false;
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
   throw new Error(`CDK context value "${key}" must be true or false.`);
 }
 
-/**
- * Parses an optional integer context value and enforces its inclusive range.
- * Numeric strings are accepted because CDK `-c` arguments arrive as strings.
- */
 function parseIntegerInRange(
   value: unknown,
   key: string,
@@ -254,45 +225,30 @@ function parseIntegerInRange(
   minimum: number,
   maximum: number,
 ): number {
-  if (value === undefined) {
-    return defaultValue;
-  }
-
+  if (value === undefined) return defaultValue;
   const parsedValue =
     typeof value === 'number'
       ? value
       : typeof value === 'string' && value.trim().length > 0
         ? Number(value)
         : Number.NaN;
-
-  if (!Number.isInteger(parsedValue)) {
+  if (!Number.isInteger(parsedValue) || parsedValue < minimum || parsedValue > maximum) {
     throw new Error(`CDK context value "${key}" must be an integer from ${minimum} through ${maximum}.`);
   }
-
-  if (parsedValue < minimum || parsedValue > maximum) {
-    throw new Error(`CDK context value "${key}" must be from ${minimum} through ${maximum}.`);
-  }
-
   return parsedValue;
 }
 
-/**
- * Validates all untrusted CDK inputs once and returns the complete stack config.
- *
- * The standalone infrastructure repository consumes immutable external
- * application artifacts. It requires a concrete target matching the supplied
- * private ECR registry.
- */
+/** Validate all external context once before constructing any AWS resources. */
 export function resolvePlatformConfig(
   context: PlatformConfigContext,
   deploymentTarget: DeploymentTarget = {},
 ): PlatformConfig {
   return {
     platformName: 'movie-reservation-platform',
-    serviceName: 'movie-reservation-service',
+    serviceName: 'movie-platform-demo',
     environmentName: 'aws-demo',
     allowedIngressPrefixListId: parseAllowedIngressPrefixListId(context.allowedIngressPrefixListId),
-    applicationImage: parseApplicationImageConfig(context, deploymentTarget),
+    applicationImages: parseApplicationImages(context, deploymentTarget),
     vpcMaxAzs: 2,
     workloadAzCount: 1,
     enableEcsExec: parseBoolean(context.enableEcsExec, 'enableEcsExec'),

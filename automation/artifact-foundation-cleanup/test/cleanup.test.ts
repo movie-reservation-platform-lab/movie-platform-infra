@@ -8,10 +8,13 @@ import { inspectArtifactFoundation } from '../src/inspection';
 import { CLEANUP_EXECUTION_OUTCOME, type ArtifactFoundationCleaner } from '../src/model';
 import {
   FOUNDATION_STACK,
+  MULTI_REPOSITORY_FOUNDATION_STACK,
   REPOSITORY,
   TEST_ARTIFACT_REPOSITORY_CATALOG,
   TEST_INSPECTION_ACCESS,
+  TEST_MULTI_REPOSITORY_CATALOG,
   TEST_TARGET,
+  WEB_REPOSITORY,
   WORKLOAD_STACK,
   createCleaner,
   createReader,
@@ -125,6 +128,53 @@ test('executes normal cleanup in fail-closed order and verifies final absence', 
     'delete-stack:ArtifactFoundationStack',
     'wait-stack:ArtifactFoundationStack',
     'delete-repository:reservation-service:111111111111:movie-reservation-service',
+    'final-inspection',
+  ]);
+});
+
+test('inspects and cleans multiple repositories in catalog order before final absence verification', async () => {
+  const inspection = await inspectArtifactFoundation(
+    TEST_INSPECTION_ACCESS,
+    createReader({
+      foundationStack: MULTI_REPOSITORY_FOUNDATION_STACK,
+      repositories: [WEB_REPOSITORY, REPOSITORY],
+    }),
+    TEST_MULTI_REPOSITORY_CATALOG,
+  );
+  expect(inspection.repositories.map(({ definition }) => definition.componentId)).toEqual([
+    'reservation-service',
+    'reservation-web',
+  ]);
+
+  const plan = planArtifactFoundationCleanup(
+    inspection,
+    buildCleanupConfirmation(TEST_TARGET),
+  );
+  const events: string[] = [];
+  const result = await executeArtifactFoundationCleanup(
+    plan,
+    createCleaner(events),
+    async () => {
+      events.push('final-inspection');
+      return inspectArtifactFoundation(
+        TEST_INSPECTION_ACCESS,
+        createReader({}),
+        TEST_MULTI_REPOSITORY_CATALOG,
+      );
+    },
+  );
+
+  expect(result.deletedRepositories.map(({ componentId }) => componentId)).toEqual([
+    'reservation-service',
+    'reservation-web',
+  ]);
+  expect(events).toEqual([
+    'cleanup-identity',
+    'disable-protection:ArtifactFoundationStack',
+    'delete-stack:ArtifactFoundationStack',
+    'wait-stack:ArtifactFoundationStack',
+    'delete-repository:reservation-service:111111111111:movie-reservation-service',
+    'delete-repository:reservation-web:111111111111:movie-reservation-web',
     'final-inspection',
   ]);
 });
