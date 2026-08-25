@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
 import {
   ARTIFACT_COPY_FAILURE_CODE,
+  ARTIFACT_COPY_FAILURE_STAGE,
   failArtifactCopy,
 } from './artifact-copy-error';
 import type {
@@ -147,5 +148,9 @@ function runProcess(invocation: ProcessInvocation): ProcessResult {
 }
 
 function failTool(message: string): never {
-  failArtifactCopy(ARTIFACT_COPY_FAILURE_CODE.TOOL_FAILED, message);
+  failArtifactCopy(
+    ARTIFACT_COPY_FAILURE_CODE.TOOL_FAILED,
+    message,
+    ARTIFACT_COPY_FAILURE_STAGE.TOOL,
+  );
 }

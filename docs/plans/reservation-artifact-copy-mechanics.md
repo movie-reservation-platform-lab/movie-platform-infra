@@ -65,6 +65,12 @@ The copy operation receives:
   and
 - an injected registry client implementation.
 
+The executable CLI keeps the normalized Skopeo path outside its untrusted,
+versioned request JSON. Private admission pins and installs Skopeo, then passes
+the trusted resolved path as a required `--skopeo-executable` argument. A
+`skopeoExecutablePath` request field is rejected as unknown so request tampering
+cannot select a runner-local binary.
+
 The copy destination is derived as
 `<destination-repository>:sha256-<expected-digest-hex>`. This deterministic,
 immutable tag keeps an admitted artifact outside the foundation's seven-day
@@ -118,11 +124,16 @@ automation/artifact-copy/
     image-manifest.ts    raw hashing, parsing, and equality checks
     skopeo-client.ts     no-shell process adapter
     artifact-copy-error.ts
+    cli-request.ts        strict versioned JSON transport parsing
+    cli.ts                sanitized process exit/output adapter
+    main.ts               executable composition root
     index.ts
   test/
     artifact-copy.test.ts
     image-manifest.test.ts
     skopeo-client.test.ts
+    cli-request.test.ts
+    cli.test.ts
   README.md
   tsconfig.json
   jest.config.cjs
@@ -187,11 +198,15 @@ Validation commands:
 
 ```bash
 npm run validate:artifact-copy
+npm run copy:artifact -- --help
 npm run ci
 git diff --check
 ```
 
-All tests remain credential-free and perform no registry or AWS mutation.
+All tests and the help invocation remain credential-free and perform no registry
+or AWS mutation. The later private orchestrator owns trusted destination
+selection; the public CLI intentionally does not accept a self-declared
+destination allowlist from the same untrusted request.
 
 ## 9. Delivery And Follow-ups
 

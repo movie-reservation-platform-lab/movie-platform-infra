@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { TextDecoder } from 'node:util';
 import {
   ARTIFACT_COPY_FAILURE_CODE,
+  ARTIFACT_COPY_FAILURE_STAGE,
   failArtifactCopy,
 } from './artifact-copy-error';
 import type { ImageManifestIdentity } from './model';
@@ -40,6 +41,9 @@ export function inspectRawImageManifest(
     failArtifactCopy(
       ARTIFACT_COPY_FAILURE_CODE.MANIFEST_DIGEST_MISMATCH,
       `${location} manifest bytes do not match the expected digest`,
+      location === 'source'
+        ? ARTIFACT_COPY_FAILURE_STAGE.SOURCE
+        : ARTIFACT_COPY_FAILURE_STAGE.DESTINATION,
     );
   }
 
@@ -142,6 +146,9 @@ function failInvalidManifest(location: ManifestLocation, detail: string): never 
   failArtifactCopy(
     ARTIFACT_COPY_FAILURE_CODE.MANIFEST_INVALID,
     `${location} ${detail}`,
+    location === 'source'
+      ? ARTIFACT_COPY_FAILURE_STAGE.SOURCE
+      : ARTIFACT_COPY_FAILURE_STAGE.DESTINATION,
   );
 }
 
@@ -149,5 +156,6 @@ function failContentMismatch(field: string): never {
   failArtifactCopy(
     ARTIFACT_COPY_FAILURE_CODE.CONTENT_MISMATCH,
     `destination ${field} does not match the source`,
+    ARTIFACT_COPY_FAILURE_STAGE.DESTINATION,
   );
 }

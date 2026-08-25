@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import {
   ARTIFACT_COPY_FAILURE_CODE,
+  ARTIFACT_COPY_FAILURE_STAGE,
   failArtifactCopy,
 } from './artifact-copy-error';
 import {
@@ -58,6 +59,7 @@ export async function copyAndVerifyArtifact(
     failArtifactCopy(
       ARTIFACT_COPY_FAILURE_CODE.COPY_FAILED,
       'registry copy failed before destination verification',
+      ARTIFACT_COPY_FAILURE_STAGE.COPY,
     );
   }
 
@@ -98,6 +100,9 @@ async function readManifest(
         ? ARTIFACT_COPY_FAILURE_CODE.SOURCE_READ_FAILED
         : ARTIFACT_COPY_FAILURE_CODE.DESTINATION_READ_FAILED,
       `${location} manifest read failed`,
+      location === 'source'
+        ? ARTIFACT_COPY_FAILURE_STAGE.SOURCE
+        : ARTIFACT_COPY_FAILURE_STAGE.DESTINATION,
     );
   }
 }
@@ -193,5 +198,9 @@ function validateAuthFile(
 }
 
 function failInvalidInput(message: string): never {
-  failArtifactCopy(ARTIFACT_COPY_FAILURE_CODE.INVALID_INPUT, message);
+  failArtifactCopy(
+    ARTIFACT_COPY_FAILURE_CODE.INVALID_INPUT,
+    message,
+    ARTIFACT_COPY_FAILURE_STAGE.INPUT,
+  );
 }
