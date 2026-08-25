@@ -12,6 +12,9 @@ infrastructure repository.
   persistent Organization/Identity Center prerequisites, MFA-backed operator
   access, and the temporary-Admin-to-Editor Grafana workflow.
 - [AWS CDK Deployment Runbook](./aws-cdk-deployment.md)
+- [Temporary Integrated AWS Demo Runbook](./temporary-integrated-demo.md):
+  controlling deadline path for six exact images, the seven-container task,
+  unified Grafana correlation, three-scenario smoke, and routine teardown.
 - [AWS Demo Release Checklist](./aws-demo-release-checklist.md): the offline
   repository gate followed by the separately approved live rehearsal.
 
@@ -36,5 +39,6 @@ The repository owns deterministic smoke tooling for deployed observability:
 
 - `npm run smoke:xray`
 - `npm run smoke:managed-metrics`
+- `npm run smoke:integrated-demo`
 
 Run these only after a real deploy, with an explicit AWS profile and Region.

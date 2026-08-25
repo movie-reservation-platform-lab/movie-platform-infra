@@ -93,25 +93,21 @@ or lifecycles diverge.
 
 ### Compute
 
-The first demo workload runs as one ECS/Fargate service with one task. The task
-contains:
-
-- an essential reservation API container on TCP `3000`;
-- a nonessential ADOT collector sidecar for traces and metrics.
-
-Future web, agent, recommendation, and MCP services should be added as separate
-implementation slices after artifact contracts and environment manifest
-selection are ready.
+The deadline demo workload runs as one ECS/Fargate service with one task. The
+task contains the web, agent, two MCP, two API, and nonessential ADOT containers.
+Only web TCP `8088` is registered with the ALB; task-local calls use loopback.
+This couples lifecycle, scaling, and rollback and is not the long-term
+independently deployable topology.
 
 ### Artifacts
 
-`ArtifactFoundationStack` creates the `movie-reservation-service` private ECR
-repository independently of the workload. The private environments workflow
-will admit an already approved immutable candidate into that destination. The
-workload then imports the selected image by digest:
+`ArtifactFoundationStack` creates one private ECR repository for each of the
+six application components independently of the workload. The private
+environments workflow admits approved immutable candidates into those
+destinations. The workload imports every selection by digest:
 
 ```text
-<account>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<digest>
+<account>.dkr.ecr.<region>.amazonaws.com/<component-repository>@sha256:<digest>
 ```
 
 Mutable tags are not deployable selectors. Tags may appear only as human

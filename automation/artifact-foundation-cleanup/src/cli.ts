@@ -146,7 +146,7 @@ const USAGE = [
   '',
   'Checks whether final project cleanup can proceed for ArtifactFoundationStack',
   'and the retained ECR repositories in the artifact destination catalog',
-  '(currently reservation-service -> movie-reservation-service).',
+  '(currently six application components mapped to their same-named movie-* repositories).',
   '',
   'The check runs the account preflight, refuses cleanup while MovieReservationWorkloadStack',
   'exists, inventories the exact stack/repository/images, and reports BLOCKED,',

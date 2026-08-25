@@ -6,10 +6,22 @@ extensions:
     service: aps
 
 receivers:
-  otlp:
+  otlp/reservation_service:
     protocols:
       http:
         endpoint: 127.0.0.1:4318
+  otlp/reservation_agent:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:4319
+  otlp/recommendation_mcp:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:4320
+  otlp/recommendation_service:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:4321
   awsecscontainermetrics:
     collection_interval: ${env:METRICS_COLLECTION_INTERVAL}
 
@@ -18,26 +30,68 @@ processors:
     check_interval: 1s
     limit_mib: 256
     spike_limit_mib: 64
-  # ADOT v0.48.0 does not include the transform processor. These values come
-  # from the same typed CDK identity used for the application's OTel resource.
-  # Keeping exporter resource conversion disabled prevents unrelated process
-  # and host resource attributes from becoming CloudWatch dimensions.
-  attributes/application_cloudwatch:
+  # Each receiver has a fixed, low-cardinality identity. A shared processor
+  # would incorrectly relabel every component as one service.
+  attributes/reservation_service_cloudwatch:
     actions:
       - key: ServiceName
-        value: ${env:APPLICATION_SERVICE_NAME}
+        value: movie-reservation-service
         action: upsert
       - key: Environment
         value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
         action: upsert
-  # The pinned ADOT image has no transform processor, so copy only the two
-  # stable deployment identities into AMP metric labels at the datapoint level.
-  # Resource conversion remains disabled for application metrics to avoid
-  # promoting process/host resource attributes into Prometheus labels.
-  attributes/application_amp:
+  attributes/reservation_agent_cloudwatch:
+    actions:
+      - key: ServiceName
+        value: movie-reservation-agent
+        action: upsert
+      - key: Environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
+        action: upsert
+  attributes/recommendation_mcp_cloudwatch:
+    actions:
+      - key: ServiceName
+        value: movie-recommendation-mcp
+        action: upsert
+      - key: Environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
+        action: upsert
+  attributes/recommendation_service_cloudwatch:
+    actions:
+      - key: ServiceName
+        value: movie-recommendation-service
+        action: upsert
+      - key: Environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
+        action: upsert
+  attributes/reservation_service_amp:
     actions:
       - key: service_name
-        value: ${env:APPLICATION_SERVICE_NAME}
+        value: movie-reservation-service
+        action: upsert
+      - key: deployment_environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
+        action: upsert
+  attributes/reservation_agent_amp:
+    actions:
+      - key: service_name
+        value: movie-reservation-agent
+        action: upsert
+      - key: deployment_environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
+        action: upsert
+  attributes/recommendation_mcp_amp:
+    actions:
+      - key: service_name
+        value: movie-recommendation-mcp
+        action: upsert
+      - key: deployment_environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
+        action: upsert
+  attributes/recommendation_service_amp:
+    actions:
+      - key: service_name
+        value: movie-recommendation-service
         action: upsert
       - key: deployment_environment
         value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
@@ -232,16 +286,40 @@ service:
   extensions: [health_check, sigv4auth]
   pipelines:
     traces:
-      receivers: [otlp]
+      receivers: [otlp/reservation_service, otlp/reservation_agent, otlp/recommendation_mcp, otlp/recommendation_service]
       processors: [memory_limiter, batch]
       exporters: [awsxray]
-    metrics/application/cloudwatch:
-      receivers: [otlp]
-      processors: [memory_limiter, attributes/application_cloudwatch, batch/application_cloudwatch]
+    metrics/reservation_service/cloudwatch:
+      receivers: [otlp/reservation_service]
+      processors: [memory_limiter, attributes/reservation_service_cloudwatch, batch/application_cloudwatch]
       exporters: [awsemf/application]
-    metrics/application/amp:
-      receivers: [otlp]
-      processors: [memory_limiter, attributes/application_amp, resource/application_amp, batch/application_amp]
+    metrics/reservation_agent/cloudwatch:
+      receivers: [otlp/reservation_agent]
+      processors: [memory_limiter, attributes/reservation_agent_cloudwatch, batch/application_cloudwatch]
+      exporters: [awsemf/application]
+    metrics/recommendation_mcp/cloudwatch:
+      receivers: [otlp/recommendation_mcp]
+      processors: [memory_limiter, attributes/recommendation_mcp_cloudwatch, batch/application_cloudwatch]
+      exporters: [awsemf/application]
+    metrics/recommendation_service/cloudwatch:
+      receivers: [otlp/recommendation_service]
+      processors: [memory_limiter, attributes/recommendation_service_cloudwatch, batch/application_cloudwatch]
+      exporters: [awsemf/application]
+    metrics/reservation_service/amp:
+      receivers: [otlp/reservation_service]
+      processors: [memory_limiter, attributes/reservation_service_amp, resource/application_amp, batch/application_amp]
+      exporters: [prometheusremotewrite/application]
+    metrics/reservation_agent/amp:
+      receivers: [otlp/reservation_agent]
+      processors: [memory_limiter, attributes/reservation_agent_amp, resource/application_amp, batch/application_amp]
+      exporters: [prometheusremotewrite/application]
+    metrics/recommendation_mcp/amp:
+      receivers: [otlp/recommendation_mcp]
+      processors: [memory_limiter, attributes/recommendation_mcp_amp, resource/application_amp, batch/application_amp]
+      exporters: [prometheusremotewrite/application]
+    metrics/recommendation_service/amp:
+      receivers: [otlp/recommendation_service]
+      processors: [memory_limiter, attributes/recommendation_service_amp, resource/application_amp, batch/application_amp]
       exporters: [prometheusremotewrite/application]
     metrics/ecs/amp:
       receivers: [awsecscontainermetrics]

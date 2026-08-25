@@ -28,24 +28,28 @@ if ! grep --fixed-strings --quiet 'endpoint: 127.0.0.1:13133' "${collector_direc
   printf 'ADOT health extension must remain bound to task loopback on port 13133\n' >&2
   exit 1
 fi
-if ! grep --fixed-strings --quiet 'endpoint: 127.0.0.1:4318' "${collector_directory}/adot-config.yaml"; then
-  printf 'ADOT OTLP/HTTP receiver must remain bound to task loopback on port 4318\n' >&2
-  exit 1
-fi
+for port in 4318 4319 4320 4321; do
+  if ! grep --fixed-strings --quiet "endpoint: 127.0.0.1:${port}" "${collector_directory}/adot-config.yaml"; then
+    printf 'ADOT OTLP/HTTP receiver must remain bound to task loopback on port %s\n' "${port}" >&2
+    exit 1
+  fi
+done
 
 pipeline_block="$(sed -n '/^  pipelines:/,$p' "${collector_directory}/adot-config.yaml")"
 if ! grep --extended-regexp --quiet '^    traces:$' <<<"${pipeline_block}"; then
   printf 'ADOT config must contain the traces pipeline\n' >&2
   exit 1
 fi
-if ! grep --fixed-strings --quiet '    metrics/application/cloudwatch:' <<<"${pipeline_block}"; then
-  printf 'ADOT config must contain the CloudWatch application metrics pipeline\n' >&2
-  exit 1
-fi
-if ! grep --fixed-strings --quiet '    metrics/application/amp:' <<<"${pipeline_block}"; then
-  printf 'ADOT config must contain the AMP application metrics pipeline\n' >&2
-  exit 1
-fi
+for component in reservation_service reservation_agent recommendation_mcp recommendation_service; do
+  if ! grep --fixed-strings --quiet "    metrics/${component}/cloudwatch:" <<<"${pipeline_block}"; then
+    printf 'ADOT config must contain the %s CloudWatch metrics pipeline\n' "${component}" >&2
+    exit 1
+  fi
+  if ! grep --fixed-strings --quiet "    metrics/${component}/amp:" <<<"${pipeline_block}"; then
+    printf 'ADOT config must contain the %s AMP metrics pipeline\n' "${component}" >&2
+    exit 1
+  fi
+done
 if ! grep --fixed-strings --quiet '    metrics/ecs/amp:' <<<"${pipeline_block}"; then
   printf 'ADOT config must contain the AMP ECS metrics pipeline\n' >&2
   exit 1
@@ -142,7 +146,6 @@ container_id="$(docker run \
   --env AWS_REGION=us-east-1 \
   --env AWS_STS_REGIONAL_ENDPOINTS=regional \
   --env AMP_REMOTE_WRITE_ENDPOINT=https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-validation/api/v1/remote_write \
-  --env APPLICATION_SERVICE_NAME=movie-reservation-service \
   --env CLOUDWATCH_METRICS_NAMESPACE=GoldenPath/test/movie-reservation-service \
   --env CLOUDWATCH_METRICS_LOG_GROUP_NAME=/golden-path/test/movie-reservation-service/metrics \
   --env DEPLOYMENT_ENVIRONMENT_NAME=test \

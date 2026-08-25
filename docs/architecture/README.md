@@ -8,25 +8,25 @@ infrastructure repository.
 The repository has two independent CDK applications because admitted artifacts
 and demo compute have different lifecycles:
 
-- `ArtifactFoundationStack` owns the persistent, account-local and Region-local
-  ECR destination for admitted reservation-service images. Termination
+- `ArtifactFoundationStack` owns six persistent, account-local and Region-local
+  ECR destinations for the integrated demo images. Termination
   protection and retain policies keep it outside routine demo teardown.
 - `MovieReservationWorkloadStack` owns the disposable, production-shaped AWS
   demo workload:
 
   - internet-facing Application Load Balancer;
   - two-AZ VPC with public and isolated subnet groups;
-  - private isolated ECS/Fargate task for the reservation API;
-  - digest-pinned application image imported from the foundation repository;
+  - private isolated ECS/Fargate task containing six applications and ADOT;
+  - six digest-pinned application images imported from foundation repositories;
   - repository-owned ADOT collector image asset;
-  - CloudWatch logs, X-Ray traces, AMP metrics, and Managed Grafana dashboarding;
+  - separate CloudWatch logs, X-Ray traces, AMP/CloudWatch metrics, and unified Managed Grafana views;
   - VPC endpoints for private AWS service access; and
   - customer-managed IPv4 prefix list for ALB and Grafana ingress.
 
 The current applications intentionally do not yet own:
 
-- frontend S3/CloudFront hosting;
-- recommendation API, agent, or MCP ECS services;
+- long-term frontend S3/CloudFront hosting;
+- independently deployable recommendation API, agent, or MCP ECS services;
 - RDS, migrations, or SQS worker signaling;
 - environment manifest selection or promotion automation;
 - production account structure, IAM Identity Center lifecycle, or organization

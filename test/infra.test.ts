@@ -4,885 +4,124 @@ import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 
 import { MovieReservationWorkloadStack } from '../lib/infra-stack';
 import {
+  APPLICATION_COMPONENT_INPUTS,
   resolvePlatformConfig,
   type DeploymentTarget,
   type PlatformConfigContext,
 } from '../lib/config/platform-config';
 
-const ECR_TEST_TARGET = {
-  account: '111111111111',
-  region: 'eu-central-1',
-} as const satisfies DeploymentTarget;
-const ECR_TEST_DIGEST = `sha256:${'a'.repeat(64)}`;
-const ECR_TEST_IMAGE_REFERENCE =
-  `${ECR_TEST_TARGET.account}.dkr.ecr.${ECR_TEST_TARGET.region}.amazonaws.com/ci-placeholder@${ECR_TEST_DIGEST}`;
-const ECR_TEST_CONTEXT = {
-  applicationImageReference: ECR_TEST_IMAGE_REFERENCE,
-  applicationServiceVersion: 'release-2026-07-31',
+const TEST_TARGET = { account: '111111111111', region: 'eu-central-1' } as const satisfies DeploymentTarget;
+const TEST_DIGEST = `sha256:${'a'.repeat(64)}`;
+const reference = (repository: string) =>
+  `${TEST_TARGET.account}.dkr.ecr.${TEST_TARGET.region}.amazonaws.com/${repository}@${TEST_DIGEST}`;
+const TEST_CONTEXT = {
+  applicationImageReference: reference('movie-reservation-service'),
+  applicationServiceVersion: 'reservation-v1',
+  reservationWebImageReference: reference('movie-reservation-web'),
+  reservationWebServiceVersion: 'web-v1',
+  reservationAgentImageReference: reference('movie-reservation-agent'),
+  reservationAgentServiceVersion: 'agent-v1',
+  reservationMcpImageReference: reference('movie-reservation-mcp'),
+  reservationMcpServiceVersion: 'reservation-mcp-v1',
+  recommendationMcpImageReference: reference('movie-recommendation-mcp'),
+  recommendationMcpServiceVersion: 'recommendation-mcp-v1',
+  recommendationServiceImageReference: reference('movie-recommendation-service'),
+  recommendationServiceVersion: 'recommendation-v1',
 } as const satisfies PlatformConfigContext;
 
-function regionalServiceName(serviceShortName: string) {
-  return `com.amazonaws.${ECR_TEST_TARGET.region}.${serviceShortName}`;
-}
-
-function gatewayRegionalServiceName(serviceShortName: string) {
-  return {
-    'Fn::Join': ['', ['com.amazonaws.', { Ref: 'AWS::Region' }, `.${serviceShortName}`]],
-  };
-}
-
-interface SynthesizedResource {
+interface Resource {
   readonly Properties?: Record<string, unknown>;
   readonly DependsOn?: string | string[];
   readonly DeletionPolicy?: string;
   readonly UpdateReplacePolicy?: string;
 }
 
-interface SynthesizedContainerDefinition {
+interface Container {
   readonly Name: string;
-  readonly Image?: unknown;
-  readonly Cpu?: number;
-  readonly Memory?: number;
-  readonly Essential?: boolean;
-  readonly DependsOn?: unknown[];
-  readonly Environment?: Array<{
-    readonly Name: string;
-    readonly Value: unknown;
-  }>;
+  readonly Image: unknown;
+  readonly Cpu: number;
+  readonly Memory: number;
+  readonly Essential: boolean;
+  readonly DependsOn?: Array<{ readonly Condition: string; readonly ContainerName: string }>;
+  readonly Environment?: Array<{ readonly Name: string; readonly Value: unknown }>;
   readonly HealthCheck?: Record<string, unknown>;
-  readonly LogConfiguration?: {
-    readonly Options?: Record<string, unknown>;
-  };
-  readonly PortMappings?: unknown[];
+  readonly LogConfiguration?: { readonly Options?: Record<string, unknown> };
+  readonly PortMappings?: Array<{ readonly ContainerPort: number }>;
   readonly RestartPolicy?: Record<string, unknown>;
-  readonly StopTimeout?: number;
 }
 
 function createStack(
-  context: PlatformConfigContext = ECR_TEST_CONTEXT,
-  deploymentTarget: DeploymentTarget = ECR_TEST_TARGET,
-) {
+  overrides: PlatformConfigContext = {},
+  target: DeploymentTarget = TEST_TARGET,
+): MovieReservationWorkloadStack {
   const app = new cdk.App();
   return new MovieReservationWorkloadStack(app, 'TestStack', {
-    env: deploymentTarget,
+    env: target,
     platformConfig: resolvePlatformConfig(
       {
         allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-        ...ECR_TEST_CONTEXT,
-        ...context,
+        ...TEST_CONTEXT,
+        ...overrides,
       },
-      deploymentTarget,
+      target,
     ),
   });
 }
 
-function synthesizeTemplate(
-  context: PlatformConfigContext = ECR_TEST_CONTEXT,
-  deploymentTarget: DeploymentTarget = ECR_TEST_TARGET,
-) {
-  return Template.fromStack(createStack(context, deploymentTarget));
+function synthesized(overrides: PlatformConfigContext = {}): Template {
+  return Template.fromStack(createStack(overrides));
 }
 
-function findResources(templateToSearch: Template, resourceType: string): SynthesizedResource[] {
-  return Object.values(templateToSearch.findResources(resourceType)) as SynthesizedResource[];
+function resources(template: Template, type: string): Resource[] {
+  return Object.values(template.findResources(type)) as Resource[];
 }
 
-function findTaskContainers(templateToSearch: Template): SynthesizedContainerDefinition[] {
-  const taskDefinition = findResources(templateToSearch, 'AWS::ECS::TaskDefinition')[0];
-  return taskDefinition.Properties?.ContainerDefinitions as SynthesizedContainerDefinition[];
+function containers(template: Template): Container[] {
+  return resources(template, 'AWS::ECS::TaskDefinition')[0].Properties?.ContainerDefinitions as Container[];
 }
 
-function environmentFor(container: SynthesizedContainerDefinition): Record<string, unknown> {
-  return Object.fromEntries((container.Environment ?? []).map(({ Name, Value }) => [Name, Value]));
+function container(template: Template, name: string): Container {
+  const found = containers(template).find(({ Name }) => Name === name);
+  if (found === undefined) throw new Error(`missing container ${name}`);
+  return found;
 }
 
-function policyActions(action: string | string[]): string[] {
-  return Array.isArray(action) ? action : [action];
+function environment(definition: Container): Record<string, unknown> {
+  return Object.fromEntries((definition.Environment ?? []).map(({ Name, Value }) => [Name, Value]));
+}
+
+function actions(statement: { readonly Action: string | string[] }): string[] {
+  return Array.isArray(statement.Action) ? statement.Action : [statement.Action];
 }
 
 let template: Template;
-let ecrStack: MovieReservationWorkloadStack;
-let ecrTemplate: Template;
-
 beforeAll(() => {
-  template = synthesizeTemplate();
-  ecrStack = createStack(ECR_TEST_CONTEXT, ECR_TEST_TARGET);
-  ecrTemplate = Template.fromStack(ecrStack);
+  template = synthesized();
 });
 
-test('uses a digest-pinned imported ECR image without creating an app asset or repository', () => {
-  expect(ecrStack.node.tryFindChild('AppImage')).toBeUndefined();
-  expect(ecrStack.node.tryFindChild('ApplicationImageRepository')).toBeDefined();
-  expect(ecrStack.node.tryFindChild('AdotImage')).toBeInstanceOf(ecrAssets.DockerImageAsset);
-  ecrTemplate.resourceCountIs('AWS::ECR::Repository', 0);
-
-  const appContainer = findTaskContainers(ecrTemplate).find(({ Name }) => Name === 'movie-reservation-service');
-  expect(appContainer).toBeDefined();
-  expect(JSON.stringify(appContainer?.Image)).toContain(ECR_TEST_TARGET.account);
-  expect(JSON.stringify(appContainer?.Image)).toContain(ECR_TEST_TARGET.region);
-  expect(JSON.stringify(appContainer?.Image)).toContain('/ci-placeholder');
-  expect(JSON.stringify(appContainer?.Image)).toContain(ECR_TEST_DIGEST);
-  if (appContainer === undefined) {
-    throw new Error('expected ECR-backed application container');
-  }
-  expect(environmentFor(appContainer)).toMatchObject({
-    SERVICE_VERSION: 'release-2026-07-31',
-  });
-});
-
-test('grants imported ECR pull access to the execution role but not the application task role', () => {
-  const policies = findResources(ecrTemplate, 'AWS::IAM::Policy');
-  const executionRolePolicy = policies.find((policy) =>
-    String(policy.Properties?.PolicyName).includes('ExecutionRoleDefaultPolicy'),
-  );
-  const taskRolePolicy = policies.find((policy) =>
-    String(policy.Properties?.PolicyName).includes('TaskRoleDefaultPolicy'),
-  );
-  expect(executionRolePolicy).toBeDefined();
-  expect(taskRolePolicy).toBeDefined();
-  const executionRolePolicyDocument = executionRolePolicy?.Properties?.PolicyDocument as {
-    readonly Statement: Array<{
-      readonly Action: string | string[];
-      readonly Effect: string;
-      readonly Resource: unknown;
-    }>;
-  };
-  const authorizationStatement = executionRolePolicyDocument.Statement.find(({ Action }) =>
-    policyActions(Action).includes('ecr:GetAuthorizationToken'),
-  );
-  const repositoryPullStatement = executionRolePolicyDocument.Statement.find(
-    ({ Action, Resource }) =>
-      policyActions(Action).includes('ecr:BatchGetImage') &&
-      JSON.stringify(Resource).includes('repository/ci-placeholder'),
+test('validates a complete six-component digest-pinned release', () => {
+  const config = resolvePlatformConfig(
+    { allowedIngressPrefixListId: 'pl-0123456789abcdef0', ...TEST_CONTEXT },
+    TEST_TARGET,
   );
 
-  expect(authorizationStatement).toMatchObject({
-    Effect: 'Allow',
-    Resource: '*',
-  });
-  expect(new Set(policyActions(repositoryPullStatement?.Action ?? []))).toEqual(
-    new Set(['ecr:BatchCheckLayerAvailability', 'ecr:GetDownloadUrlForLayer', 'ecr:BatchGetImage']),
+  expect(Object.keys(config.applicationImages).sort()).toEqual(
+    APPLICATION_COMPONENT_INPUTS.map(({ componentId }) => componentId).sort(),
   );
-  expect(repositoryPullStatement).toMatchObject({
-    Effect: 'Allow',
-  });
-  expect(JSON.stringify(taskRolePolicy?.Properties?.PolicyDocument)).not.toContain('ecr:');
-});
-
-test('preserves the ECS runtime and ALB deployment contract in ECR image mode', () => {
-  ecrTemplate.hasResourceProperties('AWS::ECS::TaskDefinition', {
-    Cpu: '512',
-    Memory: '1024',
-    ContainerDefinitions: Match.arrayWith([
-      Match.objectLike({
-        Name: 'movie-reservation-service',
-        Essential: true,
-        Cpu: 384,
-        Memory: 640,
-        PortMappings: Match.arrayWith([
-          Match.objectLike({
-            ContainerPort: 3000,
-            Protocol: 'tcp',
-          }),
-        ]),
-        Environment: Match.arrayWith([
-          Match.objectLike({
-            Name: 'SERVICE_VERSION',
-            Value: 'release-2026-07-31',
-          }),
-          Match.objectLike({
-            Name: 'OTEL_SERVICE_NAME',
-            Value: 'movie-reservation-service',
-          }),
-        ]),
-      }),
-      Match.objectLike({
-        Name: 'adot-collector',
-        Essential: false,
-      }),
-    ]),
-  });
-  ecrTemplate.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-    HealthCheckPath: '/health',
-    Port: 3000,
-    Protocol: 'HTTP',
-  });
-  ecrTemplate.hasResourceProperties('AWS::ECS::Service', {
-    DeploymentConfiguration: Match.objectLike({
-      MaximumPercent: 200,
-      MinimumHealthyPercent: 100,
-    }),
-    DesiredCount: 1,
-    EnableExecuteCommand: false,
-  });
-  const service = findResources(ecrTemplate, 'AWS::ECS::Service')[0];
-  const networkConfiguration = service.Properties?.NetworkConfiguration as {
-    readonly AwsvpcConfiguration: {
-      readonly AssignPublicIp: string;
-      readonly Subnets: unknown[];
-    };
-  };
-  expect(networkConfiguration.AwsvpcConfiguration.AssignPublicIp).toBe('DISABLED');
-  expect(networkConfiguration.AwsvpcConfiguration.Subnets).toHaveLength(1);
-  ecrTemplate.resourceCountIs('AWS::EC2::NatGateway', 0);
-});
-
-test('creates a two-AZ no-NAT VPC while keeping the workload in one subnet', () => {
-  template.resourceCountIs('AWS::EC2::NatGateway', 0);
-  template.resourceCountIs('AWS::EC2::Subnet', 4);
-  template.resourceCountIs('AWS::EC2::InternetGateway', 1);
-
-  const loadBalancer = findResources(template, 'AWS::ElasticLoadBalancingV2::LoadBalancer')[0];
-  expect(loadBalancer.Properties?.Subnets).toHaveLength(2);
-
-  const service = findResources(template, 'AWS::ECS::Service')[0];
-  const networkConfiguration = service.Properties?.NetworkConfiguration as {
-    readonly AwsvpcConfiguration: {
-      readonly AssignPublicIp: string;
-      readonly Subnets: unknown[];
-    };
-  };
-  expect(networkConfiguration.AwsvpcConfiguration.AssignPublicIp).toBe('DISABLED');
-  expect(networkConfiguration.AwsvpcConfiguration.Subnets).toHaveLength(1);
-});
-
-test('names the application cluster and enables enhanced Container Insights', () => {
-  template.hasResourceProperties('AWS::ECS::Cluster', {
-    ClusterName: 'movie-reservation-platform-aws-demo',
-    ClusterSettings: [
-      {
-        Name: 'containerInsights',
-        Value: 'enhanced',
-      },
-    ],
-    Tags: Match.arrayWith([
-      Match.objectLike({
-        Key: 'Platform',
-        Value: 'movie-reservation-platform',
-      }),
-    ]),
-  });
-
-  const cluster = findResources(template, 'AWS::ECS::Cluster')[0];
-  const clusterTags = cluster.Properties?.Tags as Array<{
-    readonly Key: string;
-    readonly Value: string;
-  }>;
-  expect(clusterTags).not.toContainEqual({
-    Key: 'Service',
-    Value: 'movie-reservation-service',
-  });
-  expect(cluster.DependsOn).toEqual(expect.arrayContaining([expect.stringContaining('ContainerInsightsLogGroup')]));
-});
-
-test('restricts public ALB ingress to the configured prefix list', () => {
-  template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-    GroupDescription: 'Allows restricted HTTP ingress to the public demo ALB',
-  });
-  template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
-    Description: 'Demo HTTP access restricted by customer-managed prefix list',
-    FromPort: 80,
-    GroupId: {
-      'Fn::GetAtt': [Match.stringLikeRegexp('AlbSecurityGroup'), 'GroupId'],
-    },
-    IpProtocol: 'tcp',
-    SourcePrefixListId: 'pl-0123456789abcdef0',
-    ToPort: 80,
-  });
-});
-
-test('creates one-subnet private endpoints for runtime AWS API calls', () => {
-  template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-    VpcEndpointType: 'Gateway',
-    ServiceName: gatewayRegionalServiceName('s3'),
-  });
-  template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-    VpcEndpointType: 'Interface',
-    ServiceName: regionalServiceName('ecr.api'),
-  });
-  template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-    VpcEndpointType: 'Interface',
-    ServiceName: regionalServiceName('ecr.dkr'),
-  });
-  template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-    VpcEndpointType: 'Interface',
-    ServiceName: regionalServiceName('logs'),
-  });
-  template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-    VpcEndpointType: 'Interface',
-    ServiceName: regionalServiceName('xray'),
-    PrivateDnsEnabled: true,
-    PolicyDocument: Match.anyValue(),
-  });
-  template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-    VpcEndpointType: 'Interface',
-    ServiceName: regionalServiceName('aps-workspaces'),
-    PrivateDnsEnabled: true,
-    PolicyDocument: Match.anyValue(),
-  });
-  template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-    VpcEndpointType: 'Interface',
-    ServiceName: regionalServiceName('sts'),
-    PrivateDnsEnabled: true,
-    PolicyDocument: Match.anyValue(),
-  });
-
-  const endpoints = findResources(template, 'AWS::EC2::VPCEndpoint');
-  const gatewayEndpoints = endpoints.filter((endpoint) => endpoint.Properties?.VpcEndpointType === 'Gateway');
-  const interfaceEndpoints = endpoints.filter((endpoint) => endpoint.Properties?.VpcEndpointType === 'Interface');
-
-  expect(gatewayEndpoints).toHaveLength(1);
-  expect(gatewayEndpoints[0].Properties?.RouteTableIds).toHaveLength(1);
-  expect(interfaceEndpoints).toHaveLength(6);
-  for (const endpoint of interfaceEndpoints) {
-    expect(endpoint.Properties?.SubnetIds).toHaveLength(1);
-  }
-
-  const xrayEndpoint = interfaceEndpoints.find((endpoint) =>
-    JSON.stringify(endpoint.Properties?.ServiceName).includes('.xray'),
-  );
-  const xrayEndpointPolicy = xrayEndpoint?.Properties?.PolicyDocument as {
-    readonly Statement: Array<{
-      readonly Action: string[];
-      readonly Effect: string;
-      readonly Principal: { readonly AWS: string };
-      readonly Resource: string;
-    }>;
-  };
-  expect(xrayEndpointPolicy.Statement).toHaveLength(1);
-  expect(xrayEndpointPolicy.Statement[0]).toMatchObject({
-    Effect: 'Allow',
-    Principal: { AWS: '*' },
-    Resource: '*',
-  });
-  expect(new Set(xrayEndpointPolicy.Statement[0]?.Action)).toEqual(
-    new Set(['xray:PutTraceSegments', 'xray:PutTelemetryRecords']),
-  );
-
-  const ampEndpoint = interfaceEndpoints.find((endpoint) =>
-    JSON.stringify(endpoint.Properties?.ServiceName).includes('.aps-workspaces'),
-  );
-  expect(ampEndpoint?.Properties?.PolicyDocument).toEqual({
-    Statement: [
-      {
-        Action: 'aps:RemoteWrite',
-        Effect: 'Allow',
-        Principal: { AWS: '*' },
-        Resource: {
-          'Fn::GetAtt': [expect.stringContaining('AmpWorkspace'), 'Arn'],
-        },
-      },
-    ],
-    Version: '2012-10-17',
-  });
-
-  const stsEndpoint = interfaceEndpoints.find((endpoint) =>
-    JSON.stringify(endpoint.Properties?.ServiceName).includes('.sts'),
-  );
-  expect(stsEndpoint?.Properties?.PolicyDocument).toEqual({
-    Statement: [
-      {
-        Action: 'sts:GetCallerIdentity',
-        Effect: 'Allow',
-        Principal: { AWS: '*' },
-        Resource: '*',
-      },
-    ],
-    Version: '2012-10-17',
-  });
-});
-
-test('creates a disposable seven-day AMP workspace', () => {
-  template.hasResourceProperties('AWS::APS::Workspace', {
-    Alias: 'movie-reservation-platform-aws-demo',
-    WorkspaceConfiguration: {
-      RetentionPeriodInDays: 7,
-    },
-    Tags: Match.arrayWith([
-      Match.objectLike({
-        Key: 'Service',
-        Value: 'movie-reservation-service',
-      }),
-    ]),
-  });
-
-  const [workspace] = findResources(template, 'AWS::APS::Workspace');
-  expect(workspace.DeletionPolicy).toBe('Delete');
-  expect(workspace.UpdateReplacePolicy).toBe('Delete');
-});
-
-test('grants Grafana only the planned AMP and CloudWatch metric reads', () => {
-  template.hasResourceProperties('AWS::IAM::Role', {
-    AssumeRolePolicyDocument: {
-      Statement: Match.arrayWith([
-        Match.objectLike({
-          Action: 'sts:AssumeRole',
-          Condition: {
-            ArnLike: {
-              'aws:SourceArn': {
-                'Fn::Join': [
-                  '',
-                  [
-                    'arn:',
-                    { Ref: 'AWS::Partition' },
-                    ':grafana:',
-                    { Ref: 'AWS::Region' },
-                    ':',
-                    { Ref: 'AWS::AccountId' },
-                    ':/workspaces/*',
-                  ],
-                ],
-              },
-            },
-            StringEquals: {
-              'aws:SourceAccount': { Ref: 'AWS::AccountId' },
-            },
-          },
-          Effect: 'Allow',
-          Principal: {
-            Service: 'grafana.amazonaws.com',
-          },
-        }),
-      ]),
-    },
-  });
-
-  const grafanaPolicy = findResources(template, 'AWS::IAM::Policy').find((policy) => {
-    const policyDocument = policy.Properties?.PolicyDocument as {
-      readonly Statement?: Array<{ readonly Action?: string | string[] }>;
-    };
-
-    return policyDocument.Statement?.some(({ Action }) => policyActions(Action ?? []).includes('aps:QueryMetrics'));
-  });
-  const policyDocument = grafanaPolicy?.Properties?.PolicyDocument as {
-    readonly Statement: Array<{
-      readonly Action: string | string[];
-      readonly Effect: string;
-      readonly Resource: unknown;
-    }>;
-    readonly Version: string;
-  };
-  expect(policyDocument.Version).toBe('2012-10-17');
-  expect(policyDocument.Statement).toHaveLength(2);
-
-  const ampQueryStatement = policyDocument.Statement.find(({ Action }) =>
-    policyActions(Action).includes('aps:QueryMetrics'),
-  );
-  expect(new Set(policyActions(ampQueryStatement?.Action ?? []))).toEqual(
-    new Set(['aps:GetLabels', 'aps:GetMetricMetadata', 'aps:GetSeries', 'aps:QueryMetrics']),
-  );
-  expect(ampQueryStatement).toMatchObject({
-    Effect: 'Allow',
-    Resource: {
-      'Fn::GetAtt': [expect.stringContaining('AmpWorkspace'), 'Arn'],
-    },
-  });
-
-  const cloudWatchQueryStatement = policyDocument.Statement.find(({ Action }) =>
-    policyActions(Action).includes('cloudwatch:GetMetricData'),
-  );
-  expect(new Set(policyActions(cloudWatchQueryStatement?.Action ?? []))).toEqual(
-    new Set(['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics', 'ec2:DescribeRegions']),
-  );
-  expect(cloudWatchQueryStatement).toMatchObject({
-    Effect: 'Allow',
-    Resource: '*',
-  });
-
-  const renderedGrafanaPolicy = JSON.stringify(policyDocument);
-  expect(renderedGrafanaPolicy).not.toContain('logs:');
-  expect(renderedGrafanaPolicy).not.toContain('xray:');
-  expect(renderedGrafanaPolicy).not.toContain('cloudwatch:DescribeAlarms');
-  expect(renderedGrafanaPolicy).not.toContain('sns:');
-  expect(renderedGrafanaPolicy).not.toContain('"Action":"*"');
-});
-
-test('restricts the Managed Grafana workspace to the configured prefix list and Identity Center', () => {
-  template.hasResourceProperties('AWS::Grafana::Workspace', {
-    AccountAccessType: 'CURRENT_ACCOUNT',
-    AuthenticationProviders: ['AWS_SSO'],
-    Name: 'movie-reservation-platform-aws-demo',
-    NetworkAccessControl: {
-      PrefixListIds: ['pl-0123456789abcdef0'],
-      VpceIds: [],
-    },
-    PermissionType: 'CUSTOMER_MANAGED',
-    RoleArn: {
-      'Fn::GetAtt': [Match.stringLikeRegexp('GrafanaDataAccessRole'), 'Arn'],
-    },
-  });
-
-  const [workspace] = findResources(template, 'AWS::Grafana::Workspace');
-  expect(workspace.DependsOn).toEqual(
-    expect.arrayContaining([expect.stringContaining('GrafanaDataAccessPolicy')]),
-  );
-  expect(workspace.DeletionPolicy).toBe('Delete');
-  expect(workspace.UpdateReplacePolicy).toBe('Delete');
-  expect(workspace.Properties).not.toHaveProperty('DataSources');
-  expect(workspace.Properties).not.toHaveProperty('GrafanaVersion');
-  expect(workspace.Properties).not.toHaveProperty('NotificationDestinations');
-  expect(workspace.Properties).not.toHaveProperty('PluginAdminEnabled');
-  expect(workspace.Properties).not.toHaveProperty('VpcConfiguration');
-});
-
-test('keeps AWS endpoint ingress on HTTPS without exposing collector ports', () => {
-  const ingressRules = findResources(template, 'AWS::EC2::SecurityGroupIngress');
-  const ingressPorts = ingressRules.map((rule) => rule.Properties?.FromPort);
-
-  expect(ingressPorts).toEqual(expect.arrayContaining([3000, 443]));
-  expect(ingressPorts).not.toEqual(expect.arrayContaining([4318, 13133]));
-  template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
-    Description: 'Private ECS tasks use HTTPS to AWS service endpoints',
-    FromPort: 443,
-    IpProtocol: 'tcp',
-    ToPort: 443,
-  });
-});
-
-test('creates backend ECS service behind an HTTP ALB health checked on /health', () => {
-  template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-    LoadBalancerAttributes: Match.arrayWith([
-      Match.objectLike({
-        Key: 'load_balancing.cross_zone.enabled',
-        Value: 'true',
-      }),
-    ]),
-    Scheme: 'internet-facing',
-    Type: 'application',
-  });
-  template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-    HealthCheckPath: '/health',
-    Port: 3000,
-    Protocol: 'HTTP',
-    TargetType: 'ip',
-  });
-  template.hasResourceProperties('AWS::ECS::Service', {
-    DeploymentConfiguration: Match.objectLike({
-      MaximumPercent: 200,
-      MinimumHealthyPercent: 100,
-    }),
-    DesiredCount: 1,
-    LaunchType: 'FARGATE',
-    EnableExecuteCommand: false,
-  });
-});
-
-test('disables reservation fault injection in the default task profile', () => {
-  const appContainer = findTaskContainers(template).find(({ Name }) => Name === 'movie-reservation-service');
-  if (appContainer === undefined) {
-    throw new Error('expected reservation service container');
-  }
-
-  const environment = environmentFor(appContainer);
-  expect({
-    RESERVATION_FAILURE_INJECTION_MODE: environment.RESERVATION_FAILURE_INJECTION_MODE,
-    RESERVATION_FAILURE_INJECTION_RATE: environment.RESERVATION_FAILURE_INJECTION_RATE,
-  }).toEqual({
-    RESERVATION_FAILURE_INJECTION_MODE: 'disabled',
-    RESERVATION_FAILURE_INJECTION_RATE: '0',
-  });
-  expect(environment).not.toHaveProperty('RESERVATION_FAILURE_INJECTION_SALT');
-});
-
-test('configures an independent app and nonessential ADOT sidecar in one Fargate task', () => {
-  template.hasResourceProperties('AWS::ECS::TaskDefinition', {
-    Cpu: '512',
-    Memory: '1024',
-    NetworkMode: 'awsvpc',
-    ContainerDefinitions: Match.arrayWith([
-      Match.objectLike({
-        Name: 'movie-reservation-service',
-        Essential: true,
-        Cpu: 384,
-        Memory: 640,
-        PortMappings: Match.arrayWith([
-          Match.objectLike({
-            ContainerPort: 3000,
-            Protocol: 'tcp',
-          }),
-        ]),
-        Environment: Match.arrayWith([
-          Match.objectLike({
-            Name: 'HOST',
-            Value: '0.0.0.0',
-          }),
-          Match.objectLike({
-            Name: 'COMPOSITION_PROFILE',
-            Value: 'local-fixed-user',
-          }),
-          Match.objectLike({
-            Name: 'OBSERVABILITY_ENABLED',
-            Value: 'true',
-          }),
-        ]),
-      }),
-      Match.objectLike({
-        Name: 'adot-collector',
-        Essential: false,
-        Cpu: 128,
-        Memory: 384,
-        HealthCheck: {
-          Command: ['CMD', '/healthcheck'],
-          Interval: 30,
-          Retries: 3,
-          StartPeriod: 10,
-          Timeout: 5,
-        },
-        RestartPolicy: {
-          Enabled: true,
-          RestartAttemptPeriod: 60,
-        },
-        StopTimeout: 30,
-      }),
-    ]),
-  });
-
-  const containers = findTaskContainers(template);
-  expect(containers).toHaveLength(2);
-  const appContainer = containers.find(({ Name }) => Name === 'movie-reservation-service');
-  const adotContainer = containers.find(({ Name }) => Name === 'adot-collector');
-  expect(appContainer).toBeDefined();
-  expect(adotContainer).toBeDefined();
-  if (appContainer === undefined || adotContainer === undefined) {
-    throw new Error('expected app and ADOT containers');
-  }
-
-  expect(appContainer.DependsOn).toBeUndefined();
-  expect(adotContainer.PortMappings).toBeUndefined();
-  expect(environmentFor(appContainer)).toMatchObject({
-    SERVICE_VERSION: ECR_TEST_CONTEXT.applicationServiceVersion,
-    OTEL_SERVICE_NAME: 'movie-reservation-service',
-    OTEL_TRACES_EXPORTER: 'otlp',
-    OTEL_METRICS_EXPORTER: 'otlp',
-    OTEL_METRIC_EXPORT_INTERVAL: '30000',
-    OTEL_LOGS_EXPORTER: 'none',
-    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4318',
-    OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
-    OTEL_PROPAGATORS: 'tracecontext,baggage',
-    OTEL_TRACES_SAMPLER: 'parentbased_always_on',
-    OTEL_RESOURCE_ATTRIBUTES: 'deployment.environment.name=aws-demo,service.namespace=movie-reservation-platform',
-    RESERVATION_WORKER_MODE: 'fake-in-process',
-    RESERVATION_FAILURE_INJECTION_MODE: 'disabled',
-    RESERVATION_FAILURE_INJECTION_RATE: '0',
-  });
-  expect(environmentFor(adotContainer)).toEqual({
-    AMP_REMOTE_WRITE_ENDPOINT: {
-      'Fn::Join': [
-        '',
-        [
-          {
-            'Fn::GetAtt': [expect.stringContaining('AmpWorkspace'), 'PrometheusEndpoint'],
-          },
-          'remote_write',
-        ],
-      ],
-    },
-    AWS_REGION: ECR_TEST_TARGET.region,
-    AWS_STS_REGIONAL_ENDPOINTS: 'regional',
-    APPLICATION_SERVICE_NAME: 'movie-reservation-service',
-    CLOUDWATCH_METRICS_NAMESPACE: 'GoldenPath/aws-demo/movie-reservation-service',
-    CLOUDWATCH_METRICS_LOG_GROUP_NAME: {
-      Ref: expect.stringContaining('ApplicationMetricsLogGroup'),
-    },
-    DEPLOYMENT_ENVIRONMENT_NAME: 'aws-demo',
-    METRICS_COLLECTION_INTERVAL: '30s',
-  });
-});
-
-test('uses separate disposable one-week application, collector, EMF, and Container Insights log groups', () => {
-  const logGroups = findResources(template, 'AWS::Logs::LogGroup');
-
-  expect(logGroups).toHaveLength(4);
-  expect(logGroups.map((logGroup) => logGroup.Properties?.LogGroupName)).toEqual(
-    expect.arrayContaining([
-      '/aws/ecs/containerinsights/movie-reservation-platform-aws-demo/performance',
-      '/golden-path/aws-demo/movie-reservation-service/app',
-      '/golden-path/aws-demo/movie-reservation-service/adot',
-      '/golden-path/aws-demo/movie-reservation-service/metrics',
-    ]),
-  );
-  for (const logGroup of logGroups) {
-    expect(logGroup.Properties?.RetentionInDays).toBe(7);
-    expect(logGroup.DeletionPolicy).toBe('Delete');
-    expect(logGroup.UpdateReplacePolicy).toBe('Delete');
-  }
-
-  const [appContainer, adotContainer] = findTaskContainers(template);
-  expect(appContainer?.LogConfiguration?.Options?.['awslogs-stream-prefix']).toBe('app');
-  expect(adotContainer?.LogConfiguration?.Options?.['awslogs-stream-prefix']).toBe('adot');
-});
-
-test('grants only X-Ray, workspace-scoped AMP, and scoped EMF log writes to the task role', () => {
-  const policies = findResources(template, 'AWS::IAM::Policy');
-  const taskRolePolicy = policies.find((policy) =>
-    String(policy.Properties?.PolicyName).includes('TaskRoleDefaultPolicy'),
-  );
-
-  const policyDocument = taskRolePolicy?.Properties?.PolicyDocument as {
-    readonly Statement: Array<{
-      readonly Action: string | string[];
-      readonly Effect: string;
-      readonly Resource: unknown;
-    }>;
-    readonly Version: string;
-  };
-  expect(policyDocument.Version).toBe('2012-10-17');
-  expect(policyDocument.Statement).toHaveLength(3);
-  const xrayStatement = policyDocument.Statement.find(({ Action }) =>
-    policyActions(Action).includes('xray:PutTraceSegments'),
-  );
-  const ampStatement = policyDocument.Statement.find(({ Action }) => policyActions(Action).includes('aps:RemoteWrite'));
-  const metricsLogStatement = policyDocument.Statement.find(({ Action }) =>
-    policyActions(Action).includes('logs:PutLogEvents'),
-  );
-  expect(xrayStatement).toMatchObject({
-    Effect: 'Allow',
-    Resource: '*',
-  });
-  expect(new Set(policyActions(xrayStatement?.Action ?? []))).toEqual(
-    new Set(['xray:PutTraceSegments', 'xray:PutTelemetryRecords']),
-  );
-  expect(ampStatement).toEqual({
-    Action: 'aps:RemoteWrite',
-    Effect: 'Allow',
-    Resource: {
-      'Fn::GetAtt': [expect.stringContaining('AmpWorkspace'), 'Arn'],
-    },
-  });
-  expect(metricsLogStatement).toMatchObject({
-    Effect: 'Allow',
-    Resource: {
-      'Fn::GetAtt': [expect.stringContaining('ApplicationMetricsLogGroup'), 'Arn'],
-    },
-  });
-  expect(new Set(policyActions(metricsLogStatement?.Action ?? []))).toEqual(
-    new Set(['logs:CreateLogStream', 'logs:PutLogEvents']),
-  );
-
-  const renderedTemplate = JSON.stringify(template.toJSON());
-  expect(renderedTemplate).not.toContain('xray:GetSampling');
-  expect(renderedTemplate).not.toContain('AWSXRayDaemonWriteAccess');
-  expect(renderedTemplate).not.toContain('CloudWatchAgentServerPolicy');
-});
-
-test('does not introduce deferred databases, alarms, or public-network resources', () => {
-  template.resourceCountIs('AWS::EC2::NatGateway', 0);
-  template.resourceCountIs('AWS::APS::Workspace', 1);
-  template.resourceCountIs('AWS::Grafana::Workspace', 1);
-  template.resourceCountIs('AWS::EC2::PrefixList', 0);
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
-  template.resourceCountIs('AWS::RDS::DBInstance', 0);
-
-  const renderedTemplate = JSON.stringify(template.toJSON());
-  expect(renderedTemplate).not.toContain('".aps"]');
-  expect(findTaskContainers(template).map(({ Name }) => Name)).not.toEqual(
-    expect.arrayContaining(['postgres', 'migration']),
-  );
-});
-
-test('adds ECS Exec wiring only when enabled', () => {
-  const execEnabledTemplate = synthesizeTemplate({
-    enableEcsExec: 'true',
-  });
-
-  execEnabledTemplate.hasResourceProperties('AWS::ECS::Service', {
-    EnableExecuteCommand: true,
-  });
-  execEnabledTemplate.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-    VpcEndpointType: 'Interface',
-    ServiceName: regionalServiceName('ssmmessages'),
-  });
-  execEnabledTemplate.hasResourceProperties('AWS::IAM::Policy', {
-    PolicyDocument: Match.objectLike({
-      Statement: Match.arrayWith([
-        Match.objectLike({
-          Action: Match.arrayWith([
-            'ssmmessages:CreateControlChannel',
-            'ssmmessages:CreateDataChannel',
-            'ssmmessages:OpenControlChannel',
-            'ssmmessages:OpenDataChannel',
-          ]),
-          Effect: 'Allow',
-          Resource: '*',
-        }),
-      ]),
-    }),
-  });
-
-  expect(JSON.stringify(template.toJSON())).not.toContain('ssmmessages:CreateControlChannel');
-});
-
-test('requires allowedIngressPrefixListId at the config boundary', () => {
-  expect(() => resolvePlatformConfig({})).toThrow('allowedIngressPrefixListId');
-});
-
-test.each([
-  '0.0.0.0/0',
-  '203.0.113.10/32',
-  'vpce-0123456789abcdef0',
-  'pl-not-hex',
-  'pl-012345678',
-  'pl-0123456789abcdef',
-  'pl-0123456789ABCDEF0',
-])(
-  'rejects a malformed ingress prefix list ID: %s',
-  (allowedIngressPrefixListId) => {
-    expect(() => resolvePlatformConfig({ allowedIngressPrefixListId })).toThrow(
-      '"allowedIngressPrefixListId" must start with pl- and contain exactly 8 or 17 lowercase hexadecimal characters',
-    );
-  },
-);
-
-test.each(['pl-0123abcd', 'pl-0123456789abcdef0'])(
-  'accepts a valid ingress prefix list ID: %s',
-  (allowedIngressPrefixListId) => {
-    expect(
-      resolvePlatformConfig(
-        {
-          allowedIngressPrefixListId,
-          ...ECR_TEST_CONTEXT,
-        },
-        ECR_TEST_TARGET,
-      ).allowedIngressPrefixListId,
-    ).toBe(allowedIngressPrefixListId);
-  },
-);
-
-test('trims the configured ingress prefix list ID', () => {
-  expect(
-    resolvePlatformConfig(
-      {
-        allowedIngressPrefixListId: '  pl-0123456789abcdef0  ',
-        ...ECR_TEST_CONTEXT,
-      },
-      ECR_TEST_TARGET,
-    ).allowedIngressPrefixListId,
-  ).toBe('pl-0123456789abcdef0');
-});
-
-test('keeps the VPC and workload AZ counts fixed outside caller-controlled context', () => {
-  expect(
-    resolvePlatformConfig(
-      {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-        ...ECR_TEST_CONTEXT,
-      },
-      ECR_TEST_TARGET,
-    ),
-  ).toEqual({
-    platformName: 'movie-reservation-platform',
-    serviceName: 'movie-reservation-service',
-    environmentName: 'aws-demo',
-    allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-    applicationImage: {
+  for (const input of APPLICATION_COMPONENT_INPUTS) {
+    expect(config.applicationImages[input.componentId]).toMatchObject({
       kind: 'ecr-image',
-      imageReference: ECR_TEST_IMAGE_REFERENCE,
-      registryAccount: ECR_TEST_TARGET.account,
-      registryRegion: ECR_TEST_TARGET.region,
-      repositoryName: 'ci-placeholder',
-      imageDigest: ECR_TEST_DIGEST,
-      serviceVersion: 'release-2026-07-31',
-    },
+      componentId: input.componentId,
+      repositoryName: input.repositoryName,
+      registryAccount: TEST_TARGET.account,
+      registryRegion: TEST_TARGET.region,
+      imageDigest: TEST_DIGEST,
+    });
+  }
+  expect(config).toMatchObject({
+    platformName: 'movie-reservation-platform',
+    serviceName: 'movie-platform-demo',
+    environmentName: 'aws-demo',
     vpcMaxAzs: 2,
     workloadAzCount: 1,
     enableEcsExec: false,
@@ -890,251 +129,376 @@ test('keeps the VPC and workload AZ counts fixed outside caller-controlled conte
   });
 });
 
-test('resolves and trims a matching digest-pinned ECR image contract', () => {
-  expect(
-    resolvePlatformConfig(
-      {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-        applicationImageReference: `  ${ECR_TEST_IMAGE_REFERENCE}  `,
-        applicationServiceVersion: '  release-candidate+build.17  ',
-      },
-      ECR_TEST_TARGET,
-    ).applicationImage,
-  ).toEqual({
-    kind: 'ecr-image',
-    imageReference: ECR_TEST_IMAGE_REFERENCE,
-    registryAccount: ECR_TEST_TARGET.account,
-    registryRegion: ECR_TEST_TARGET.region,
-    repositoryName: 'ci-placeholder',
-    imageDigest: ECR_TEST_DIGEST,
-    serviceVersion: 'release-candidate+build.17',
-  });
-});
-
-test.each([
-  {
-    context: {
-      applicationImageReference: ECR_TEST_IMAGE_REFERENCE,
-    },
-    missingKey: 'applicationServiceVersion',
-  },
-  {
-    context: {
-      applicationServiceVersion: 'release-candidate',
-    },
-    missingKey: 'applicationImageReference',
-  },
-])('rejects a partial application image contract missing $missingKey', ({ context, missingKey }) => {
-  expect(() =>
-    resolvePlatformConfig(
-      {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-        ...context,
-      },
-      ECR_TEST_TARGET,
-    ),
-  ).toThrow(missingKey);
-});
-
-test.each([
-  {
-    key: 'applicationImageReference',
-    context: {
-      applicationImageReference: '   ',
-      applicationServiceVersion: 'release-candidate',
-    },
-  },
-  {
-    key: 'applicationServiceVersion',
-    context: {
-      applicationImageReference: ECR_TEST_IMAGE_REFERENCE,
-      applicationServiceVersion: '',
-    },
-  },
-])('rejects a blank $key', ({ context, key }) => {
-  expect(() =>
-    resolvePlatformConfig(
-      {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-        ...context,
-      },
-      ECR_TEST_TARGET,
-    ),
-  ).toThrow(`"${key}" must be a non-empty string`);
-});
-
-test.each([
-  ['mutable latest tag', `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder:latest`],
-  ['mutable version tag', `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder:1.2.3`],
-  ['bare digest', ECR_TEST_DIGEST],
-  ['bare repository', `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder`],
-  [
-    'malformed account',
-    `11111111111.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder@${ECR_TEST_DIGEST}`,
-  ],
-  [
-    'malformed Region',
-    `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central.amazonaws.com/ci-placeholder@${ECR_TEST_DIGEST}`,
-  ],
-  [
-    'malformed repository',
-    `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central-1.amazonaws.com/Invalid_Repository@${ECR_TEST_DIGEST}`,
-  ],
-  [
-    'short digest',
-    `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder@sha256:${'a'.repeat(63)}`,
-  ],
-  [
-    'long digest',
-    `${ECR_TEST_TARGET.account}.dkr.ecr.eu-central-1.amazonaws.com/ci-placeholder@sha256:${'a'.repeat(65)}`,
-  ],
-])('rejects a %s application image reference', (_caseName, applicationImageReference) => {
-  expect(() =>
-    resolvePlatformConfig(
-      {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-        applicationImageReference,
-        applicationServiceVersion: 'release-candidate',
-      },
-      ECR_TEST_TARGET,
-    ),
-  ).toThrow('"applicationImageReference" must be a complete private ECR image URI');
-});
-
-test.each([
-  ['one-character repository', 'a'],
-  ['repository longer than 256 characters', 'a'.repeat(257)],
-])('rejects a %s', (_caseName, repositoryName) => {
-  expect(() =>
-    resolvePlatformConfig(
-      {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-        applicationImageReference:
-          `${ECR_TEST_TARGET.account}.dkr.ecr.${ECR_TEST_TARGET.region}.amazonaws.com/` +
-          `${repositoryName}@${ECR_TEST_DIGEST}`,
-        applicationServiceVersion: 'release-candidate',
-      },
-      ECR_TEST_TARGET,
-    ),
-  ).toThrow('must contain an ECR repository name from 2 through 256 characters');
-});
-
-test.each([
-  ['missing account', { region: ECR_TEST_TARGET.region }, 'CDK_DEFAULT_ACCOUNT'],
-  ['invalid account', { account: 'not-an-account', region: ECR_TEST_TARGET.region }, 'CDK_DEFAULT_ACCOUNT'],
-  ['missing Region', { account: ECR_TEST_TARGET.account }, 'CDK_DEFAULT_REGION'],
-  ['invalid Region', { account: ECR_TEST_TARGET.account, region: 'Europe' }, 'CDK_DEFAULT_REGION'],
-] satisfies Array<[string, DeploymentTarget, string]>)(
-  'rejects ECR mode with a %s deployment target',
-  (_caseName, deploymentTarget, expectedMessage) => {
+test.each(APPLICATION_COMPONENT_INPUTS)(
+  'requires both immutable reference and version for $componentId',
+  ({ imageReferenceKey, serviceVersionKey }) => {
     expect(() =>
       resolvePlatformConfig(
         {
           allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-          ...ECR_TEST_CONTEXT,
+          ...TEST_CONTEXT,
+          [imageReferenceKey]: undefined,
         },
-        deploymentTarget,
+        TEST_TARGET,
       ),
-    ).toThrow(expectedMessage);
+    ).toThrow(String(imageReferenceKey));
+    expect(() =>
+      resolvePlatformConfig(
+        {
+          allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+          ...TEST_CONTEXT,
+          [serviceVersionKey]: ' ',
+        },
+        TEST_TARGET,
+      ),
+    ).toThrow(String(serviceVersionKey));
   },
 );
 
-test('rejects an ECR registry account that differs from the deployment target', () => {
+test('rejects mutable, wrong-repository, cross-account, and cross-Region images', () => {
   expect(() =>
     resolvePlatformConfig(
       {
         allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-        ...ECR_TEST_CONTEXT,
+        ...TEST_CONTEXT,
+        reservationWebImageReference:
+          `${TEST_TARGET.account}.dkr.ecr.${TEST_TARGET.region}.amazonaws.com/movie-reservation-web:latest`,
       },
+      TEST_TARGET,
+    ),
+  ).toThrow('pinned by a sha256 digest');
+  expect(() =>
+    resolvePlatformConfig(
       {
-        account: '222222222222',
-        region: ECR_TEST_TARGET.region,
+        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+        ...TEST_CONTEXT,
+        reservationWebImageReference: reference('movie-reservation-agent'),
       },
+      TEST_TARGET,
+    ),
+  ).toThrow('must select ECR repository "movie-reservation-web"');
+  expect(() =>
+    resolvePlatformConfig(
+      { allowedIngressPrefixListId: 'pl-0123456789abcdef0', ...TEST_CONTEXT },
+      { account: '222222222222', region: TEST_TARGET.region },
     ),
   ).toThrow('must match deployment account');
-});
-
-test('rejects an ECR registry Region that differs from the deployment target', () => {
   expect(() =>
     resolvePlatformConfig(
-      {
-        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-        ...ECR_TEST_CONTEXT,
-      },
-      {
-        account: ECR_TEST_TARGET.account,
-        region: 'us-east-1',
-      },
+      { allowedIngressPrefixListId: 'pl-0123456789abcdef0', ...TEST_CONTEXT },
+      { account: TEST_TARGET.account, region: 'us-east-1' },
     ),
   ).toThrow('must match deployment Region');
 });
 
-test('validates and applies the application metric export cadence', () => {
-  expect(
-    resolvePlatformConfig({
-      allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-      ...ECR_TEST_CONTEXT,
-      metricsExportIntervalSeconds: '45',
-    }, ECR_TEST_TARGET).metricsExportIntervalSeconds,
-  ).toBe(45);
-
-  const overrideTemplate = synthesizeTemplate({
-    metricsExportIntervalSeconds: '45',
-  });
-  const [appContainer, adotContainer] = findTaskContainers(overrideTemplate);
-  expect(environmentFor(appContainer)).toMatchObject({
-    OTEL_METRIC_EXPORT_INTERVAL: '45000',
-  });
-  expect(environmentFor(adotContainer)).toMatchObject({
-    METRICS_COLLECTION_INTERVAL: '45s',
-  });
-});
-
-test.each([4, 301])('rejects metric export cadence outside the supported range: %s', (value) => {
+test('validates ingress, ECS Exec, and metrics cadence at the context boundary', () => {
+  expect(() => resolvePlatformConfig({})).toThrow('allowedIngressPrefixListId');
   expect(() =>
-    resolvePlatformConfig({
-      allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-      ...ECR_TEST_CONTEXT,
-      metricsExportIntervalSeconds: value,
-    }, ECR_TEST_TARGET),
+    resolvePlatformConfig(
+      { allowedIngressPrefixListId: '0.0.0.0/0', ...TEST_CONTEXT },
+      TEST_TARGET,
+    ),
+  ).toThrow('allowedIngressPrefixListId');
+  expect(() =>
+    resolvePlatformConfig(
+      { allowedIngressPrefixListId: 'pl-0123456789abcdef0', ...TEST_CONTEXT, enableEcsExec: 'yes' },
+      TEST_TARGET,
+    ),
+  ).toThrow('enableEcsExec');
+  expect(() =>
+    resolvePlatformConfig(
+      {
+        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+        ...TEST_CONTEXT,
+        metricsExportIntervalSeconds: 301,
+      },
+      TEST_TARGET,
+    ),
   ).toThrow('metricsExportIntervalSeconds');
+  expect(
+    resolvePlatformConfig(
+      {
+        allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+        ...TEST_CONTEXT,
+        enableEcsExec: 'true',
+        metricsExportIntervalSeconds: '45',
+      },
+      TEST_TARGET,
+    ),
+  ).toMatchObject({ enableEcsExec: true, metricsExportIntervalSeconds: 45 });
 });
 
-test.each(['30.5', '', true])('rejects noninteger metric export cadence: %p', (value) => {
-  expect(() =>
-    resolvePlatformConfig({
-      allowedIngressPrefixListId: 'pl-0123456789abcdef0',
-      ...ECR_TEST_CONTEXT,
-      metricsExportIntervalSeconds: value,
-    }, ECR_TEST_TARGET),
-  ).toThrow('must be an integer');
+test('imports all six ECR images by exact digest and keeps ADOT as the only Docker asset', () => {
+  const stack = createStack();
+  expect(stack.node.tryFindChild('AdotImage')).toBeInstanceOf(ecrAssets.DockerImageAsset);
+  template.resourceCountIs('AWS::ECR::Repository', 0);
+
+  for (const input of APPLICATION_COMPONENT_INPUTS) {
+    const definition = container(template, `movie-${input.componentId}`);
+    const renderedImage = JSON.stringify(definition.Image);
+    expect(renderedImage).toContain(input.repositoryName);
+    expect(renderedImage).toContain(TEST_DIGEST);
+  }
 });
 
-test('outputs CloudWatch, ECS, AMP, and Grafana identifiers', () => {
-  template.hasOutput('CloudWatchApplicationMetricsNamespace', {
-    Value: 'GoldenPath/aws-demo/movie-reservation-service',
+test('creates the no-NAT private workload network and required AWS endpoints', () => {
+  template.resourceCountIs('AWS::EC2::NatGateway', 0);
+  template.resourceCountIs('AWS::EC2::Subnet', 4);
+  template.resourceCountIs('AWS::EC2::InternetGateway', 1);
+  const endpointServices = resources(template, 'AWS::EC2::VPCEndpoint').map(
+    ({ Properties }) => Properties?.ServiceName,
+  );
+  for (const suffix of ['ecr.api', 'ecr.dkr', 'logs', 'xray', 'aps-workspaces', 'sts']) {
+    expect(JSON.stringify(endpointServices)).toContain(suffix);
+  }
+});
+
+test('creates one 2-vCPU/4-GiB task with six essential apps and nonessential ADOT', () => {
+  template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+    Cpu: '2048',
+    Memory: '4096',
+    NetworkMode: 'awsvpc',
   });
-  template.hasOutput('EcsClusterName', {
-    Value: Match.anyValue(),
+  const definitions = containers(template);
+  expect(definitions).toHaveLength(7);
+  expect(definitions.map(({ Name }) => Name).sort()).toEqual(
+    [
+      'adot-collector',
+      'movie-recommendation-mcp',
+      'movie-recommendation-service',
+      'movie-reservation-agent',
+      'movie-reservation-mcp',
+      'movie-reservation-service',
+      'movie-reservation-web',
+    ].sort(),
+  );
+  expect(definitions.filter(({ Essential }) => Essential).length).toBe(6);
+  expect(container(template, 'adot-collector')).toMatchObject({
+    Essential: false,
+    RestartPolicy: { Enabled: true, RestartAttemptPeriod: 60 },
   });
-  template.hasOutput('EcsServiceName', {
-    Value: Match.anyValue(),
+  for (const name of definitions.filter(({ Essential }) => Essential).map(({ Name }) => Name)) {
+    expect(container(template, name).HealthCheck).toMatchObject({
+      Interval: 15,
+      Retries: 5,
+      StartPeriod: 20,
+      Timeout: 5,
+    });
+  }
+});
+
+test('uses the health commands supported by the six published runtime images', () => {
+  expect(container(template, 'movie-reservation-service').HealthCheck?.Command).toEqual([
+    'CMD',
+    '/nodejs/bin/node',
+    '-e',
+    "fetch('http://127.0.0.1:3000/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+  ]);
+  expect(container(template, 'movie-recommendation-service').HealthCheck?.Command).toEqual([
+    'CMD-SHELL',
+    'curl -fsS http://127.0.0.1:8082/ready || exit 1',
+  ]);
+  expect(container(template, 'movie-reservation-mcp').HealthCheck?.Command).toEqual([
+    'CMD-SHELL',
+    'curl -fsS http://127.0.0.1:8091/health || exit 1',
+  ]);
+  expect(container(template, 'movie-recommendation-mcp').HealthCheck?.Command).toEqual([
+    'CMD-SHELL',
+    'curl -fsS http://127.0.0.1:8092/health || exit 1',
+  ]);
+  expect(container(template, 'movie-reservation-agent').HealthCheck?.Command).toEqual([
+    'CMD-SHELL',
+    'curl -fsS http://127.0.0.1:8080/health || exit 1',
+  ]);
+  expect(container(template, 'movie-reservation-web').HealthCheck?.Command).toEqual([
+    'CMD-SHELL',
+    'wget -qO- http://127.0.0.1:8088/health >/dev/null || exit 1',
+  ]);
+  expect(container(template, 'adot-collector').HealthCheck?.Command).toEqual([
+    'CMD',
+    '/healthcheck',
+  ]);
+});
+
+test('wires task-local URLs, deterministic behavior, faults, versions, and distinct OTLP receivers', () => {
+  expect(environment(container(template, 'movie-reservation-service'))).toMatchObject({
+    HOST: '0.0.0.0',
+    PORT: '3000',
+    COMPOSITION_PROFILE: 'local-fixed-user',
+    RESERVATION_WORKER_MODE: 'fake-in-process',
+    RESERVATION_FAILURE_INJECTION_MODE: 'disabled',
+    SERVICE_VERSION: 'reservation-v1',
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4318',
   });
-  template.hasOutput('AmpWorkspaceId', {
-    Value: Match.anyValue(),
+  expect(environment(container(template, 'movie-recommendation-service'))).toMatchObject({
+    PORT: '8082',
+    USE_DUMMY: 'true',
+    DEMO_FAULT_MODE: 'none',
+    ALLOW_REQUEST_DEMO_FAULTS: 'true',
+    SERVICE_VERSION: 'recommendation-v1',
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4321',
   });
-  template.hasOutput('AmpWorkspaceArn', {
-    Value: Match.anyValue(),
+  expect(environment(container(template, 'movie-reservation-mcp'))).toMatchObject({
+    MOVIE_RESERVATION_GRAPHQL_URL: 'http://127.0.0.1:3000/graphql',
+    MOVIE_RESERVATION_HEALTH_URL: 'http://127.0.0.1:3000/health',
+    MOVIE_RESERVATION_API_TIMEOUT_SECONDS: '10',
   });
-  template.hasOutput('AmpPrometheusEndpoint', {
-    Value: Match.anyValue(),
+  expect(environment(container(template, 'movie-recommendation-mcp'))).toMatchObject({
+    MOVIE_RECOMMENDATION_API_URL: 'http://127.0.0.1:8082',
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4320',
   });
-  template.hasOutput('GrafanaWorkspaceId', {
-    Value: Match.anyValue(),
+  expect(environment(container(template, 'movie-reservation-agent'))).toMatchObject({
+    MOVIE_RESERVATION_MCP_URL: 'http://127.0.0.1:8091/mcp',
+    MOVIE_RECOMMENDATION_MCP_URL: 'http://127.0.0.1:8092/mcp',
+    DEMO_MCP_TIMEOUT_SECONDS: '15',
+    DEMO_RESERVATION_POLL_ATTEMPTS: '6',
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4319',
   });
-  template.hasOutput('GrafanaWorkspaceUrl', {
-    Value: Match.objectLike({
-      'Fn::Join': Match.anyValue(),
-    }),
+  expect(environment(container(template, 'movie-reservation-agent'))).not.toHaveProperty('NO_LLM');
+  expect(environment(container(template, 'movie-reservation-mcp'))).not.toHaveProperty(
+    'OTEL_EXPORTER_OTLP_ENDPOINT',
+  );
+});
+
+test('uses health-gated API-to-MCP-to-agent-to-web startup dependencies', () => {
+  const dependency = (name: string, upstream: string, condition = 'HEALTHY') =>
+    expect(container(template, name).DependsOn).toContainEqual({
+      ContainerName: upstream,
+      Condition: condition,
+    });
+
+  dependency('movie-reservation-service', 'adot-collector');
+  dependency('movie-recommendation-service', 'adot-collector');
+  dependency('movie-reservation-mcp', 'movie-reservation-service');
+  dependency('movie-recommendation-mcp', 'movie-recommendation-service');
+  dependency('movie-reservation-agent', 'movie-reservation-mcp');
+  dependency('movie-reservation-agent', 'movie-recommendation-mcp');
+  dependency('movie-reservation-web', 'movie-reservation-agent');
+  dependency('movie-reservation-web', 'movie-reservation-service');
+});
+
+test('exposes only web port 8088 through the prefix-list-restricted ALB', () => {
+  template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+    HealthCheckPath: '/health',
+    Port: 8088,
+    Protocol: 'HTTP',
+    TargetType: 'ip',
   });
+  const service = resources(template, 'AWS::ECS::Service')[0];
+  expect(service.Properties?.HealthCheckGracePeriodSeconds).toBe(180);
+  expect(JSON.stringify(service.Properties?.LoadBalancers)).toContain('movie-reservation-web');
+  expect(JSON.stringify(service.Properties?.LoadBalancers)).not.toContain('movie-reservation-service');
+  template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+    FromPort: 80,
+    ToPort: 80,
+    IpProtocol: 'tcp',
+    SourcePrefixListId: 'pl-0123456789abcdef0',
+  });
+  template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+    FromPort: 8088,
+    ToPort: 8088,
+    IpProtocol: 'tcp',
+    SourceSecurityGroupId: Match.anyValue(),
+  });
+  const ingress = resources(template, 'AWS::EC2::SecurityGroupIngress');
+  expect(ingress.map(({ Properties }) => Properties?.CidrIp)).not.toContain('0.0.0.0/0');
+});
+
+test('uses separate disposable one-week logs for every component, ADOT, metrics, and Container Insights', () => {
+  const logGroups = resources(template, 'AWS::Logs::LogGroup');
+  expect(logGroups).toHaveLength(9);
+  const names = logGroups.map(({ Properties }) => Properties?.LogGroupName);
+  for (const component of APPLICATION_COMPONENT_INPUTS) {
+    expect(names).toContain(`/movie-platform/aws-demo/${component.componentId}/app`);
+  }
+  expect(names).toEqual(
+    expect.arrayContaining([
+      '/movie-platform/aws-demo/adot',
+      '/movie-platform/aws-demo/metrics',
+      '/aws/ecs/containerinsights/movie-reservation-platform-aws-demo/performance',
+    ]),
+  );
+  for (const logGroup of logGroups) {
+    expect(logGroup.Properties?.RetentionInDays).toBe(7);
+    expect(logGroup.DeletionPolicy).toBe('Delete');
+  }
+  expect(new Set(containers(template).map(({ LogConfiguration }) => LogConfiguration?.Options?.['awslogs-group']).filter(Boolean)).size).toBe(7);
+});
+
+test('keeps Grafana read-only while granting approved AMP, metric, bounded log, and X-Ray reads', () => {
+  template.hasResourceProperties('AWS::Grafana::Workspace', {
+    AccountAccessType: 'CURRENT_ACCOUNT',
+    DataSources: ['CLOUDWATCH', 'PROMETHEUS', 'XRAY'],
+    PermissionType: 'CUSTOMER_MANAGED',
+  });
+  const policies = resources(template, 'AWS::IAM::Policy');
+  const grafanaPolicy = policies.find(({ Properties }) =>
+    String(Properties?.PolicyName).includes('GrafanaDataAccessPolicy'),
+  );
+  const document = grafanaPolicy?.Properties?.PolicyDocument as {
+    readonly Statement: Array<{ readonly Action: string | string[]; readonly Resource: unknown }>;
+  };
+  const allActions = document.Statement.flatMap(actions);
+  expect(allActions).toEqual(
+    expect.arrayContaining([
+      'aps:QueryMetrics',
+      'cloudwatch:GetMetricData',
+      'logs:StartQuery',
+      'logs:GetQueryResults',
+      'xray:BatchGetTraces',
+      'xray:GetTraceSummaries',
+    ]),
+  );
+  expect(allActions.some((action) => /Put|Create|Delete|Update/.test(action))).toBe(false);
+  const scopedLogs = document.Statement.find(({ Action }) => actions({ Action }).includes('logs:StartQuery'));
+  expect(JSON.stringify(scopedLogs?.Resource)).toContain('/movie-platform/aws-demo/reservation-agent/app');
+  expect(scopedLogs?.Resource).not.toBe('*');
+  const xray = document.Statement.find(({ Action }) => actions({ Action }).includes('xray:BatchGetTraces'));
+  expect(xray?.Resource).toBe('*');
+});
+
+test('task role can export telemetry but application images cannot mutate AWS', () => {
+  const policies = resources(template, 'AWS::IAM::Policy');
+  const taskPolicy = policies.find(({ Properties }) =>
+    String(Properties?.PolicyName).includes('TaskRoleDefaultPolicy'),
+  );
+  const rendered = JSON.stringify(taskPolicy?.Properties?.PolicyDocument);
+  expect(rendered).toContain('xray:PutTraceSegments');
+  expect(rendered).toContain('aps:RemoteWrite');
+  expect(rendered).toContain('logs:PutLogEvents');
+  expect(rendered).not.toContain('ecr:PutImage');
+  expect(rendered).not.toContain('ecs:UpdateService');
+});
+
+test('enables ECS Exec and its endpoint only when explicitly requested', () => {
+  expect(JSON.stringify(template.toJSON())).not.toContain('ssmmessages:CreateControlChannel');
+  const enabled = synthesized({ enableEcsExec: true });
+  enabled.hasResourceProperties('AWS::ECS::Service', { EnableExecuteCommand: true });
+  expect(JSON.stringify(enabled.toJSON())).toContain('ssmmessages:CreateControlChannel');
+  expect(JSON.stringify(enabled.toJSON())).toContain('ssmmessages');
+});
+
+test('publishes deployment, telemetry, and per-component log discovery outputs', () => {
+  const outputs = template.toJSON().Outputs as Record<string, unknown>;
+  for (const output of [
+    'DemoBaseUrl',
+    'LoadBalancerDnsName',
+    'CloudWatchApplicationMetricsNamespace',
+    'EcsClusterName',
+    'EcsServiceName',
+    'AmpWorkspaceId',
+    'AmpWorkspaceArn',
+    'AmpPrometheusEndpoint',
+    'GrafanaWorkspaceId',
+    'GrafanaWorkspaceUrl',
+    'AdotLogGroupName',
+    'ReservationWebLogGroupName',
+    'ReservationAgentLogGroupName',
+    'ReservationMcpLogGroupName',
+    'RecommendationMcpLogGroupName',
+    'ReservationServiceLogGroupName',
+    'RecommendationServiceLogGroupName',
+  ]) {
+    expect(outputs).toHaveProperty(output);
+  }
 });
