@@ -134,6 +134,47 @@ Routine demo teardown must not run a foundation destroy command. Final project
 cleanup uses the separate guarded workflow described in the
 [artifact-foundation runbook](docs/operations/aws-artifact-foundation.md#guarded-final-cleanup).
 
+## GitHub OIDC Trust Workflow
+
+The GitHub trust roles have their own CDK entrypoint so changing private
+workflow identities does not couple their lifecycle to the persistent artifact
+repository or the disposable workload stack. The public repository contains
+only fake test bindings:
+
+```bash
+npm run synth:github-oidc-trust
+```
+
+Real synthesis requires a private JSON file supplied at runtime:
+
+```bash
+npm run cdk -- \
+  --app "npx ts-node --prefer-ts-exts bin/github-oidc-trust.ts" \
+  synth GitHubOidcTrustStack \
+  --no-lookups \
+  -c githubOidcTrustConfigFile=/private/path/github-oidc-trust.json
+```
+
+The version-1 file provides the CDK bootstrap qualifier and separate exact
+GitHub `subject`, repository name and immutable IDs, workflow name, `main` ref,
+and GitHub Environment for admission and deployment. Both roles must belong to
+the same repository and owner identities, while their workflows and GitHub
+Environments must remain separate. The exact `subject` is copied as an opaque
+claim so private configuration can use GitHub's supported subject formats.
+Wildcards, placeholders, and non-main refs are rejected. Do not commit a real
+file, account ID, repository name, or workflow identity here.
+
+The admission role can authenticate to ECR and write/read only the
+infra-owned reservation-service repository. The deployment entry role has no
+admission permission; it can assume only the selected account and Region's
+exact modern CDK bootstrap roles. The bootstrap `CloudFormationExecutionRole`
+still determines effective deployment authority and requires a separate live
+policy review before use.
+
+This repository currently validates and synthesizes the trust mechanics only.
+Do not deploy or assume these roles without an explicit reviewed private
+binding and user authorization.
+
 ## Application Image Contract
 
 Standalone synth/deploy requires both application image inputs:

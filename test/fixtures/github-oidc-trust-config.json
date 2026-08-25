@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1",
+  "bootstrapQualifier": "hnb659fds",
+  "admission": {
+    "subject": "repo:test-org/test-private-control:environment:artifact-admission-test",
+    "repository": "test-org/test-private-control",
+    "repositoryId": "1000001",
+    "repositoryOwnerId": "1000000",
+    "workflow": "Artifact Admission Test",
+    "ref": "refs/heads/main",
+    "environment": "artifact-admission-test"
+  },
+  "deployment": {
+    "subject": "repo:test-org/test-private-control:environment:workload-deployment-test",
+    "repository": "test-org/test-private-control",
+    "repositoryId": "1000001",
+    "repositoryOwnerId": "1000000",
+    "workflow": "Workload Deployment Test",
+    "ref": "refs/heads/main",
+    "environment": "workload-deployment-test"
+  }
+}
+
