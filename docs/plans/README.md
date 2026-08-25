@@ -81,6 +81,9 @@ Unit tests, CDK assertions, synth contracts, script checks, and smoke tests.
 
 ## Current Planning Priorities
 
+- [Reservation Artifact Copy Mechanics](./reservation-artifact-copy-mechanics.md):
+  copy one approved single-image manifest from GHCR to ECR without rebuilding,
+  then verify exact manifest, config, and layer digest identity.
 - [Persistent ECR Artifact Foundation](./persistent-ecr-artifact-foundation.md):
   establish the approved persistent repository, guarded cleanup, cross-repo
   admission boundary, testing strategy, and five-PR delivery plan for issue #12.

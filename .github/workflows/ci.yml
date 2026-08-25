@@ -41,6 +41,9 @@ jobs:
       - name: Validate artifact-foundation cleanup automation
         run: npm run validate:artifact-foundation-cleanup
 
+      - name: Validate artifact-copy automation
+        run: npm run validate:artifact-copy
+
   # Builds and tests the CDK infrastructure definitions after automation checks
   # pass, covering both workload and artifact-foundation stacks.
   infra:

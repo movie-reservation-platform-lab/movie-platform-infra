@@ -50,6 +50,7 @@ Run commands from this repository root:
 npm ci
 npm run validate:aws-account-preflight
 npm run validate:artifact-foundation-cleanup
+npm run validate:artifact-copy
 npm run build
 npm run test:cdk
 npm run test:tooling
@@ -63,9 +64,14 @@ npm run ci
 ```
 
 `npm test` remains the convenience command for all CDK and repository-tooling
-Jest tests under `test/`. The account-preflight and artifact-foundation cleanup
-automation packages have their own TypeScript and Jest configurations, so CI
-validates them separately and before CDK or tooling tests.
+Jest tests under `test/`. The account-preflight, artifact-foundation cleanup,
+and artifact-copy automation packages have their own TypeScript and Jest
+configurations, so CI validates them separately and before CDK or tooling tests.
+
+`npm run validate:artifact-copy` is credential-free and performs no registry
+mutation. It validates strict single-manifest copy mechanics and the no-shell
+Skopeo adapter contract; live admission orchestration remains private
+environment-repository work.
 
 `npm run synth:ecr-contract` uses a fake account, fake repository, and all-zero
 digest with `--no-lookups`. It proves the CDK app accepts an immutable image
