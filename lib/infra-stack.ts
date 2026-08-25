@@ -14,12 +14,41 @@ import { Construct } from 'constructs';
 import { resolveApplicationImage } from './application-image';
 import type { PlatformConfig } from './config/platform-config';
 
-const APP_CONTAINER_PORT = 3000;
+const WEB_CONTAINER_PORT = 8088;
 const AMP_REMOTE_WRITE_ACTIONS = ['aps:RemoteWrite'];
 const AMP_QUERY_ACTIONS = ['aps:GetLabels', 'aps:GetMetricMetadata', 'aps:GetSeries', 'aps:QueryMetrics'];
 const CLOUDWATCH_METRIC_READ_ACTIONS = ['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics'];
+const CLOUDWATCH_LOG_GLOBAL_READ_ACTIONS = [
+  'logs:DescribeLogGroups',
+  'logs:GetQueryResults',
+  'logs:StopQuery',
+];
+const CLOUDWATCH_LOG_SCOPED_READ_ACTIONS = [
+  'logs:GetLogEvents',
+  'logs:GetLogGroupFields',
+  'logs:StartQuery',
+];
 const STS_IDENTITY_ACTIONS = ['sts:GetCallerIdentity'];
 const XRAY_WRITE_ACTIONS = ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'];
+const XRAY_READ_ACTIONS = [
+  'xray:BatchGetTraces',
+  'xray:GetInsight',
+  'xray:GetInsightEvents',
+  'xray:GetInsightImpactGraph',
+  'xray:GetInsightSummaries',
+  'xray:GetServiceGraph',
+  'xray:GetTimeSeriesServiceStatistics',
+  'xray:GetTraceGraph',
+  'xray:GetTraceSummaries',
+];
+const APPLICATION_COMPONENTS = [
+  'reservation-web',
+  'reservation-agent',
+  'reservation-mcp',
+  'recommendation-mcp',
+  'reservation-service',
+  'recommendation-service',
+] as const;
 
 /** Input required to synthesize the current demo infrastructure stack. */
 export interface MovieReservationWorkloadStackProps extends cdk.StackProps {
@@ -115,8 +144,8 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
     tagServiceResource(serviceSecurityGroup);
     serviceSecurityGroup.addIngressRule(
       albSecurityGroup,
-      ec2.Port.tcp(APP_CONTAINER_PORT),
-      'Only the ALB can call the application container',
+      ec2.Port.tcp(WEB_CONTAINER_PORT),
+      'Only the ALB can call the frontend container',
     );
 
     const endpointSecurityGroup = new ec2.SecurityGroup(this, 'EndpointSecurityGroup', {
@@ -138,6 +167,27 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
     ampWorkspace.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
     tagServiceResource(ampWorkspace);
 
+    const componentLogGroupNames = Object.fromEntries(
+      APPLICATION_COMPONENTS.map((componentId) => [
+        componentId,
+        `/movie-platform/${platformConfig.environmentName}/${componentId}/app`,
+      ]),
+    ) as Record<(typeof APPLICATION_COMPONENTS)[number], string>;
+    const adotLogGroupName = `/movie-platform/${platformConfig.environmentName}/adot`;
+    const applicationMetricsLogGroupName = `/movie-platform/${platformConfig.environmentName}/metrics`;
+    const grafanaReadableLogGroupArns = [
+      ...Object.values(componentLogGroupNames),
+      adotLogGroupName,
+      applicationMetricsLogGroupName,
+    ].map((logGroupName) =>
+      cdk.Stack.of(this).formatArn({
+        service: 'logs',
+        resource: 'log-group',
+        resourceName: `${logGroupName}:*`,
+        arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
+      }),
+    );
+
     // The workspace ARN is deliberately wildcarded in the trust policy to
     // avoid a CloudFormation cycle: Grafana needs this role ARN while creating
     // the workspace. SourceAccount and the same-account workspace ARN pattern
@@ -152,7 +202,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       ':/workspaces/*',
     ]);
     const grafanaDataAccessRole = new iam.Role(this, 'GrafanaDataAccessRole', {
-      description: 'Allows the Managed Grafana workspace to query the demo AMP and CloudWatch metrics',
+      description: 'Allows Managed Grafana to read demo metrics, logs, and traces',
       assumedBy: new iam.ServicePrincipal('grafana.amazonaws.com', {
         conditions: {
           ArnLike: {
@@ -177,13 +227,27 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
           actions: [...CLOUDWATCH_METRIC_READ_ACTIONS, 'ec2:DescribeRegions'],
           resources: ['*'],
         }),
+        new iam.PolicyStatement({
+          actions: CLOUDWATCH_LOG_GLOBAL_READ_ACTIONS,
+          resources: ['*'],
+        }),
+        new iam.PolicyStatement({
+          actions: CLOUDWATCH_LOG_SCOPED_READ_ACTIONS,
+          resources: grafanaReadableLogGroupArns,
+        }),
+        new iam.PolicyStatement({
+          // X-Ray read APIs do not support resource-level permissions.
+          actions: XRAY_READ_ACTIONS,
+          resources: ['*'],
+        }),
       ],
     });
 
     const grafanaWorkspace = new grafana.CfnWorkspace(this, 'GrafanaWorkspace', {
       accountAccessType: 'CURRENT_ACCOUNT',
       authenticationProviders: ['AWS_SSO'],
-      description: 'Managed metrics dashboard for the movie reservation AWS demo',
+      dataSources: ['CLOUDWATCH', 'PROMETHEUS', 'XRAY'],
+      description: 'Managed metrics, logs, and traces for the movie reservation AWS demo',
       name: `${platformConfig.platformName}-${platformConfig.environmentName}`,
       networkAccessControl: {
         prefixListIds: [platformConfig.allowedIngressPrefixListId],
@@ -279,27 +343,61 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
     cluster.node.addDependency(containerInsightsLogGroup);
 
     const repositoryRoot = process.cwd();
-    const applicationImage = resolveApplicationImage(this, platformConfig.applicationImage);
+    const images = {
+      reservationService: resolveApplicationImage(
+        this,
+        platformConfig.applicationImages['reservation-service'],
+      ),
+      reservationWeb: resolveApplicationImage(
+        this,
+        platformConfig.applicationImages['reservation-web'],
+      ),
+      reservationAgent: resolveApplicationImage(
+        this,
+        platformConfig.applicationImages['reservation-agent'],
+      ),
+      reservationMcp: resolveApplicationImage(
+        this,
+        platformConfig.applicationImages['reservation-mcp'],
+      ),
+      recommendationMcp: resolveApplicationImage(
+        this,
+        platformConfig.applicationImages['recommendation-mcp'],
+      ),
+      recommendationService: resolveApplicationImage(
+        this,
+        platformConfig.applicationImages['recommendation-service'],
+      ),
+    };
     const adotImage = new ecrAssets.DockerImageAsset(this, 'AdotImage', {
       directory: path.join(repositoryRoot, 'adot-collector'),
     });
     const cloudWatchApplicationMetricsNamespace =
-      `GoldenPath/${platformConfig.environmentName}/${platformConfig.serviceName}`;
+      `MoviePlatform/${platformConfig.environmentName}/applications`;
 
-    const appLogGroup = new logs.LogGroup(this, 'AppLogGroup', {
-      logGroupName: `/golden-path/${platformConfig.environmentName}/${platformConfig.serviceName}/app`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-    tagServiceResource(appLogGroup);
+    const componentLogGroups = Object.fromEntries(
+      APPLICATION_COMPONENTS.map((componentId) => {
+        const constructId = `${componentId
+          .split('-')
+          .map((part) => part[0].toUpperCase() + part.slice(1))
+          .join('')}LogGroup`;
+        const logGroup = new logs.LogGroup(this, constructId, {
+          logGroupName: componentLogGroupNames[componentId],
+          retention: logs.RetentionDays.ONE_WEEK,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+        });
+        tagServiceResource(logGroup);
+        return [componentId, logGroup];
+      }),
+    ) as Record<(typeof APPLICATION_COMPONENTS)[number], logs.LogGroup>;
     const adotLogGroup = new logs.LogGroup(this, 'AdotLogGroup', {
-      logGroupName: `/golden-path/${platformConfig.environmentName}/${platformConfig.serviceName}/adot`,
+      logGroupName: adotLogGroupName,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
     tagServiceResource(adotLogGroup);
     const applicationMetricsLogGroup = new logs.LogGroup(this, 'ApplicationMetricsLogGroup', {
-      logGroupName: `/golden-path/${platformConfig.environmentName}/${platformConfig.serviceName}/metrics`,
+      logGroupName: applicationMetricsLogGroupName,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -307,8 +405,8 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
 
     const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
       family: `${platformConfig.environmentName}-${platformConfig.serviceName}`,
-      cpu: 512,
-      memoryLimitMiB: 1024,
+      cpu: 2048,
+      memoryLimitMiB: 4096,
     });
     tagServiceResource(taskDefinition);
 
@@ -343,54 +441,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       );
     }
 
-    const appContainer = taskDefinition.addContainer('AppContainer', {
-      containerName: platformConfig.serviceName,
-      image: applicationImage.image,
-      essential: true,
-      cpu: 384,
-      memoryLimitMiB: 640,
-      logging: ecs.LogDrivers.awsLogs({
-        logGroup: appLogGroup,
-        streamPrefix: 'app',
-      }),
-      environment: {
-        PORT: APP_CONTAINER_PORT.toString(),
-        HOST: '0.0.0.0',
-        NODE_ENV: 'development',
-        LOG_LEVEL: 'info',
-        SERVICE_VERSION: applicationImage.serviceVersion,
-        COMPOSITION_PROFILE: 'local-fixed-user',
-        RESERVATION_WORKER_MODE: 'fake-in-process',
-        RESERVATION_FAILURE_INJECTION_MODE: 'disabled',
-        RESERVATION_FAILURE_INJECTION_RATE: '0',
-        OBSERVABILITY_ENABLED: 'true',
-        OTEL_SERVICE_NAME: platformConfig.serviceName,
-        OTEL_TRACES_EXPORTER: 'otlp',
-        OTEL_METRICS_EXPORTER: 'otlp',
-        OTEL_METRIC_EXPORT_INTERVAL: (platformConfig.metricsExportIntervalSeconds * 1000).toString(),
-        OTEL_LOGS_EXPORTER: 'none',
-        OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4318',
-        OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
-        OTEL_PROPAGATORS: 'tracecontext,baggage',
-        // Deterministic sample-all is for this low-traffic demo and smoke test.
-        // Revisit sampling before production, higher traffic, or meaningful cost.
-        OTEL_TRACES_SAMPLER: 'parentbased_always_on',
-        OTEL_RESOURCE_ATTRIBUTES: `deployment.environment.name=${platformConfig.environmentName},service.namespace=${platformConfig.platformName}`,
-        ENABLE_GRAPHIQL: 'false',
-      },
-    });
-    appContainer.addPortMappings({
-      containerPort: APP_CONTAINER_PORT,
-      protocol: ecs.Protocol.TCP,
-    });
-
-    // TODO(platform-telemetry): This per-task ADOT sidecar is the issue #37
-    // demo topology, not the long-term platform shape. Before adding several
-    // microservices or scaling task counts, move export to a dedicated OTel
-    // collector service/gateway and point app tasks at that stable OTLP
-    // endpoint. Until then, ADOT remains nonessential so collector failure
-    // costs telemetry, not application availability.
-    taskDefinition.addContainer('AdotContainer', {
+    // This per-task collector is deliberately nonessential: telemetry loss
+    // must not make the demo application unavailable.
+    const adotContainer = taskDefinition.addContainer('AdotContainer', {
       containerName: 'adot-collector',
       image: ecs.ContainerImage.fromDockerImageAsset(adotImage),
       essential: false,
@@ -407,7 +460,6 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         AWS_REGION: cdk.Stack.of(this).region,
         AWS_STS_REGIONAL_ENDPOINTS: 'regional',
         AMP_REMOTE_WRITE_ENDPOINT: cdk.Fn.join('', [ampWorkspace.attrPrometheusEndpoint, 'remote_write']),
-        APPLICATION_SERVICE_NAME: platformConfig.serviceName,
         CLOUDWATCH_METRICS_NAMESPACE: cloudWatchApplicationMetricsNamespace,
         CLOUDWATCH_METRICS_LOG_GROUP_NAME: applicationMetricsLogGroup.logGroupName,
         DEPLOYMENT_ENVIRONMENT_NAME: platformConfig.environmentName,
@@ -421,6 +473,216 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         startPeriod: cdk.Duration.seconds(10),
       },
     });
+
+    const componentLogging = (componentId: (typeof APPLICATION_COMPONENTS)[number]) =>
+      ecs.LogDrivers.awsLogs({
+        logGroup: componentLogGroups[componentId],
+        streamPrefix: componentId,
+      });
+    const healthCheck = (command: string[]): ecs.HealthCheck => ({
+      command,
+      interval: cdk.Duration.seconds(15),
+      timeout: cdk.Duration.seconds(5),
+      retries: 5,
+      startPeriod: cdk.Duration.seconds(20),
+    });
+    const otelEnvironment = (serviceName: string, port: number): Record<string, string> => ({
+      OTEL_SERVICE_NAME: serviceName,
+      OTEL_TRACES_EXPORTER: 'otlp',
+      OTEL_METRICS_EXPORTER: 'otlp',
+      OTEL_METRIC_EXPORT_INTERVAL: (platformConfig.metricsExportIntervalSeconds * 1000).toString(),
+      OTEL_LOGS_EXPORTER: 'none',
+      OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${port}`,
+      OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
+      OTEL_PROPAGATORS: 'tracecontext,baggage',
+      OTEL_TRACES_SAMPLER: 'parentbased_always_on',
+      OTEL_RESOURCE_ATTRIBUTES:
+        `deployment.environment.name=${platformConfig.environmentName},service.namespace=${platformConfig.platformName}`,
+    });
+
+    const reservationService = taskDefinition.addContainer('ReservationServiceContainer', {
+      containerName: 'movie-reservation-service',
+      image: images.reservationService.image,
+      essential: true,
+      cpu: 384,
+      memoryLimitMiB: 640,
+      logging: componentLogging('reservation-service'),
+      environment: {
+        PORT: '3000',
+        HOST: '0.0.0.0',
+        NODE_ENV: 'development',
+        LOG_LEVEL: 'info',
+        SERVICE_VERSION: images.reservationService.serviceVersion,
+        COMPOSITION_PROFILE: 'local-fixed-user',
+        RESERVATION_WORKER_MODE: 'fake-in-process',
+        RESERVATION_FAILURE_INJECTION_MODE: 'disabled',
+        RESERVATION_FAILURE_INJECTION_RATE: '0',
+        OBSERVABILITY_ENABLED: 'true',
+        ENABLE_GRAPHIQL: 'false',
+        ...otelEnvironment('movie-reservation-service', 4318),
+      },
+      healthCheck: healthCheck([
+        'CMD',
+        '/nodejs/bin/node',
+        '-e',
+        "fetch('http://127.0.0.1:3000/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+      ]),
+    });
+    reservationService.addPortMappings({ containerPort: 3000, protocol: ecs.Protocol.TCP });
+    reservationService.addContainerDependencies({
+      container: adotContainer,
+      condition: ecs.ContainerDependencyCondition.HEALTHY,
+    });
+
+    const recommendationService = taskDefinition.addContainer('RecommendationServiceContainer', {
+      containerName: 'movie-recommendation-service',
+      image: images.recommendationService.image,
+      essential: true,
+      cpu: 384,
+      memoryLimitMiB: 512,
+      logging: componentLogging('recommendation-service'),
+      environment: {
+        PORT: '8082',
+        USE_DUMMY: 'true',
+        DEMO_FAULT_MODE: 'none',
+        ALLOW_REQUEST_DEMO_FAULTS: 'true',
+        RUST_LOG: 'info',
+        SERVICE_VERSION: images.recommendationService.serviceVersion,
+        ...otelEnvironment('movie-recommendation-service', 4321),
+      },
+      healthCheck: healthCheck([
+        'CMD-SHELL',
+        'curl -fsS http://127.0.0.1:8082/ready || exit 1',
+      ]),
+    });
+    recommendationService.addPortMappings({ containerPort: 8082, protocol: ecs.Protocol.TCP });
+    recommendationService.addContainerDependencies({
+      container: adotContainer,
+      condition: ecs.ContainerDependencyCondition.HEALTHY,
+    });
+
+    const reservationMcp = taskDefinition.addContainer('ReservationMcpContainer', {
+      containerName: 'movie-reservation-mcp',
+      image: images.reservationMcp.image,
+      essential: true,
+      cpu: 256,
+      memoryLimitMiB: 384,
+      logging: componentLogging('reservation-mcp'),
+      environment: {
+        HOST: '0.0.0.0',
+        PORT: '8091',
+        MOVIE_RESERVATION_GRAPHQL_URL: 'http://127.0.0.1:3000/graphql',
+        MOVIE_RESERVATION_HEALTH_URL: 'http://127.0.0.1:3000/health',
+        MOVIE_RESERVATION_API_TIMEOUT_SECONDS: '10',
+        SERVICE_VERSION: images.reservationMcp.serviceVersion,
+      },
+      healthCheck: healthCheck([
+        'CMD-SHELL',
+        'curl -fsS http://127.0.0.1:8091/health || exit 1',
+      ]),
+    });
+    reservationMcp.addPortMappings({ containerPort: 8091, protocol: ecs.Protocol.TCP });
+    reservationMcp.addContainerDependencies({
+      container: reservationService,
+      condition: ecs.ContainerDependencyCondition.HEALTHY,
+    });
+
+    const recommendationMcp = taskDefinition.addContainer('RecommendationMcpContainer', {
+      containerName: 'movie-recommendation-mcp',
+      image: images.recommendationMcp.image,
+      essential: true,
+      cpu: 256,
+      memoryLimitMiB: 384,
+      logging: componentLogging('recommendation-mcp'),
+      environment: {
+        HOST: '0.0.0.0',
+        PORT: '8092',
+        MOVIE_RECOMMENDATION_API_URL: 'http://127.0.0.1:8082',
+        SERVICE_VERSION: images.recommendationMcp.serviceVersion,
+        DEPLOYMENT_ENVIRONMENT: platformConfig.environmentName,
+        LOG_LEVEL: 'INFO',
+        ...otelEnvironment('movie-recommendation-mcp', 4320),
+      },
+      healthCheck: healthCheck([
+        'CMD-SHELL',
+        'curl -fsS http://127.0.0.1:8092/health || exit 1',
+      ]),
+    });
+    recommendationMcp.addPortMappings({ containerPort: 8092, protocol: ecs.Protocol.TCP });
+    recommendationMcp.addContainerDependencies(
+      {
+        container: recommendationService,
+        condition: ecs.ContainerDependencyCondition.HEALTHY,
+      },
+      {
+        container: adotContainer,
+        condition: ecs.ContainerDependencyCondition.HEALTHY,
+      },
+    );
+
+    const reservationAgent = taskDefinition.addContainer('ReservationAgentContainer', {
+      containerName: 'movie-reservation-agent',
+      image: images.reservationAgent.image,
+      essential: true,
+      cpu: 384,
+      memoryLimitMiB: 768,
+      logging: componentLogging('reservation-agent'),
+      environment: {
+        MOVIE_RESERVATION_MCP_URL: 'http://127.0.0.1:8091/mcp',
+        MOVIE_RECOMMENDATION_MCP_URL: 'http://127.0.0.1:8092/mcp',
+        DEMO_MCP_TIMEOUT_SECONDS: '15',
+        DEMO_RESERVATION_POLL_ATTEMPTS: '6',
+        DEMO_RESERVATION_POLL_INTERVAL_SECONDS: '0.25',
+        SERVICE_VERSION: images.reservationAgent.serviceVersion,
+        ...otelEnvironment('movie-reservation-agent', 4319),
+      },
+      healthCheck: healthCheck([
+        'CMD-SHELL',
+        'curl -fsS http://127.0.0.1:8080/health || exit 1',
+      ]),
+    });
+    reservationAgent.addPortMappings({ containerPort: 8080, protocol: ecs.Protocol.TCP });
+    reservationAgent.addContainerDependencies(
+      {
+        container: reservationMcp,
+        condition: ecs.ContainerDependencyCondition.HEALTHY,
+      },
+      {
+        container: recommendationMcp,
+        condition: ecs.ContainerDependencyCondition.HEALTHY,
+      },
+      {
+        container: adotContainer,
+        condition: ecs.ContainerDependencyCondition.HEALTHY,
+      },
+    );
+
+    const webContainer = taskDefinition.addContainer('WebContainer', {
+      containerName: 'movie-reservation-web',
+      image: images.reservationWeb.image,
+      essential: true,
+      cpu: 256,
+      memoryLimitMiB: 256,
+      logging: componentLogging('reservation-web'),
+      environment: {
+        SERVICE_VERSION: images.reservationWeb.serviceVersion,
+      },
+      healthCheck: healthCheck([
+        'CMD-SHELL',
+        'wget -qO- http://127.0.0.1:8088/health >/dev/null || exit 1',
+      ]),
+    });
+    webContainer.addPortMappings({ containerPort: WEB_CONTAINER_PORT, protocol: ecs.Protocol.TCP });
+    webContainer.addContainerDependencies(
+      {
+        container: reservationAgent,
+        condition: ecs.ContainerDependencyCondition.HEALTHY,
+      },
+      {
+        container: reservationService,
+        condition: ecs.ContainerDependencyCondition.HEALTHY,
+      },
+    );
 
     const service = new ecs.FargateService(this, 'Service', {
       cluster,
@@ -436,7 +698,10 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       circuitBreaker: {
         rollback: true,
       },
-      healthCheckGracePeriod: cdk.Duration.seconds(60),
+      // The task has an intentional API -> MCP -> agent -> web health-gated
+      // startup chain. Give the ALB enough time for that serial readiness path
+      // before ECS evaluates target-health failures.
+      healthCheckGracePeriod: cdk.Duration.seconds(180),
     });
     tagServiceResource(service);
 
@@ -444,7 +709,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       vpc,
       internetFacing: true,
       crossZoneEnabled: true,
-      loadBalancerName: `${platformConfig.environmentName}-backend`,
+      loadBalancerName: `${platformConfig.environmentName}-web`,
       securityGroup: albSecurityGroup,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC,
@@ -459,12 +724,12 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
     });
 
     listener.addTargets('EcsTargets', {
-      port: APP_CONTAINER_PORT,
+      port: WEB_CONTAINER_PORT,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targets: [
         service.loadBalancerTarget({
-          containerName: appContainer.containerName,
-          containerPort: APP_CONTAINER_PORT,
+          containerName: webContainer.containerName,
+          containerPort: WEB_CONTAINER_PORT,
         }),
       ],
       healthCheck: {
@@ -477,7 +742,25 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'LoadBalancerDnsName', {
       value: loadBalancer.loadBalancerDnsName,
-      description: 'Public DNS name for the backend ALB',
+      description: 'Public DNS name for the temporary integrated demo web ALB',
+    });
+    new cdk.CfnOutput(this, 'DemoBaseUrl', {
+      value: cdk.Fn.join('', ['http://', loadBalancer.loadBalancerDnsName]),
+      description: 'Temporary integrated demo base URL',
+    });
+    for (const componentId of APPLICATION_COMPONENTS) {
+      const outputId = `${componentId
+        .split('-')
+        .map((part) => part[0].toUpperCase() + part.slice(1))
+        .join('')}LogGroupName`;
+      new cdk.CfnOutput(this, outputId, {
+        value: componentLogGroups[componentId].logGroupName,
+        description: `CloudWatch log group for ${componentId}`,
+      });
+    }
+    new cdk.CfnOutput(this, 'AdotLogGroupName', {
+      value: adotLogGroup.logGroupName,
+      description: 'CloudWatch log group for the task-local ADOT collector',
     });
     new cdk.CfnOutput(this, 'CloudWatchApplicationMetricsNamespace', {
       value: cloudWatchApplicationMetricsNamespace,

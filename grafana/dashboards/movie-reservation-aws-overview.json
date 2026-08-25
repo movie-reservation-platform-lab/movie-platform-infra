@@ -15,6 +15,14 @@
       "pluginId": "cloudwatch",
       "pluginName": "CloudWatch",
       "type": "datasource"
+    },
+    {
+      "description": "AWS X-Ray data source for distributed trace exploration",
+      "label": "AWS X-Ray",
+      "name": "DS_XRAY",
+      "pluginId": "grafana-x-ray-datasource",
+      "pluginName": "AWS X-Ray",
+      "type": "datasource"
     }
   ],
   "annotations": {
@@ -471,7 +479,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
           "editorMode": "code",
-          "expr": "sum by (aws_ecs_service_name) (ecs_task_cpu_reserved{aws_ecs_service_name=\"movie-reservation-service\",cloud_region=\"eu-central-1\"})",
+          "expr": "sum by (aws_ecs_service_name) (ecs_task_cpu_reserved{aws_ecs_service_name=\"movie-platform-demo\",cloud_region=\"eu-central-1\"})",
           "legendFormat": "reserved",
           "range": true,
           "refId": "A"
@@ -479,7 +487,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
           "editorMode": "code",
-          "expr": "sum by (aws_ecs_service_name) (ecs_task_cpu_utilized{aws_ecs_service_name=\"movie-reservation-service\",cloud_region=\"eu-central-1\"})",
+          "expr": "sum by (aws_ecs_service_name) (ecs_task_cpu_utilized{aws_ecs_service_name=\"movie-platform-demo\",cloud_region=\"eu-central-1\"})",
           "legendFormat": "utilized",
           "range": true,
           "refId": "B"
@@ -504,7 +512,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
           "editorMode": "code",
-          "expr": "sum by (aws_ecs_service_name) (ecs_task_memory_reserved{aws_ecs_service_name=\"movie-reservation-service\",cloud_region=\"eu-central-1\"})",
+          "expr": "sum by (aws_ecs_service_name) (ecs_task_memory_reserved{aws_ecs_service_name=\"movie-platform-demo\",cloud_region=\"eu-central-1\"})",
           "legendFormat": "reserved",
           "range": true,
           "refId": "A"
@@ -512,7 +520,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "${DS_AMP}" },
           "editorMode": "code",
-          "expr": "sum by (aws_ecs_service_name) (ecs_task_memory_utilized{aws_ecs_service_name=\"movie-reservation-service\",cloud_region=\"eu-central-1\"})",
+          "expr": "sum by (aws_ecs_service_name) (ecs_task_memory_utilized{aws_ecs_service_name=\"movie-platform-demo\",cloud_region=\"eu-central-1\"})",
           "legendFormat": "utilized",
           "range": true,
           "refId": "B"
@@ -538,7 +546,7 @@
           "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
           "dimensions": {
             "ClusterName": "movie-reservation-platform-aws-demo",
-            "ServiceName": "movie-reservation-service"
+            "ServiceName": "movie-platform-demo"
           },
           "label": "running tasks",
           "matchExact": true,
@@ -556,7 +564,7 @@
           "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
           "dimensions": {
             "ClusterName": "movie-reservation-platform-aws-demo",
-            "ServiceName": "movie-reservation-service"
+            "ServiceName": "movie-platform-demo"
           },
           "label": "desired tasks",
           "matchExact": true,
@@ -609,13 +617,74 @@
       ],
       "title": "ECS Service and ALB Target Health",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 40 },
+      "id": 21,
+      "panels": [],
+      "title": "Correlation",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 41 },
+      "id": 22,
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "showCommonLabels": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "expression": "fields @timestamp, @message | filter @message like /${trace_id}/ | sort @timestamp desc | limit 100",
+          "logGroupNames": [
+            "/movie-platform/aws-demo/reservation-agent/app",
+            "/movie-platform/aws-demo/reservation-mcp/app",
+            "/movie-platform/aws-demo/recommendation-mcp/app",
+            "/movie-platform/aws-demo/reservation-service/app",
+            "/movie-platform/aws-demo/recommendation-service/app"
+          ],
+          "queryMode": "Logs",
+          "refId": "A",
+          "region": "eu-central-1"
+        }
+      ],
+      "title": "Request Logs by Trace ID",
+      "type": "logs"
+    },
+    {
+      "datasource": { "type": "grafana-x-ray-datasource", "uid": "${DS_XRAY}" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 41 },
+      "id": 23,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-x-ray-datasource", "uid": "${DS_XRAY}" },
+          "filter": "trace.id = \"${trace_id}\"",
+          "queryType": "getTraceSummaries",
+          "refId": "A",
+          "region": "eu-central-1"
+        }
+      ],
+      "title": "X-Ray Trace by Trace ID",
+      "type": "table"
     }
   ],
   "refresh": "30s",
   "schemaVersion": 41,
   "tags": ["aws", "ecs", "managed-observability", "movie-reservation"],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "hide": 0,
+        "label": "Trace ID",
+        "name": "trace_id",
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
   },
   "time": {
     "from": "now-1h",
