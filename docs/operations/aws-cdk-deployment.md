@@ -17,6 +17,11 @@ creates resources that incur charges while they exist, including a Fargate task,
 an Application Load Balancer, interface VPC endpoints, CloudWatch logs and
 metrics, an AMP workspace, and an Amazon Managed Grafana workspace.
 
+Ordinary deployment uses the stable reservation profile: failure injection is
+disabled, its rate is zero, and no failure-injection salt is supplied. A later
+slice of issue #11 will add validated, explicit operator selection for controlled
+fault exercises; until then this runbook does not enable a fault scenario.
+
 ## CDK Lifecycle Mental Model
 
 | Phase | Where it runs | What it does |

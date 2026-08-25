@@ -567,6 +567,23 @@ test('creates backend ECS service behind an HTTP ALB health checked on /health',
   });
 });
 
+test('disables reservation fault injection in the default task profile', () => {
+  const appContainer = findTaskContainers(template).find(({ Name }) => Name === 'movie-reservation-service');
+  if (appContainer === undefined) {
+    throw new Error('expected reservation service container');
+  }
+
+  const environment = environmentFor(appContainer);
+  expect({
+    RESERVATION_FAILURE_INJECTION_MODE: environment.RESERVATION_FAILURE_INJECTION_MODE,
+    RESERVATION_FAILURE_INJECTION_RATE: environment.RESERVATION_FAILURE_INJECTION_RATE,
+  }).toEqual({
+    RESERVATION_FAILURE_INJECTION_MODE: 'disabled',
+    RESERVATION_FAILURE_INJECTION_RATE: '0',
+  });
+  expect(environment).not.toHaveProperty('RESERVATION_FAILURE_INJECTION_SALT');
+});
+
 test('configures an independent app and nonessential ADOT sidecar in one Fargate task', () => {
   template.hasResourceProperties('AWS::ECS::TaskDefinition', {
     Cpu: '512',
@@ -645,9 +662,8 @@ test('configures an independent app and nonessential ADOT sidecar in one Fargate
     OTEL_TRACES_SAMPLER: 'parentbased_always_on',
     OTEL_RESOURCE_ATTRIBUTES: 'deployment.environment.name=aws-demo,service.namespace=movie-reservation-platform',
     RESERVATION_WORKER_MODE: 'fake-in-process',
-    RESERVATION_FAILURE_INJECTION_MODE: 'stable-random-unexpected-error',
-    RESERVATION_FAILURE_INJECTION_RATE: '0.4',
-    RESERVATION_FAILURE_INJECTION_SALT: 'aws-demo-managed-observability',
+    RESERVATION_FAILURE_INJECTION_MODE: 'disabled',
+    RESERVATION_FAILURE_INJECTION_RATE: '0',
   });
   expect(environmentFor(adotContainer)).toEqual({
     AMP_REMOTE_WRITE_ENDPOINT: {

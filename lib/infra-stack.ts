@@ -20,7 +20,6 @@ const AMP_QUERY_ACTIONS = ['aps:GetLabels', 'aps:GetMetricMetadata', 'aps:GetSer
 const CLOUDWATCH_METRIC_READ_ACTIONS = ['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics'];
 const STS_IDENTITY_ACTIONS = ['sts:GetCallerIdentity'];
 const XRAY_WRITE_ACTIONS = ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'];
-const RESERVATION_FAILURE_INJECTION_SALT = 'aws-demo-managed-observability';
 
 /** Input required to synthesize the current demo infrastructure stack. */
 export interface MovieReservationWorkloadStackProps extends cdk.StackProps {
@@ -362,9 +361,8 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         SERVICE_VERSION: applicationImage.serviceVersion,
         COMPOSITION_PROFILE: 'local-fixed-user',
         RESERVATION_WORKER_MODE: 'fake-in-process',
-        RESERVATION_FAILURE_INJECTION_MODE: 'stable-random-unexpected-error',
-        RESERVATION_FAILURE_INJECTION_RATE: '0.4',
-        RESERVATION_FAILURE_INJECTION_SALT,
+        RESERVATION_FAILURE_INJECTION_MODE: 'disabled',
+        RESERVATION_FAILURE_INJECTION_RATE: '0',
         OBSERVABILITY_ENABLED: 'true',
         OTEL_SERVICE_NAME: platformConfig.serviceName,
         OTEL_TRACES_EXPORTER: 'otlp',
