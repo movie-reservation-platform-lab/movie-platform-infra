@@ -8,7 +8,9 @@ The detailed procedures remain authoritative:
 
 - [Standalone-account access bootstrap](./standalone-account-access-bootstrap.md)
 - [AWS artifact-foundation runbook](./aws-artifact-foundation.md)
-- [AWS CDK deployment runbook](./aws-cdk-deployment.md)
+- [Temporary integrated AWS demo runbook](./temporary-integrated-demo.md), which
+  controls foundation expansion, six-image selection, deployment, acceptance,
+  and teardown for this release
 
 Do not treat completion of Gate 1 as permission to start Gate 2.
 
@@ -64,30 +66,33 @@ account IDs, role ARNs/suffixes, SSO URLs, email addresses, or session data.
 
 - [ ] The local offline verification in the deployment runbook passes again
       from the exact release checkout.
-- [ ] `ArtifactFoundationStack` is deployed through its controlling runbook;
-      termination protection, retain policies, outputs, repository settings,
-      lifecycle rule, and ownership tags are verified.
-- [ ] The private environments workflow resolves the foundation outputs and
-      admits the exact approved GHCR candidate; sanitized evidence records the
-      source and admitted digests without committing concrete target values.
+- [ ] `ArtifactFoundationStack` is deployed through Gate 1 of the integrated
+      runbook; termination protection, retain policies, all six repository
+      outputs/settings, lifecycle rules, and ownership tags are verified.
+- [ ] Gate 2 resolves six exact approved GHCR source digests. Reservation service
+      retains its generalized admission result; the other five candidates use
+      the reviewed temporary copy-and-verify path. Sanitized evidence records
+      matching source and destination digests without committing target values.
 - [ ] The preflight passes immediately before creating or changing the ingress
       prefix list; its owner, Region, IPv4 family, capacity, and reviewed `/32`
       entries are verified afterward.
 - [ ] The preflight passes immediately before the one-time CDK bootstrap, and
       the intended account/Region are supplied explicitly.
-- [ ] CDK synth and diff are reviewed with the exact prefix-list ID,
-      digest-pinned application image, and release identifier.
+- [ ] CDK synth and diff are reviewed with the exact prefix-list ID and all six
+      exact private-ECR `destinationImageReference` plus `deploymentVersion`
+      pairs from the environment release.
 - [ ] The preflight passes again immediately before deployment.
 - [ ] `MovieReservationWorkloadStack` deploys successfully, and its expected billable
       resources become healthy.
 
 ### Workload and Grafana acceptance
 
-- [ ] Workload health and the X-Ray and managed-metrics smoke checks pass.
+- [ ] Workload health, integrated happy/slow/error scenarios, and the X-Ray and
+      managed-metrics smoke checks pass.
 - [ ] The preflight passes before the Managed Grafana access changes.
 - [ ] The named operator is assigned to the deployed workspace and promoted to
-      Admin only long enough to create and test the AMP and CloudWatch data
-      sources.
+      Admin only long enough to create and test the AMP, CloudWatch metrics/logs,
+      and X-Ray data sources.
 - [ ] The operator is downgraded to Editor, starts a fresh session, and can use
       dashboards and Explore without being able to manage data sources.
 - [ ] The repository dashboard is imported only after the final Editor state is

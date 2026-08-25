@@ -367,10 +367,11 @@ has separate approval, `MovieReservationWorkloadStack` is deployed, and the work
 5. Promote that operator to **Admin** and verify the displayed role.
 6. Open the workspace URL in a fresh browser session and complete the
    MFA-backed Identity Center login.
-7. While Admin, create and test the Amazon Managed Service for Prometheus and
-   CloudWatch data sources in `eu-central-1`. Use the stack-created customer-
-   managed data-access role; do not enter human AWS credentials into Grafana.
-8. Confirm both data sources return a successful test/query result.
+7. While Admin, create and test the Amazon Managed Service for Prometheus,
+   CloudWatch, and AWS X-Ray data sources in `eu-central-1`. Use the stack-created
+   customer-managed data-access role; do not enter human AWS credentials into
+   Grafana. The CloudWatch source serves both metrics and Logs Insights.
+8. Confirm all three data sources return a successful test/query result.
 9. Return to the Amazon Managed Grafana workspace's **Authentication** page and
    change the operator's workspace role from Admin to **Editor**. Role changes
    belong in the Amazon Managed Grafana console/API, not inside the Grafana UI.

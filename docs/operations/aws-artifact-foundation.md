@@ -18,15 +18,17 @@ The repository deliberately has two CDK applications with different lifecycles:
 | Persistent artifact foundation | `bin/artifact-foundation.ts`; `npm run cdk:foundation -- ...` | Preserve between demos |
 | Disposable demo workload | `bin/infra.ts`; `npm run cdk -- ...` | Destroy promptly after a demo |
 
-`ArtifactFoundationStack` currently owns the account-local and Region-local
-`movie-reservation-service` ECR repository. The repository retains tagged
-admitted images, expires only untagged images older than seven days, and is
-protected by both CloudFormation termination protection and retain policies.
-It can still incur ordinary ECR storage and request charges while preserved.
+`ArtifactFoundationStack` owns one account-local and Region-local ECR repository
+for each integrated demo component: reservation web, agent, reservation MCP,
+recommendation MCP, reservation service, and recommendation service. Every
+repository retains tagged admitted images, expires only untagged images older
+than seven days, and is protected by both CloudFormation termination protection
+and retain policies. They can still incur ordinary ECR storage and request
+charges while preserved.
 
-`MovieReservationWorkloadStack` imports an explicitly selected ECR image by
-digest. It does not own the application repository and routine workload teardown
-must not remove admitted artifacts.
+`MovieReservationWorkloadStack` imports six explicitly selected ECR images by
+digest. It does not own the application repositories and routine workload
+teardown must not remove admitted artifacts.
 
 The following resources are outside both lifecycle commands:
 
@@ -187,13 +189,13 @@ with no blockers. Review its redacted target and confirm:
 
 - stack name `ArtifactFoundationStack`, successful status, and termination
   protection enabled;
-- repository name `movie-reservation-service` and registry account match;
+- all six repository names and registry accounts match the catalog;
 - immutable tags with no mutability exclusions;
 - AES-256 ECR encryption;
 - manual rather than scan-on-push scanning for the current lab model;
 - the seven-day expiration rule applies only to untagged images;
-- the exact `Platform`, `Service`, `Scope`, `Lifecycle`, and `ManagedBy` tags;
-- the three repository name, URI, and ARN outputs agree with the inspected
+- each repository has the exact `Platform`, `Service`, `Scope`, `Lifecycle`, and `ManagedBy` tags;
+- each repository's name, URI, and ARN outputs agree with the inspected
   repository; and
 - the inventory contains only the images actually present.
 
@@ -229,7 +231,8 @@ In the later environments-owned release workflow:
 2. Verify the approved immutable GHCR candidate and its evidence.
 3. Copy that exact artifact into the account-local ECR destination.
 4. Record the source and admitted digests in sanitized release evidence.
-5. Pass `<repository-uri>@sha256:<admitted-digest>` plus a human release ID to
+5. Pass every `destinationImageReference` plus its environments-owned
+   `deploymentVersion` (derived from the full source revision) to
    the [workload deployment runbook](./aws-cdk-deployment.md).
 6. Verify the requested digest against the running ECS task in the later
    environments acceptance workflow.
@@ -253,8 +256,9 @@ Use final cleanup only when retiring the project foundation or when the issue
 
 ## Guarded Final Cleanup
 
-Final cleanup permanently deletes the foundation repository and every image in
-it. It is intentionally a different CLI operation from workload teardown.
+Final cleanup permanently deletes all catalogued foundation repositories and
+every image in them. It is intentionally a different CLI operation from
+workload teardown.
 
 First ensure the disposable workload stack is gone. Then run the read-only
 inspection:
@@ -304,7 +308,7 @@ Do not infer current AWS state from the last command attempted.
 | Inspected state | Meaning and action |
 | --- | --- |
 | Foundation stack and expected repository exist | Normal state. Resolve blockers, review warnings, and use the ordinary guarded flow. |
-| Foundation stack is absent but the exact retained repository exists | Approved resumable state. Review the `RETAINED_REPOSITORY_WITHOUT_STACK` warning, obtain fresh approval, and rerun guarded execution; only the retained repository remains to delete. |
+| Foundation stack is absent but one or more exact retained repositories exist | Approved resumable state. Review each `RETAINED_REPOSITORY_WITHOUT_STACK` warning, obtain fresh approval, and rerun guarded execution; only the retained repositories remain to delete. |
 | Foundation stack exists but an expected repository is absent | Inconsistent and blocked. Do not create or delete a similarly named repository manually; investigate drift and use a corrective PR or reviewed recovery plan. |
 | Stack or repository operation is still in progress | Wait for a terminal AWS state, then inspect again. Never bypass the blocker. |
 | Both stack and configured repositories are absent | `NOTHING_TO_CLEAN`; stop successfully. |

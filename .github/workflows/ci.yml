@@ -107,6 +107,9 @@ jobs:
       - name: Validate managed-metrics smoke tooling
         run: npm run validate:managed-metrics-smoke
 
+      - name: Validate integrated-demo smoke tooling
+        run: npm run validate:integrated-demo-smoke
+
       - name: Validate Grafana dashboard
         run: npm run validate:grafana-dashboard
 

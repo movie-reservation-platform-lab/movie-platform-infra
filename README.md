@@ -12,11 +12,11 @@ synth or deployment.
 
 The current CDK app has two lifecycle boundaries:
 
-- `ArtifactFoundationStack` owns the persistent, account-local ECR repository
-  used for admitted reservation-service image artifacts. Routine demo teardown
-  must preserve this stack and its retained repository. Cleanup inspection reads
-  an explicit artifact destination catalog; it does not discover sibling
-  repositories from the workspace.
+- `ArtifactFoundationStack` owns the six persistent, account-local ECR
+  repositories used for admitted application image artifacts. Routine demo
+  teardown must preserve this stack and its retained repositories. Cleanup
+  inspection reads an explicit artifact destination catalog; it does not
+  discover sibling repositories from the workspace.
 - `MovieReservationWorkloadStack` owns the disposable AWS demo reservation workload.
 
 `MovieReservationWorkloadStack` models:
@@ -26,21 +26,22 @@ The current CDK app has two lifecycle boundaries:
 - private isolated Fargate task pinned to one workload Availability Zone;
 - no NAT Gateway;
 - ECS cluster named `movie-reservation-platform-aws-demo`;
-- imported digest-pinned reservation service image from private ECR;
+- six independently published, digest-pinned application images from private
+  ECR in one temporary seven-container task;
 - repository-owned ADOT collector Docker image asset;
-- one-week CloudWatch log groups for app logs, collector logs, application
-  metrics, and enhanced Container Insights performance events;
+- one-week CloudWatch log groups per application component, collector logs,
+  application metrics, and enhanced Container Insights performance events;
 - ADOT sidecar exporting traces to X-Ray and application/ECS metrics to
   CloudWatch and AMP;
 - disposable AMP workspace and prefix-list-restricted Amazon Managed Grafana
-  workspace;
+  workspace with read-only metrics, CloudWatch Logs, and X-Ray access;
 - VPC endpoints for ECR image pull, CloudWatch Logs, X-Ray, AMP remote write,
   and STS.
 
-The stack still runs the reservation service with
-`COMPOSITION_PROFILE=local-fixed-user` for the disposable demo. Database,
-multi-service topology, frontend hosting, MCP services, promotion automation,
-and environment manifests are separate follow-up slices.
+The integrated task runs the Nginx frontend, deterministic reservation agent,
+two MCP servers, two APIs, and ADOT over task-local loopback. Only web port 8088
+is registered with the ALB. This is a deadline demo shortcut, not the later
+independently deployable topology.
 
 ## Useful Commands
 
@@ -59,6 +60,7 @@ npm run test:tooling
 npm run validate:adot-image
 npm run validate:xray-smoke
 npm run validate:managed-metrics-smoke
+npm run validate:integrated-demo-smoke
 npm run validate:grafana-dashboard
 npm run synth:ecr-contract
 npm run synth:artifact-foundation
@@ -135,8 +137,8 @@ npm run cdk:foundation -- deploy ArtifactFoundationStack
 ```
 
 The deploy command creates the persistent, termination-protected ECR
-destination. The private `movie-platform-environments` repository will later
-admit an approved immutable GHCR candidate and hand its exact ECR digest to the
+destinations. The private `movie-platform-environments` repository selects the
+approved immutable GHCR candidates and hands their exact ECR digests to the
 workload deployment. This repository does not build sibling application source.
 
 Routine demo teardown must not run a foundation destroy command. Final project
@@ -186,19 +188,24 @@ binding and user authorization.
 
 ## Application Image Contract
 
-Standalone synth/deploy requires both application image inputs:
+Standalone synth/deploy maps each environment release component's
+`destinationImageReference` and `deploymentVersion` to a private-ECR image
+reference and service-version context pair:
 
-```bash
-npm run cdk -- synth \
-  -c allowedIngressPrefixListId=pl-0123456789abcdef0 \
-  -c 'applicationImageReference=111111111111.dkr.ecr.eu-central-1.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest>' \
-  -c 'applicationServiceVersion=<release-id>'
-```
+| Component | Image context | Version context |
+| --- | --- | --- |
+| Reservation service | `applicationImageReference` | `applicationServiceVersion` |
+| Reservation web | `reservationWebImageReference` | `reservationWebServiceVersion` |
+| Reservation agent | `reservationAgentImageReference` | `reservationAgentServiceVersion` |
+| Reservation MCP | `reservationMcpImageReference` | `reservationMcpServiceVersion` |
+| Recommendation MCP | `recommendationMcpImageReference` | `recommendationMcpServiceVersion` |
+| Recommendation service | `recommendationServiceImageReference` | `recommendationServiceVersion` |
 
-The image reference must be a private ECR URI pinned by `sha256` digest. Mutable
-tags such as `latest` or `1.2.3` are rejected. In ECR image mode,
-`CDK_DEFAULT_ACCOUNT` and `CDK_DEFAULT_REGION` must match the registry account
-and Region encoded in the image URI.
+Every image reference must use its expected repository and be pinned by a
+`sha256` digest. Mutable tags are rejected. All six references must encode the
+same concrete account and Region supplied through `CDK_DEFAULT_ACCOUNT` and
+`CDK_DEFAULT_REGION`. The environment release's `sourceVersion` remains
+provenance and must not replace `deploymentVersion` at this boundary.
 
 ## Ingress Prefix List
 
@@ -246,56 +253,19 @@ not add `0.0.0.0/0`.
 
 ## Workload CDK Workflow
 
-The workload CDK application has three separate steps:
-
-- `synth` runs the TypeScript app and writes a CloudFormation template to
-  `cdk.out`.
-- `bootstrap` prepares one AWS account and Region for CDK deployments by
-  creating CDK toolkit resources, including asset storage.
-- `deploy` publishes assets, creates a CloudFormation change set, and applies it
-  to the selected AWS account and Region.
-
-Use this order for a real deployment:
-
-```bash
-export AWS_PROFILE=movie-platform-demo
-export AWS_REGION=eu-central-1
-export AWS_ACCOUNT_ID='<12-digit-account-id>'
-export ALLOWED_INGRESS_PREFIX_LIST_ID=pl-0123456789abcdef0
-export APPLICATION_IMAGE_REFERENCE="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest>"
-export APPLICATION_SERVICE_VERSION='<release-id>'
-
-aws sso login --profile "$AWS_PROFILE"
-npm run preflight:aws
-
-npm run cdk -- bootstrap "aws://$AWS_ACCOUNT_ID/$AWS_REGION" \
-  -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
-  -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
-  -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
-
-npm run cdk -- synth \
-  -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
-  -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
-  -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
-
-npm run cdk -- diff \
-  -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
-  -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
-  -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
-
-npm run preflight:aws
-
-npm run cdk -- deploy MovieReservationWorkloadStack \
-  -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
-  -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
-  -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
-```
+Use the
+[temporary integrated demo runbook](docs/operations/temporary-integrated-demo.md)
+as the controlling sequence for the six-image release. It supplies the complete
+context array and separate approval gates for foundation expansion, exact
+artifact copying, CDK diff, workload deployment, Grafana setup, smoke, and
+teardown.
 
 Do not run `deploy` until the account, Region, stack name, ingress prefix list,
-selected application digest, and expected cost are clear. This stack creates a
-public ALB, ECS/Fargate service, an ADOT Docker image asset, CloudWatch log
-groups, custom and enhanced Container Insights metrics, AMP and Managed Grafana
-workspaces, a Grafana data-access role, and interface VPC endpoints.
+all six application digests, expected cost, and teardown owner are clear. The
+stack creates a public ALB, ECS/Fargate service, an ADOT Docker image asset,
+CloudWatch log groups, custom and enhanced Container Insights metrics, AMP and
+Managed Grafana workspaces, a Grafana data-access role, and interface VPC
+endpoints.
 
 For a real deploy, replace `pl-0123456789abcdef0` with your customer-managed
 IPv4 prefix list ID. The configuration boundary validates the ID shape offline.
@@ -306,8 +276,16 @@ entries before deployment.
 
 ## Smoke Tooling
 
-After deployment, run the deterministic trace smoke with the same AWS profile
-and Region:
+After deployment, run the three application scenarios through the public web
+route before the telemetry-specific checks:
+
+```bash
+npm run smoke:integrated-demo -- \
+  --base-url "$DEMO_BASE_URL" \
+  --report .local/integrated-demo-smoke.json
+```
+
+Then run the deterministic trace smoke with the same AWS profile and Region:
 
 ```bash
 AWS_PROFILE="$AWS_PROFILE" AWS_REGION="$AWS_REGION" \
@@ -323,16 +301,9 @@ AWS_PROFILE="$AWS_PROFILE" AWS_REGION="$AWS_REGION" \
 
 ## Teardown
 
-Destroy the stack with the same required context boundary:
-
-```bash
-npm run preflight:aws
-
-npm run cdk -- destroy MovieReservationWorkloadStack \
-  -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
-  -c applicationImageReference="$APPLICATION_IMAGE_REFERENCE" \
-  -c applicationServiceVersion="$APPLICATION_SERVICE_VERSION"
-```
+Use Gate 6 of the
+[temporary integrated demo runbook](docs/operations/temporary-integrated-demo.md#gate-6-teardown)
+with the same complete six-image context and a fresh explicit approval.
 
 Confirm that the CloudFormation stack, ALB, ECS service/tasks, AMP and Grafana
 workspaces, Grafana role, VPC endpoints, and log groups are gone. The
@@ -343,7 +314,7 @@ to replace and remove the temporary `AdministratorAccess` assignment before a
 second workload deployment.
 
 This is routine demo teardown. It intentionally preserves
-`ArtifactFoundationStack` and the retained ECR repository. For final project
+`ArtifactFoundationStack` and the retained ECR repositories. For final project
 cleanup, follow the separate controlling runbook and inspect readiness first:
 
 ```bash
@@ -352,13 +323,8 @@ npm run cleanup:artifact-foundation
 
 ## Optional Context
 
-```bash
-npm run cdk -- synth \
-  -c allowedIngressPrefixListId=pl-0123456789abcdef0 \
-  -c 'applicationImageReference=<account-id>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<64-hex-digest>' \
-  -c 'applicationServiceVersion=<release-id>' \
-  -c enableEcsExec=true
-```
+Append `-c enableEcsExec=true` to every synth, diff, deploy, and destroy command
+that uses the runbook's complete `CDK_CONTEXT` array.
 
 `enableEcsExec=true` enables ECS Exec on the service, adds the private
 `ssmmessages` endpoint, and grants the ECS task role permission to open the SSM
