@@ -2,8 +2,15 @@ import {
   ARTIFACT_COPY_FAILURE_CODE,
   ArtifactCopyFailure,
 } from '../src/artifact-copy-error';
-import { copyAndVerifyArtifact } from '../src/artifact-copy';
-import { ARTIFACT_COPY_VERIFICATION_METHOD, type RegistryImageClient } from '../src/model';
+import { copyAndVerifyArtifact, transferAndVerifyArtifact } from '../src/artifact-copy';
+import {
+  ARTIFACT_COPY_VERIFICATION_METHOD,
+  ARTIFACT_TRANSFER_OPERATION,
+  ARTIFACT_TRANSFER_OUTCOME,
+  ARTIFACT_TRANSFER_VERIFICATION_METHOD,
+  type ArtifactTransferRequest,
+  type RegistryImageClient,
+} from '../src/model';
 import { CONFIG_DIGEST, LAYER_DIGEST_A, LAYER_DIGEST_B, createCopyFixture } from './test-support';
 
 test('verifies source before copying and destination after copying', async () => {
@@ -61,6 +68,116 @@ test('passes separate source and destination auth files to the registry port', a
     sourceAuthFile: request.sourceAuthFile,
     destinationAuthFile: request.destinationAuthFile,
   });
+});
+
+test('v2 copy-and-verify preserves source-read, copy, destination-read ordering', async () => {
+  const fixture = createCopyFixture();
+  const events: string[] = [];
+  const client: RegistryImageClient = {
+    readRawManifest: async ({ reference }) => {
+      events.push(`read:${reference}`);
+      return fixture.rawManifest;
+    },
+    copy: async ({ destinationReference }) => {
+      events.push(`copy:${destinationReference}`);
+    },
+  };
+
+  const result = await transferAndVerifyArtifact({
+    ...fixture.request,
+    operation: ARTIFACT_TRANSFER_OPERATION.COPY_AND_VERIFY,
+  }, client);
+
+  expect(result).toEqual({
+    verificationMethod: ARTIFACT_TRANSFER_VERIFICATION_METHOD,
+    outcome: ARTIFACT_TRANSFER_OUTCOME.COPIED,
+    sourceManifestDigest: fixture.digest,
+    destinationManifestDigest: fixture.digest,
+    configDigest: CONFIG_DIGEST,
+    layerDigests: [LAYER_DIGEST_A, LAYER_DIGEST_B],
+  });
+  expect(events).toEqual([
+    `read:${fixture.request.sourceReference}`,
+    `copy:${fixture.request.destinationRepository}:sha256-${fixture.digest.slice('sha256:'.length)}`,
+    `read:${fixture.request.destinationRepository}@${fixture.digest}`,
+  ]);
+  expect(Object.isFrozen(result)).toBe(true);
+  expect(Object.isFrozen(result.layerDigests)).toBe(true);
+});
+
+test('v2 verify-existing performs two reads and never invokes the mutating port', async () => {
+  const fixture = createCopyFixture();
+  const readRawManifest = jest.fn(async () => fixture.rawManifest);
+  const copy = jest.fn(async () => undefined);
+  const client: RegistryImageClient = { readRawManifest, copy };
+
+  const result = await transferAndVerifyArtifact({
+    ...fixture.request,
+    operation: ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING,
+  }, client);
+
+  expect(result).toEqual({
+    verificationMethod: ARTIFACT_TRANSFER_VERIFICATION_METHOD,
+    outcome: ARTIFACT_TRANSFER_OUTCOME.ALREADY_PRESENT,
+    sourceManifestDigest: fixture.digest,
+    destinationManifestDigest: fixture.digest,
+    configDigest: CONFIG_DIGEST,
+    layerDigests: [LAYER_DIGEST_A, LAYER_DIGEST_B],
+  });
+  expect(readRawManifest).toHaveBeenNthCalledWith(1, {
+    reference: fixture.request.sourceReference,
+    authFile: undefined,
+  });
+  expect(readRawManifest).toHaveBeenNthCalledWith(2, {
+    reference: `${fixture.request.destinationRepository}@${fixture.digest}`,
+    authFile: fixture.request.destinationAuthFile,
+  });
+  expect(copy).not.toHaveBeenCalled();
+});
+
+test('v2 verify-existing does not copy when destination verification fails', async () => {
+  const fixture = createCopyFixture();
+  let reads = 0;
+  const copy = jest.fn(async () => undefined);
+  const client: RegistryImageClient = {
+    readRawManifest: async () => {
+      reads += 1;
+      if (reads === 2) {
+        throw new Error('destination absent');
+      }
+      return fixture.rawManifest;
+    },
+    copy,
+  };
+
+  await expect(transferAndVerifyArtifact({
+    ...fixture.request,
+    operation: ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING,
+  }, client)).rejects.toMatchObject({
+    code: ARTIFACT_COPY_FAILURE_CODE.DESTINATION_READ_FAILED,
+  });
+  expect(copy).not.toHaveBeenCalled();
+});
+
+test('v2 rejects an unknown operation before invoking the registry port', async () => {
+  const fixture = createCopyFixture();
+  const client: RegistryImageClient = {
+    readRawManifest: jest.fn(async () => fixture.rawManifest),
+    copy: jest.fn(async () => undefined),
+  };
+  const request = {
+    ...fixture.request,
+    operation: 'copy-if-needed',
+  } as unknown as ArtifactTransferRequest;
+
+  await expect(transferAndVerifyArtifact(request, client)).rejects.toEqual(
+    new ArtifactCopyFailure(
+      ARTIFACT_COPY_FAILURE_CODE.INVALID_INPUT,
+      'operation must be copy-and-verify or verify-existing',
+    ),
+  );
+  expect(client.readRawManifest).not.toHaveBeenCalled();
+  expect(client.copy).not.toHaveBeenCalled();
 });
 
 test('rejects invalid source bytes before invoking the mutating port', async () => {

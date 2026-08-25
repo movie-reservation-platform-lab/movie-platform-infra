@@ -11,8 +11,9 @@ import {
   ARTIFACT_COPY_FAILURE_STAGE,
   ArtifactCopyFailure,
 } from './artifact-copy-error';
-import { copyAndVerifyArtifact } from './artifact-copy';
+import { copyAndVerifyArtifact, transferAndVerifyArtifact } from './artifact-copy';
 import {
+  ARTIFACT_COPY_CLI_REQUEST_VERSION,
   ArtifactCopyCliInputFailure,
   MAX_ARTIFACT_COPY_REQUEST_BYTES,
   parseArtifactCopyCliRequest,
@@ -20,6 +21,8 @@ import {
 import type {
   ArtifactCopyRequest,
   ArtifactCopyVerification,
+  ArtifactTransferRequest,
+  ArtifactTransferVerification,
   RegistryImageClient,
 } from './model';
 import { createSkopeoRegistryClient } from './skopeo-client';
@@ -56,6 +59,10 @@ export interface ArtifactCopyCliDependencies {
     request: ArtifactCopyRequest,
     client: RegistryImageClient,
   ) => Promise<ArtifactCopyVerification>;
+  readonly transferArtifact: (
+    request: ArtifactTransferRequest,
+    client: RegistryImageClient,
+  ) => Promise<ArtifactTransferVerification>;
 }
 
 interface CliOptions {
@@ -81,6 +88,7 @@ const PRODUCTION_DEPENDENCIES: ArtifactCopyCliDependencies = {
   createRegistryClient: (trustedSkopeoExecutable) =>
     createSkopeoRegistryClient({ executablePath: trustedSkopeoExecutable }),
   copyArtifact: copyAndVerifyArtifact,
+  transferArtifact: transferAndVerifyArtifact,
 };
 const CLI_OPTIONS = {
   help: {
@@ -99,8 +107,9 @@ const USAGE = [
   '         --skopeo-executable <normalized-absolute-path>',
   '       npm run copy:artifact -- --help',
   '',
-  'Copies and verifies one approved, digest-pinned single-image manifest.',
-  'The request file must be strict artifact-copy-request-v1 JSON. The pinned',
+  'Copies or verifies one approved, digest-pinned single-image manifest.',
+  'The request file must be strict artifact-copy-request-v1 or v2 JSON. V2',
+  'requires copy-and-verify or verify-existing. The pinned',
   'private workflow separately supplies the trusted Skopeo executable path.',
   'Registry credentials remain in referenced auth files and are never accepted',
   'inline.',
@@ -130,7 +139,9 @@ export async function runCli(
     const rawRequest = readRequest(requestFile, dependencies.readRequestFile);
     const request = parseArtifactCopyCliRequest(rawRequest);
     const client = dependencies.createRegistryClient(skopeoExecutable);
-    const result = await dependencies.copyArtifact(request.copyRequest, client);
+    const result = request.requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION
+      ? await dependencies.copyArtifact(request.copyRequest, client)
+      : await dependencies.transferArtifact(request.transferRequest, client);
     streams.stdout(`${JSON.stringify(result)}\n`);
     return ARTIFACT_COPY_CLI_EXIT_CODE.SUCCESS;
   } catch (error: unknown) {

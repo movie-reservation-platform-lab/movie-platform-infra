@@ -12,7 +12,7 @@ export {
   type ArtifactCopyCliDependencies,
   type ArtifactCopyCliStreams,
 } from './cli';
-export { copyAndVerifyArtifact } from './artifact-copy';
+export { copyAndVerifyArtifact, transferAndVerifyArtifact } from './artifact-copy';
 export {
   DOCKER_V2_IMAGE_MANIFEST_MEDIA_TYPE,
   OCI_IMAGE_MANIFEST_MEDIA_TYPE,
@@ -22,8 +22,15 @@ export {
 } from './image-manifest';
 export {
   ARTIFACT_COPY_VERIFICATION_METHOD,
+  ARTIFACT_TRANSFER_OPERATION,
+  ARTIFACT_TRANSFER_OUTCOME,
+  ARTIFACT_TRANSFER_VERIFICATION_METHOD,
   type ArtifactCopyRequest,
   type ArtifactCopyVerification,
+  type ArtifactTransferOperation,
+  type ArtifactTransferOutcome,
+  type ArtifactTransferRequest,
+  type ArtifactTransferVerification,
   type ImageManifestIdentity,
   type RawManifestReadRequest,
   type RegistryCopyRequest,

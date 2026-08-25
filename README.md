@@ -51,6 +51,7 @@ npm ci
 npm run validate:aws-account-preflight
 npm run validate:artifact-foundation-cleanup
 npm run validate:artifact-copy
+npm run build:artifact-copy-cli
 npm run copy:artifact -- --help
 npm run build
 npm run test:cdk
@@ -70,14 +71,16 @@ and artifact-copy automation packages have their own TypeScript and Jest
 configurations, so CI validates them separately and before CDK or tooling tests.
 
 `npm run validate:artifact-copy` is credential-free and performs no registry
-mutation. It validates strict single-manifest copy mechanics, the no-shell
-Skopeo adapter contract, and the sanitized CLI boundary. The live invocation
-accepts a strict request file and a separate trusted `--skopeo-executable`
-argument through `npm run copy:artifact`; candidate policy, binary pinning,
+mutation. It validates strict single-manifest copy and existing-content
+verification mechanics, the no-shell Skopeo adapter contract, and the sanitized
+CLI boundary. The live invocation accepts a strict versioned request file and a
+separate trusted `--skopeo-executable` argument through
+`npm run copy:artifact`; candidate policy, operation selection, binary pinning,
 trusted destination selection, credentials, and orchestration remain private
 environment-repository work. See
 [`automation/artifact-copy/README.md`](automation/artifact-copy/README.md) for
-the request schema and stable exit classifications.
+the request schema, credential-free compiled-runtime handoff, and stable exit
+classifications.
 
 `npm run synth:ecr-contract` uses a fake account, fake repository, and all-zero
 digest with `--no-lookups`. It proves the CDK app accepts an immutable image
