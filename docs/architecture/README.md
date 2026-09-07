@@ -5,8 +5,8 @@ infrastructure repository.
 
 ## Current Stack Boundaries
 
-The repository has two independent CDK applications because admitted artifacts
-and demo compute have different lifecycles:
+The repository has independent CDK applications because artifacts, compute,
+operational telemetry and audit evidence have different lifecycles:
 
 - `ArtifactFoundationStack` owns six persistent, account-local and Region-local
   ECR destinations for the integrated demo images. Termination
@@ -16,12 +16,16 @@ and demo compute have different lifecycles:
 
   - internet-facing Application Load Balancer;
   - two-AZ VPC with public and isolated subnet groups;
-  - private isolated ECS/Fargate task containing six applications and ADOT;
+  - private isolated ECS/Fargate task containing six applications, ADOT and FireLens;
   - six digest-pinned application images imported from foundation repositories;
-  - repository-owned ADOT collector image asset;
-  - separate CloudWatch logs, X-Ray traces, AMP/CloudWatch metrics, and unified Managed Grafana views;
+  - repository-owned collector/router assets and imported telemetry destinations;
   - VPC endpoints for private AWS service access; and
   - customer-managed IPv4 prefix list for ALB and Grafana ingress.
+- `ObservabilityStack` owns operational log groups, AMP and optional Grafana.
+- `AuditStack` owns Firehose, S3 evidence, CloudTrail, Glue and Athena.
+
+The [audit and observability architecture](./audit-and-observability.md) is the
+current source of truth for these ownership boundaries and correlation paths.
 
 The current applications intentionally do not yet own:
 
@@ -50,3 +54,4 @@ The current applications intentionally do not yet own:
 ## Detailed Notes
 
 - [AWS Resource Topology](./aws-resource-topology.md)
+- [Audit and Observability](./audit-and-observability.md)

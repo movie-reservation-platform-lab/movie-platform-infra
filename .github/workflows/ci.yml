@@ -74,6 +74,9 @@ jobs:
       - name: Run artifact-foundation CDK assertion tests
         run: npm run test:cdk:foundation
 
+      - name: Run audit and observability foundation tests
+        run: npm run test:cdk:audit-foundations
+
   # Validates repository tooling that supports deployability and operations,
   # including image, smoke-test, metrics, and dashboard checks.
   tooling:
@@ -100,6 +103,9 @@ jobs:
 
       - name: Validate ADOT image
         run: npm run validate:adot-image
+
+      - name: Validate audit router with real Fluent Bit and no AWS network
+        run: npm run validate:audit-router
 
       - name: Validate X-Ray smoke tooling
         run: npm run validate:xray-smoke
@@ -141,3 +147,9 @@ jobs:
 
       - name: Run artifact-foundation offline synth contract
         run: npm run synth:artifact-foundation
+
+      - name: Synthesize independent audit foundation
+        run: npm run synth:audit
+
+      - name: Synthesize independent observability foundation
+        run: npm run synth:observability

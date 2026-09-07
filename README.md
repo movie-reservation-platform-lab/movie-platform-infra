@@ -10,7 +10,7 @@ synth or deployment.
 
 ## Current Stacks
 
-The current CDK app has two lifecycle boundaries:
+The current CDK apps have separate lifecycle boundaries:
 
 - `ArtifactFoundationStack` owns the six persistent, account-local ECR
   repositories used for admitted application image artifacts. Routine demo
@@ -18,6 +18,13 @@ The current CDK app has two lifecycle boundaries:
   inspection reads an explicit artifact destination catalog; it does not
   discover sibling repositories from the workspace.
 - `MovieReservationWorkloadStack` owns the disposable AWS demo reservation workload.
+- `ObservabilityStack` owns AMP, optional Grafana and operational log groups.
+- `AuditStack` owns Firehose, the S3 audit/ALB archives, CloudTrail and Athena.
+
+Start with the [audit demo deploy/destroy runbook](docs/operations/audit-demo.md)
+and [architecture](docs/architecture/audit-and-observability.md). Both foundations
+must exist before workload deployment. Their resources are not deleted by a
+workload-only teardown.
 
 `MovieReservationWorkloadStack` models:
 
@@ -27,19 +34,18 @@ The current CDK app has two lifecycle boundaries:
 - no NAT Gateway;
 - ECS cluster named `movie-reservation-platform-aws-demo`;
 - six independently published, digest-pinned application images from private
-  ECR in one temporary seven-container task;
-- repository-owned ADOT collector Docker image asset;
-- one-week CloudWatch log groups per application component, collector logs,
-  application metrics, and enhanced Container Insights performance events;
+  ECR in one temporary eight-container task;
+- repository-owned ADOT collector and FireLens/Fluent Bit router image assets;
+- imported operational log groups owned by the observability stack;
 - ADOT sidecar exporting traces to X-Ray and application/ECS metrics to
   CloudWatch and AMP;
-- disposable AMP workspace and prefix-list-restricted Amazon Managed Grafana
-  workspace with read-only metrics, CloudWatch Logs, and X-Ray access;
+- imported AMP and Grafana discovery outputs;
 - VPC endpoints for ECR image pull, CloudWatch Logs, X-Ray, AMP remote write,
-  and STS.
+  STS, Firehose and (when demo login is enabled) Secrets Manager;
+- native ALB access logs in the audit-owned bucket.
 
 The integrated task runs the Nginx frontend, deterministic reservation agent,
-two MCP servers, two APIs, and ADOT over task-local loopback. Only web port 8088
+two MCP servers, two APIs, ADOT and the audit router. Only web port 8088
 is registered with the ALB. This is a deadline demo shortcut, not the later
 independently deployable topology.
 
@@ -58,12 +64,15 @@ npm run build
 npm run test:cdk
 npm run test:tooling
 npm run validate:adot-image
+npm run validate:audit-router
 npm run validate:xray-smoke
 npm run validate:managed-metrics-smoke
 npm run validate:integrated-demo-smoke
 npm run validate:grafana-dashboard
 npm run synth:ecr-contract
 npm run synth:artifact-foundation
+npm run synth:audit
+npm run synth:observability
 npm run ci
 ```
 

@@ -1,5 +1,9 @@
 # AWS Resource Topology
 
+Historical single-stack topology. Current ownership and the eight-container
+request/audit path are documented in
+[Audit and Observability](audit-and-observability.md).
+
 This page describes the persistent artifact foundation modeled by
 `ArtifactFoundationStack` and the disposable resources modeled by
 `MovieReservationWorkloadStack`. The two CDK applications are intentionally

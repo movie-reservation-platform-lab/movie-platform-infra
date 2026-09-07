@@ -1,5 +1,11 @@
 # Temporary Integrated AWS Demo Runbook
 
+Historical deployment sequence. For current code use the
+[audit demo runbook](audit-demo.md): audit and observability now deploy separately,
+and the task has an additional FireLens router. The artifact-copy background and
+existing smoke commands below remain useful; do not follow its old one-stack
+ownership/teardown assumptions.
+
 This is the controlling operator path for the deadline-oriented seven-container
 AWS demo. It deploys six independently published application images plus the
 repository-owned ADOT collector in one disposable Fargate task. Only the Nginx

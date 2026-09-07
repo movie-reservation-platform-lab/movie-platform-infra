@@ -40,6 +40,8 @@ export interface PlatformConfig {
   readonly workloadAzCount: 1;
   readonly enableEcsExec: boolean;
   readonly metricsExportIntervalSeconds: number;
+  readonly demoAuthEnabled: boolean;
+  readonly demoAuthSecretArn?: string;
 }
 
 /** Untrusted values accepted from CDK context at the application boundary. */
@@ -60,6 +62,8 @@ export interface PlatformConfigContext {
   readonly recommendationServiceVersion?: unknown;
   readonly enableEcsExec?: unknown;
   readonly metricsExportIntervalSeconds?: unknown;
+  readonly demoAuthEnabled?: unknown;
+  readonly demoAuthSecretArn?: unknown;
 }
 
 interface ComponentInputDefinition {
@@ -243,6 +247,17 @@ export function resolvePlatformConfig(
   context: PlatformConfigContext,
   deploymentTarget: DeploymentTarget = {},
 ): PlatformConfig {
+  const demoAuthEnabled = parseBoolean(context.demoAuthEnabled, 'demoAuthEnabled');
+  let demoAuthSecretArn: string | undefined;
+  if (demoAuthEnabled) {
+    demoAuthSecretArn = parseRequiredString(context.demoAuthSecretArn, 'demoAuthSecretArn');
+    const match = /^arn:aws:secretsmanager:([a-z0-9-]+):(\d{12}):secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}$/.exec(demoAuthSecretArn);
+    if (!match || match[1] !== deploymentTarget.region || match[2] !== deploymentTarget.account) {
+      throw new Error('demoAuthSecretArn must be a complete Secrets Manager ARN in the deployment account and Region.');
+    }
+  } else if (context.demoAuthSecretArn !== undefined) {
+    throw new Error('demoAuthSecretArn requires demoAuthEnabled=true.');
+  }
   return {
     platformName: 'movie-reservation-platform',
     serviceName: 'movie-platform-demo',
@@ -252,6 +267,8 @@ export function resolvePlatformConfig(
     vpcMaxAzs: 2,
     workloadAzCount: 1,
     enableEcsExec: parseBoolean(context.enableEcsExec, 'enableEcsExec'),
+    demoAuthEnabled,
+    demoAuthSecretArn,
     metricsExportIntervalSeconds: parseIntegerInRange(
       context.metricsExportIntervalSeconds,
       'metricsExportIntervalSeconds',
