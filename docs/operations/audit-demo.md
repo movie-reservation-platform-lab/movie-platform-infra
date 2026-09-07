@@ -166,6 +166,11 @@ npm run cdk -- synth MovieReservationWorkloadStack --no-lookups \
   -c recommendationServiceImageReference="$RECOMMENDATION_SERVICE_IMAGE" \
   -c recommendationServiceVersion="$RECOMMENDATION_SERVICE_VERSION" \
   -c demoAuthEnabled=true -c demoAuthSecretArn="$DEMO_AUTH_SECRET_ARN"
+```
+
+For either synth path, review and deploy the saved workload assembly:
+
+```bash
 npm run cdk -- --app .local/audit-demo/workload-assembly diff MovieReservationWorkloadStack --change-set=false
 npm run preflight:aws
 npm run cdk -- --app .local/audit-demo/workload-assembly deploy MovieReservationWorkloadStack
