@@ -27,6 +27,8 @@ const platformConfig = resolvePlatformConfig(
     recommendationServiceVersion: app.node.tryGetContext('recommendationServiceVersion'),
     enableEcsExec: app.node.tryGetContext('enableEcsExec'),
     metricsExportIntervalSeconds: app.node.tryGetContext('metricsExportIntervalSeconds'),
+    demoAuthEnabled: app.node.tryGetContext('demoAuthEnabled'),
+    demoAuthSecretArn: app.node.tryGetContext('demoAuthSecretArn'),
   },
   deploymentTarget,
 );

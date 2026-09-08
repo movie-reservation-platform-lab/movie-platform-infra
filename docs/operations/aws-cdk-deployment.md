@@ -1,5 +1,10 @@
 # AWS CDK Deployment Runbook
 
+For the current three-stack implementation use the
+[audit demo deployment/cleanup runbook](audit-demo.md). This older page explains
+CDK and account prerequisites but its single-stack commands and observability
+ownership no longer describe current deployment.
+
 This runbook deploys the disposable `MovieReservationWorkloadStack` from a
 developer workstation into an AWS account, verifies the infrastructure
 contract, and removes the deployed workload resources afterward.

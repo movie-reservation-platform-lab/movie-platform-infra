@@ -1,0 +1,6 @@
+*
+!Dockerfile
+!platform.conf
+!parsers.conf
+!routing.conf
+!route.lua

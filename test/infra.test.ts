@@ -3,6 +3,8 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 
 import { MovieReservationWorkloadStack } from '../lib/infra-stack';
+import { ObservabilityStack } from '../lib/observability-stack';
+import { resolveObservabilityConfig } from '../lib/config/foundation-config';
 import {
   APPLICATION_COMPONENT_INPUTS,
   resolvePlatformConfig,
@@ -95,8 +97,13 @@ function actions(statement: { readonly Action: string | string[] }): string[] {
 }
 
 let template: Template;
+let observabilityTemplate: Template;
 beforeAll(() => {
   template = synthesized();
+  observabilityTemplate = Template.fromStack(new ObservabilityStack(new cdk.App(), 'ObservabilityTest', {
+    env: TEST_TARGET,
+    config: resolveObservabilityConfig({ allowedIngressPrefixListId: 'pl-0123456789abcdef0' }),
+  }));
 });
 
 test('validates a complete six-component digest-pinned release', () => {
@@ -228,9 +235,10 @@ test('validates ingress, ECS Exec, and metrics cadence at the context boundary',
   ).toMatchObject({ enableEcsExec: true, metricsExportIntervalSeconds: 45 });
 });
 
-test('imports all six ECR images by exact digest and keeps ADOT as the only Docker asset', () => {
+test('imports all six ECR images by exact digest and builds only owned collector/router assets', () => {
   const stack = createStack();
   expect(stack.node.tryFindChild('AdotImage')).toBeInstanceOf(ecrAssets.DockerImageAsset);
+  expect(stack.node.tryFindChild('AuditRouterImage')).toBeInstanceOf(ecrAssets.DockerImageAsset);
   template.resourceCountIs('AWS::ECR::Repository', 0);
 
   for (const input of APPLICATION_COMPONENT_INPUTS) {
@@ -248,22 +256,33 @@ test('creates the no-NAT private workload network and required AWS endpoints', (
   const endpointServices = resources(template, 'AWS::EC2::VPCEndpoint').map(
     ({ Properties }) => Properties?.ServiceName,
   );
-  for (const suffix of ['ecr.api', 'ecr.dkr', 'logs', 'xray', 'aps-workspaces', 'sts']) {
+  for (const suffix of ['ecr.api', 'ecr.dkr', 'logs', 'xray', 'aps-workspaces', 'sts', 'kinesis-firehose']) {
     expect(JSON.stringify(endpointServices)).toContain(suffix);
   }
+});
+
+test('does not request availability-zone lookups for an account without cached context', () => {
+  const app = new cdk.App({ context: {} });
+  new MovieReservationWorkloadStack(app, 'UncachedWorkload', {
+    env: TEST_TARGET,
+    platformConfig: resolvePlatformConfig({ allowedIngressPrefixListId: 'pl-0123456789abcdef0', ...TEST_CONTEXT }, TEST_TARGET),
+  });
+  expect(app.synth().manifest.missing ?? []).toEqual([]);
 });
 
 test('creates one 2-vCPU/4-GiB task with six essential apps and nonessential ADOT', () => {
   template.hasResourceProperties('AWS::ECS::TaskDefinition', {
     Cpu: '2048',
+    RuntimePlatform: { CpuArchitecture: 'X86_64', OperatingSystemFamily: 'LINUX' },
     Memory: '4096',
     NetworkMode: 'awsvpc',
   });
   const definitions = containers(template);
-  expect(definitions).toHaveLength(7);
+  expect(definitions).toHaveLength(8);
   expect(definitions.map(({ Name }) => Name).sort()).toEqual(
     [
       'adot-collector',
+      'audit-router',
       'movie-recommendation-mcp',
       'movie-recommendation-service',
       'movie-reservation-agent',
@@ -272,12 +291,14 @@ test('creates one 2-vCPU/4-GiB task with six essential apps and nonessential ADO
       'movie-reservation-web',
     ].sort(),
   );
-  expect(definitions.filter(({ Essential }) => Essential).length).toBe(6);
+  expect(definitions.filter(({ Essential }) => Essential).length).toBe(7);
+  expect(definitions.reduce((total, definition) => total + definition.Cpu, 0)).toBeLessThanOrEqual(2048);
+  expect(definitions.reduce((total, definition) => total + definition.Memory, 0)).toBeLessThanOrEqual(4096);
   expect(container(template, 'adot-collector')).toMatchObject({
     Essential: false,
     RestartPolicy: { Enabled: true, RestartAttemptPeriod: 60 },
   });
-  for (const name of definitions.filter(({ Essential }) => Essential).map(({ Name }) => Name)) {
+  for (const name of definitions.filter(({ Name }) => Name.startsWith('movie-')).map(({ Name }) => Name)) {
     expect(container(template, name).HealthCheck).toMatchObject({
       Interval: 15,
       Retries: 5,
@@ -405,8 +426,9 @@ test('exposes only web port 8088 through the prefix-list-restricted ALB', () => 
 });
 
 test('uses separate disposable one-week logs for every component, ADOT, metrics, and Container Insights', () => {
-  const logGroups = resources(template, 'AWS::Logs::LogGroup');
-  expect(logGroups).toHaveLength(9);
+  template.resourceCountIs('AWS::Logs::LogGroup', 0);
+  const logGroups = resources(observabilityTemplate, 'AWS::Logs::LogGroup');
+  expect(logGroups).toHaveLength(10);
   const names = logGroups.map(({ Properties }) => Properties?.LogGroupName);
   for (const component of APPLICATION_COMPONENT_INPUTS) {
     expect(names).toContain(`/movie-platform/aws-demo/${component.componentId}/app`);
@@ -422,16 +444,17 @@ test('uses separate disposable one-week logs for every component, ADOT, metrics,
     expect(logGroup.Properties?.RetentionInDays).toBe(7);
     expect(logGroup.DeletionPolicy).toBe('Delete');
   }
-  expect(new Set(containers(template).map(({ LogConfiguration }) => LogConfiguration?.Options?.['awslogs-group']).filter(Boolean)).size).toBe(7);
+  expect(containers(template).filter(({ LogConfiguration }) => LogConfiguration?.Options?.['awslogs-group'])).toHaveLength(2);
 });
 
 test('keeps Grafana read-only while granting approved AMP, metric, bounded log, and X-Ray reads', () => {
-  template.hasResourceProperties('AWS::Grafana::Workspace', {
+  template.resourceCountIs('AWS::Grafana::Workspace', 0);
+  observabilityTemplate.hasResourceProperties('AWS::Grafana::Workspace', {
     AccountAccessType: 'CURRENT_ACCOUNT',
     DataSources: ['CLOUDWATCH', 'PROMETHEUS', 'XRAY'],
     PermissionType: 'CUSTOMER_MANAGED',
   });
-  const policies = resources(template, 'AWS::IAM::Policy');
+  const policies = resources(observabilityTemplate, 'AWS::IAM::Policy');
   const grafanaPolicy = policies.find(({ Properties }) =>
     String(Properties?.PolicyName).includes('GrafanaDataAccessPolicy'),
   );
@@ -476,6 +499,57 @@ test('enables ECS Exec and its endpoint only when explicitly requested', () => {
   enabled.hasResourceProperties('AWS::ECS::Service', { EnableExecuteCommand: true });
   expect(JSON.stringify(enabled.toJSON())).toContain('ssmmessages:CreateControlChannel');
   expect(JSON.stringify(enabled.toJSON())).toContain('ssmmessages');
+});
+
+test('routes app stdout through an essential bounded FireLens router with ordered shutdown', () => {
+  expect(container(template, 'audit-router')).toMatchObject({
+    Essential: true, Cpu: 128, Memory: 256, StopTimeout: 120,
+    FirelensConfiguration: { Type: 'fluentbit' },
+  });
+  for (const input of APPLICATION_COMPONENT_INPUTS) {
+    const definition = container(template, `movie-${input.componentId}`);
+    expect(definition.LogConfiguration).toEqual({
+      LogDriver: 'awsfirelens', Options: { 'log-driver-buffer-limit': '1024' },
+    });
+    expect(definition.DependsOn).toContainEqual({ ContainerName: 'audit-router', Condition: 'START' });
+  }
+  expect(JSON.stringify(template.toJSON())).not.toContain('"FromPort":24224');
+});
+
+test('injects demo credentials only through Secrets Manager and preserves disabled default', () => {
+  const secretArn = `arn:aws:secretsmanager:${TEST_TARGET.region}:${TEST_TARGET.account}:secret:movie-platform/aws-demo/auth-Ab12Cd`;
+  for (const producer of ['reservation-service', 'reservation-agent', 'recommendation-service']) {
+    expect(environment(container(template, `movie-${producer}`))).toMatchObject({ DEMO_AUTH_ENABLED: 'false' });
+  }
+  expect(() => synthesized({ demoAuthEnabled: true })).toThrow('demoAuthSecretArn');
+  expect(() => synthesized({ demoAuthSecretArn: secretArn })).toThrow('demoAuthEnabled=true');
+  expect(() => synthesized({ demoAuthEnabled: true, demoAuthSecretArn: secretArn.replace(TEST_TARGET.account, '222222222222') })).toThrow('deployment account');
+  const enabled = synthesized({ demoAuthEnabled: true, demoAuthSecretArn: secretArn });
+  for (const producer of ['reservation-service', 'reservation-agent', 'recommendation-service']) {
+    const definition = container(enabled, `movie-${producer}`);
+    expect(environment(definition)).toMatchObject({ DEMO_AUTH_ENABLED: 'true', DEPLOYMENT_ENVIRONMENT: 'aws-demo' });
+    expect(environment(definition)).not.toHaveProperty('DEMO_AUTH_PASSWORD');
+    expect(definition).toMatchObject({ Secrets: [
+      { Name: 'DEMO_AUTH_USERNAME', ValueFrom: `${secretArn}:username::` },
+      { Name: 'DEMO_AUTH_PASSWORD', ValueFrom: `${secretArn}:password::` },
+    ] });
+  }
+  expect(JSON.stringify(enabled.toJSON())).toContain('secretsmanager:GetSecretValue');
+  expect(JSON.stringify(enabled.toJSON())).toContain('secretsmanager');
+  const taskPolicy = resources(enabled, 'AWS::IAM::Policy').find(({ Properties }) => String(Properties?.PolicyName).includes('TaskRoleDefaultPolicy'));
+  expect(JSON.stringify(taskPolicy)).not.toContain('secretsmanager:GetSecretValue');
+});
+
+test('enables ALB native access logs in the audit-owned bucket', () => {
+  template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
+    LoadBalancerAttributes: Match.arrayWith([
+      { Key: 'access_logs.s3.enabled', Value: 'true' },
+      { Key: 'access_logs.s3.bucket', Value: { 'Fn::ImportValue': 'MoviePlatformAwsDemo:AlbAccessLogBucketName' } },
+      { Key: 'access_logs.s3.prefix', Value: 'alb' },
+    ]),
+  });
+  template.resourceCountIs('AWS::S3::Bucket', 0);
+  template.resourceCountIs('AWS::APS::Workspace', 0);
 });
 
 test('publishes deployment, telemetry, and per-component log discovery outputs', () => {

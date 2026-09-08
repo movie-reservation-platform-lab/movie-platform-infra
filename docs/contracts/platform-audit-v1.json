@@ -1,0 +1,63 @@
+{
+  "schema_version": "platform-audit/1",
+  "transport": {
+    "stdout": "Exactly one compact JSON line: {\"audit\":<event>}; no logger message wrapping or pretty printing.",
+    "archive": "Router extracts the pure event; Fluent Bit Firehose output serializes one newline-delimited JSON record."
+  },
+  "event": {
+    "activity_id": 99,
+    "activity_name": "Credential validation",
+    "category_uid": 3,
+    "class_uid": 3002,
+    "type_uid": 300299,
+    "severity_id": 2,
+    "status_id": 2,
+    "status_detail": "INVALID_CREDENTIALS",
+    "time": 1788814800000,
+    "metadata": {
+      "version": "1.3.0",
+      "uid": "11111111-1111-4111-8111-111111111111",
+      "correlation_uid": "demo-action-001",
+      "product": {
+        "name": "movie-reservation-service",
+        "vendor_name": "Movie Reservation Platform Lab",
+        "version": "demo-build-001"
+      }
+    },
+    "service": {
+      "name": "movie-reservation-service",
+      "version": "demo-build-001"
+    },
+    "user": {
+      "name": "unknown",
+      "type_id": 0
+    },
+    "unmapped": {
+      "platform": {
+        "schema_version": "1",
+        "environment": "demo",
+        "request_id": "demo-request-001",
+        "trace_id": "6a9dd2710123456789abcdef01234567",
+        "span_id": "0123456789abcdef",
+        "aws_alb_trace_id": "Root=1-6a9dd271-0123456789abcdef01234567",
+        "route": "/demo/auth/login",
+        "auth_boundary": "demo_login"
+      }
+    }
+  },
+  "rules": [
+    "Failure status_id=2,severity_id=2,user={name:'unknown',type_id:0}; never submitted username/decoded identity.",
+    "Optional successful credential check uses status_id=1,severity_id=1,status_detail=AUTHENTICATED,user={name:'demo-user',type_id:1}; no production/session claim.",
+    "Allowed failure reasons INVALID_CREDENTIALS,MISSING_CREDENTIALS,MALFORMED_CREDENTIALS,INVALID_TOKEN,UNAUTHENTICATED; fixed allowlist not raw exceptions.",
+    "metadata.uid generated once; same value in response/log. OCSF time epoch milliseconds.",
+    "metadata.correlation_uid safe inherited action ID or generated. platform.request_id safe server/request ID. IDs bounded <=128 printable allowlist; header values no control chars <=512.",
+    "trace_id 32 lowercase hex nonzero, span_id16 lowercase hex nonzero from actual active OTel context; optional and omit absent, not empty strings. Keep when unsampled if active context valid.",
+    "aws_alb_trace_id sanitized X-Amzn-Trace-Id raw header <=512; optional aws_cloudfront_request_id sanitized X-Amz-Cf-Id when actually present <=512.",
+    "platform.route constant route template, auth_boundary demo_login|graphql|api_auth; no query/body. environment from DEPLOYMENT_ENVIRONMENT default local; service version existing SERVICE_VERSION.",
+    "Do not activate OCSF profiles requiring extra objects; this subset uses base Authentication fields. Need user name to satisfy OCSF user identity constraint; unknown literal explicitly sentinel.",
+    "Do not emit top-level actor/tenant/token/password/headers/raw_data/payload. Normal operational log can reference event UID/request/trace without full auth payload.",
+    "Endpoint POST /demo/auth/login body username,password strings max256,max1024. Disabled404; enabled requires nonblank DEMO_AUTH_USERNAME and DEMO_AUTH_PASSWORD; never hardcode demo password. Wrong/missing creds401, valid200. Bad JSON/shape may400 but do not log body.",
+    "Response401 {authenticated:false,message:'Invalid credentials',request_id:<id>,audit_event_id:<uid>,trace_id?:<valid-id>}. Response200 {authenticated:true,message:'Demo credentials accepted',request_id:<id>,audit_event_id:<uid>,trace_id?:<valid-id>}. Success event required if returning audit_event_id; otherwise can omit success id but coordinate UI.",
+    "No existing app auth behavior change. Endpoint authenticates only demo check, no cookie/session/token grant. Browser route proxy /audit-demo/{reservation|agent|recommendation}/login -> backend /demo/auth/login."
+  ]
+}

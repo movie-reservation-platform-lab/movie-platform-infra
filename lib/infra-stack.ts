@@ -1,14 +1,14 @@
 import * as path from 'node:path';
 
 import * as cdk from 'aws-cdk-lib';
-import * as aps from 'aws-cdk-lib/aws-aps';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as grafana from 'aws-cdk-lib/aws-grafana';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import { importFoundationOutput } from './stack-bindings';
 import { Construct } from 'constructs';
 
 import { resolveApplicationImage } from './application-image';
@@ -16,31 +16,8 @@ import type { PlatformConfig } from './config/platform-config';
 
 const WEB_CONTAINER_PORT = 8088;
 const AMP_REMOTE_WRITE_ACTIONS = ['aps:RemoteWrite'];
-const AMP_QUERY_ACTIONS = ['aps:GetLabels', 'aps:GetMetricMetadata', 'aps:GetSeries', 'aps:QueryMetrics'];
-const CLOUDWATCH_METRIC_READ_ACTIONS = ['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics'];
-const CLOUDWATCH_LOG_GLOBAL_READ_ACTIONS = [
-  'logs:DescribeLogGroups',
-  'logs:GetQueryResults',
-  'logs:StopQuery',
-];
-const CLOUDWATCH_LOG_SCOPED_READ_ACTIONS = [
-  'logs:GetLogEvents',
-  'logs:GetLogGroupFields',
-  'logs:StartQuery',
-];
 const STS_IDENTITY_ACTIONS = ['sts:GetCallerIdentity'];
 const XRAY_WRITE_ACTIONS = ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'];
-const XRAY_READ_ACTIONS = [
-  'xray:BatchGetTraces',
-  'xray:GetInsight',
-  'xray:GetInsightEvents',
-  'xray:GetInsightImpactGraph',
-  'xray:GetInsightSummaries',
-  'xray:GetServiceGraph',
-  'xray:GetTimeSeriesServiceStatistics',
-  'xray:GetTraceGraph',
-  'xray:GetTraceSummaries',
-];
 const APPLICATION_COMPONENTS = [
   'reservation-web',
   'reservation-agent',
@@ -56,33 +33,17 @@ export interface MovieReservationWorkloadStackProps extends cdk.StackProps {
   readonly platformConfig: PlatformConfig;
 }
 
-/**
- * Deploys the movie reservation platform workload.
- *
- * **Note**: This phase intentionally keeps the infrastructure in one CloudFormation
- * stack so the complete request path and its costs are easy to learn, deploy,
- * and tear down together.
- *
- * The stack provisions:
- * - a two-AZ VPC without a NAT gateway
- * - public subnets for a prefix-list-restricted Application Load Balancer
- * - one selected isolated workload subnet for the Fargate service
- * - the S3, ECR, CloudWatch Logs, X-Ray, AMP, and STS endpoints required by private tasks
- * - an optional SSM Messages endpoint and task permissions for ECS Exec
- * - a disposable AMP workspace and enhanced ECS Container Insights
- * - a prefix-list-restricted Managed Grafana workspace and customer-managed metric-read role
- * - the service and ADOT image assets, log groups, task definition, ECS service, and ALB
- * - common resource tags plus ALB, CloudWatch, ECS, AMP, and Grafana outputs
- *
- * The backend uses the in-memory demo composition and exports OTLP/HTTP traces
- * and metrics through a nonessential ADOT sidecar. ADOT sends traces to X-Ray
- * and fans application metrics out to CloudWatch through EMF and AMP through
- * Prometheus remote write. The same sidecar also exports bounded task/container
- * metrics to AMP. Later waves can split networking, workloads, and
- * observability into separate constructs or stacks when those ownership and
- * lifecycle boundaries become useful.
- */
+/** ECS, networking and task-local telemetry. Audit/observability are imported foundations. */
 export class MovieReservationWorkloadStack extends cdk.Stack {
+  // CDK's Vpc validates even explicitly supplied AZs against stack.availabilityZones.
+  // Override that lookup too: CloudFormation selects two real account AZs at deploy.
+  public override get availabilityZones(): string[] {
+    return [
+      cdk.Fn.select(0, cdk.Fn.getAzs(this.region)),
+      cdk.Fn.select(1, cdk.Fn.getAzs(this.region)),
+    ];
+  }
+
   constructor(scope: Construct, id: string, props: MovieReservationWorkloadStackProps) {
     super(scope, id, props);
 
@@ -158,110 +119,15 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       'Private ECS tasks use HTTPS to AWS service endpoints',
     );
 
-    const ampWorkspace = new aps.CfnWorkspace(this, 'AmpWorkspace', {
-      alias: `${platformConfig.platformName}-${platformConfig.environmentName}`,
-      workspaceConfiguration: {
-        retentionPeriodInDays: 7,
-      },
-    });
-    ampWorkspace.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
-    tagServiceResource(ampWorkspace);
-
-    const componentLogGroupNames = Object.fromEntries(
-      APPLICATION_COMPONENTS.map((componentId) => [
-        componentId,
-        `/movie-platform/${platformConfig.environmentName}/${componentId}/app`,
-      ]),
-    ) as Record<(typeof APPLICATION_COMPONENTS)[number], string>;
-    const adotLogGroupName = `/movie-platform/${platformConfig.environmentName}/adot`;
-    const applicationMetricsLogGroupName = `/movie-platform/${platformConfig.environmentName}/metrics`;
-    const grafanaReadableLogGroupArns = [
-      ...Object.values(componentLogGroupNames),
-      adotLogGroupName,
-      applicationMetricsLogGroupName,
-    ].map((logGroupName) =>
-      cdk.Stack.of(this).formatArn({
-        service: 'logs',
-        resource: 'log-group',
-        resourceName: `${logGroupName}:*`,
-        arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
-      }),
-    );
-
-    // The workspace ARN is deliberately wildcarded in the trust policy to
-    // avoid a CloudFormation cycle: Grafana needs this role ARN while creating
-    // the workspace. SourceAccount and the same-account workspace ARN pattern
-    // still prevent another service or account from assuming the role.
-    const grafanaWorkspaceSourceArn = cdk.Fn.join('', [
-      'arn:',
-      cdk.Aws.PARTITION,
-      ':grafana:',
-      cdk.Aws.REGION,
-      ':',
-      cdk.Aws.ACCOUNT_ID,
-      ':/workspaces/*',
-    ]);
-    const grafanaDataAccessRole = new iam.Role(this, 'GrafanaDataAccessRole', {
-      description: 'Allows Managed Grafana to read demo metrics, logs, and traces',
-      assumedBy: new iam.ServicePrincipal('grafana.amazonaws.com', {
-        conditions: {
-          ArnLike: {
-            'aws:SourceArn': grafanaWorkspaceSourceArn,
-          },
-          StringEquals: {
-            'aws:SourceAccount': cdk.Aws.ACCOUNT_ID,
-          },
-        },
-      }),
-    });
-    const grafanaDataAccessPolicy = new iam.Policy(this, 'GrafanaDataAccessPolicy', {
-      roles: [grafanaDataAccessRole],
-      statements: [
-        new iam.PolicyStatement({
-          actions: AMP_QUERY_ACTIONS,
-          resources: [ampWorkspace.attrArn],
-        }),
-        new iam.PolicyStatement({
-          // These metric discovery/query and Region discovery APIs do not
-          // support useful resource-level scoping.
-          actions: [...CLOUDWATCH_METRIC_READ_ACTIONS, 'ec2:DescribeRegions'],
-          resources: ['*'],
-        }),
-        new iam.PolicyStatement({
-          actions: CLOUDWATCH_LOG_GLOBAL_READ_ACTIONS,
-          resources: ['*'],
-        }),
-        new iam.PolicyStatement({
-          actions: CLOUDWATCH_LOG_SCOPED_READ_ACTIONS,
-          resources: grafanaReadableLogGroupArns,
-        }),
-        new iam.PolicyStatement({
-          // X-Ray read APIs do not support resource-level permissions.
-          actions: XRAY_READ_ACTIONS,
-          resources: ['*'],
-        }),
-      ],
-    });
-
-    const grafanaWorkspace = new grafana.CfnWorkspace(this, 'GrafanaWorkspace', {
-      accountAccessType: 'CURRENT_ACCOUNT',
-      authenticationProviders: ['AWS_SSO'],
-      dataSources: ['CLOUDWATCH', 'PROMETHEUS', 'XRAY'],
-      description: 'Managed metrics, logs, and traces for the movie reservation AWS demo',
-      name: `${platformConfig.platformName}-${platformConfig.environmentName}`,
-      networkAccessControl: {
-        prefixListIds: [platformConfig.allowedIngressPrefixListId],
-        vpceIds: [],
-      },
-      permissionType: 'CUSTOMER_MANAGED',
-      roleArn: grafanaDataAccessRole.roleArn,
-    });
-    // roleArn creates a dependency on the role itself, not on its separately
-    // synthesized AWS::IAM::Policy. Wait for both before Grafana validates and
-    // starts using the customer-managed role.
-    grafanaWorkspace.node.addDependency(grafanaDataAccessPolicy);
-    grafanaWorkspace.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
-    tagServiceResource(grafanaWorkspace);
+    const ampWorkspace = {
+      attrArn: importFoundationOutput('AmpWorkspaceArn'),
+      attrWorkspaceId: importFoundationOutput('AmpWorkspaceId'),
+      attrPrometheusEndpoint: importFoundationOutput('AmpPrometheusEndpoint'),
+    };
+    const grafanaWorkspaceId = importFoundationOutput('GrafanaWorkspaceId');
+    const grafanaWorkspaceUrl = importFoundationOutput('GrafanaWorkspaceUrl');
+    const auditStreamArn = importFoundationOutput('AuditDeliveryStreamArn');
+    const auditStreamName = importFoundationOutput('AuditDeliveryStreamName');
 
     vpc.addGatewayEndpoint('S3Endpoint', {
       service: ec2.GatewayVpcEndpointAwsService.S3,
@@ -309,6 +175,27 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         resources: [ampWorkspace.attrArn],
       }),
     );
+    const firehoseEndpoint = vpc.addInterfaceEndpoint('FirehoseEndpoint', {
+      ...interfaceEndpointProps,
+      service: ec2.InterfaceVpcEndpointAwsService.KINESIS_FIREHOSE,
+    });
+    firehoseEndpoint.addToPolicy(new iam.PolicyStatement({
+      principals: [new iam.AnyPrincipal()],
+      actions: ['firehose:PutRecordBatch'],
+      resources: [auditStreamArn],
+    }));
+    if (platformConfig.demoAuthEnabled) {
+      const secretsEndpoint = vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
+        ...interfaceEndpointProps,
+        service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+      });
+      secretsEndpoint.addToPolicy(new iam.PolicyStatement({
+        principals: [new iam.AnyPrincipal()],
+        actions: ['secretsmanager:GetSecretValue'],
+        resources: [platformConfig.demoAuthSecretArn!],
+      }));
+    }
+
     const stsEndpoint = vpc.addInterfaceEndpoint('StsEndpoint', {
       ...interfaceEndpointProps,
       service: ec2.InterfaceVpcEndpointAwsService.STS,
@@ -329,18 +216,11 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
     }
 
     const clusterName = `${platformConfig.platformName}-${platformConfig.environmentName}`;
-    const containerInsightsLogGroup = new logs.LogGroup(this, 'ContainerInsightsLogGroup', {
-      logGroupName: `/aws/ecs/containerinsights/${clusterName}/performance`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
     const cluster = new ecs.Cluster(this, 'ApplicationCluster', {
       vpc,
       clusterName,
       containerInsightsV2: ecs.ContainerInsights.ENHANCED,
     });
-    cluster.node.addDependency(containerInsightsLogGroup);
 
     const repositoryRoot = process.cwd();
     const images = {
@@ -371,42 +251,31 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
     };
     const adotImage = new ecrAssets.DockerImageAsset(this, 'AdotImage', {
       directory: path.join(repositoryRoot, 'adot-collector'),
+      platform: ecrAssets.Platform.LINUX_AMD64,
     });
     const cloudWatchApplicationMetricsNamespace =
       `MoviePlatform/${platformConfig.environmentName}/applications`;
 
-    const componentLogGroups = Object.fromEntries(
-      APPLICATION_COMPONENTS.map((componentId) => {
-        const constructId = `${componentId
-          .split('-')
-          .map((part) => part[0].toUpperCase() + part.slice(1))
-          .join('')}LogGroup`;
-        const logGroup = new logs.LogGroup(this, constructId, {
-          logGroupName: componentLogGroupNames[componentId],
-          retention: logs.RetentionDays.ONE_WEEK,
-          removalPolicy: cdk.RemovalPolicy.DESTROY,
-        });
-        tagServiceResource(logGroup);
-        return [componentId, logGroup];
-      }),
-    ) as Record<(typeof APPLICATION_COMPONENTS)[number], logs.LogGroup>;
-    const adotLogGroup = new logs.LogGroup(this, 'AdotLogGroup', {
-      logGroupName: adotLogGroupName,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-    tagServiceResource(adotLogGroup);
-    const applicationMetricsLogGroup = new logs.LogGroup(this, 'ApplicationMetricsLogGroup', {
-      logGroupName: applicationMetricsLogGroupName,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-    tagServiceResource(applicationMetricsLogGroup);
+    const componentLogGroups = Object.fromEntries(APPLICATION_COMPONENTS.map(component => {
+      const name = component.split('-').map(part => part[0].toUpperCase() + part.slice(1)).join('');
+      return [component, logs.LogGroup.fromLogGroupName(this, `${name}Logs`,
+        importFoundationOutput(`${name}LogGroupName`))];
+    })) as Record<(typeof APPLICATION_COMPONENTS)[number], logs.ILogGroup>;
+    const adotLogGroup = logs.LogGroup.fromLogGroupName(this, 'AdotLogs',
+      importFoundationOutput('AdotLogGroupName'));
+    const applicationMetricsLogGroup = logs.LogGroup.fromLogGroupName(this, 'MetricsLogs',
+      importFoundationOutput('ApplicationMetricsLogGroupName'));
+    const routerLogGroup = logs.LogGroup.fromLogGroupName(this, 'RouterLogs',
+      importFoundationOutput('AuditRouterLogGroupName'));
 
     const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
       family: `${platformConfig.environmentName}-${platformConfig.serviceName}`,
       cpu: 2048,
       memoryLimitMiB: 4096,
+      runtimePlatform: {
+        cpuArchitecture: ecs.CpuArchitecture.X86_64,
+        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
+      },
     });
     tagServiceResource(taskDefinition);
 
@@ -425,6 +294,25 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       }),
     );
     applicationMetricsLogGroup.grantWrite(taskDefinition.taskRole);
+    // FireLens is an application-side API caller: these belong to the task role,
+    // not the execution role used to pull images and inject startup secrets.
+    taskDefinition.addToTaskRolePolicy(new iam.PolicyStatement({
+      actions: ['firehose:PutRecordBatch'],
+      resources: [auditStreamArn],
+    }));
+    for (const group of [...Object.values(componentLogGroups), routerLogGroup]) {
+      group.grantWrite(taskDefinition.taskRole);
+    }
+    const demoAuthEnvironment = {
+      DEMO_AUTH_ENABLED: String(platformConfig.demoAuthEnabled),
+      DEPLOYMENT_ENVIRONMENT: platformConfig.environmentName,
+    };
+    const demoAuthSecret = platformConfig.demoAuthSecretArn === undefined ? undefined :
+      secretsmanager.Secret.fromSecretCompleteArn(this, 'DemoAuthSecret', platformConfig.demoAuthSecretArn);
+    const demoAuthSecrets: Record<string, ecs.Secret> = demoAuthSecret === undefined ? {} : {
+      DEMO_AUTH_USERNAME: ecs.Secret.fromSecretsManager(demoAuthSecret, 'username'),
+      DEMO_AUTH_PASSWORD: ecs.Secret.fromSecretsManager(demoAuthSecret, 'password'),
+    };
 
     if (platformConfig.enableEcsExec) {
       // ECS Exec message-channel actions do not support resource-scoped ARNs.
@@ -474,11 +362,27 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       },
     });
 
-    const componentLogging = (componentId: (typeof APPLICATION_COMPONENTS)[number]) =>
-      ecs.LogDrivers.awsLogs({
-        logGroup: componentLogGroups[componentId],
-        streamPrefix: componentId,
-      });
+    const routerImage = new ecrAssets.DockerImageAsset(this, 'AuditRouterImage', {
+      directory: path.join(repositoryRoot, 'audit-router'),
+      platform: ecrAssets.Platform.LINUX_AMD64,
+    });
+    const auditRouter = taskDefinition.addFirelensLogRouter('AuditRouter', {
+      containerName: 'audit-router',
+      image: ecs.ContainerImage.fromDockerImageAsset(routerImage),
+      firelensConfig: { type: ecs.FirelensLogRouterType.FLUENTBIT },
+      essential: true,
+      cpu: 128,
+      memoryLimitMiB: 256,
+      stopTimeout: cdk.Duration.seconds(120),
+      logging: ecs.LogDrivers.awsLogs({ logGroup: routerLogGroup, streamPrefix: 'router' }),
+      environment: {
+        AWS_REGION: this.region,
+        AUDIT_DELIVERY_STREAM: auditStreamName,
+        ROUTER_LOG_GROUP: routerLogGroup.logGroupName,
+      },
+    });
+    const componentLogging = (_component: (typeof APPLICATION_COMPONENTS)[number]) =>
+      ecs.LogDrivers.firelens({ options: { 'log-driver-buffer-limit': '1024' } });
     const healthCheck = (command: string[]): ecs.HealthCheck => ({
       command,
       interval: cdk.Duration.seconds(15),
@@ -507,7 +411,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       cpu: 384,
       memoryLimitMiB: 640,
       logging: componentLogging('reservation-service'),
+      secrets: demoAuthSecrets,
       environment: {
+        ...demoAuthEnvironment,
         PORT: '3000',
         HOST: '0.0.0.0',
         NODE_ENV: 'development',
@@ -541,7 +447,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       cpu: 384,
       memoryLimitMiB: 512,
       logging: componentLogging('recommendation-service'),
+      secrets: demoAuthSecrets,
       environment: {
+        ...demoAuthEnvironment,
         PORT: '8082',
         USE_DUMMY: 'true',
         DEMO_FAULT_MODE: 'none',
@@ -627,7 +535,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       cpu: 384,
       memoryLimitMiB: 768,
       logging: componentLogging('reservation-agent'),
+      secrets: demoAuthSecrets,
       environment: {
+        ...demoAuthEnvironment,
         MOVIE_RESERVATION_MCP_URL: 'http://127.0.0.1:8091/mcp',
         MOVIE_RECOMMENDATION_MCP_URL: 'http://127.0.0.1:8092/mcp',
         DEMO_MCP_TIMEOUT_SECONDS: '15',
@@ -661,7 +571,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       containerName: 'movie-reservation-web',
       image: images.reservationWeb.image,
       essential: true,
-      cpu: 256,
+      cpu: 128,
       memoryLimitMiB: 256,
       logging: componentLogging('reservation-web'),
       environment: {
@@ -683,6 +593,15 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         condition: ecs.ContainerDependencyCondition.HEALTHY,
       },
     );
+
+    // With explicit existing health dependencies, also state the router startup
+    // dependency. ECS reverses this order on stop to drain logs before the router.
+    for (const application of [reservationService, recommendationService, reservationMcp,
+      recommendationMcp, reservationAgent, webContainer]) {
+      application.addContainerDependencies({
+        container: auditRouter, condition: ecs.ContainerDependencyCondition.START,
+      });
+    }
 
     const service = new ecs.FargateService(this, 'Service', {
       cluster,
@@ -716,6 +635,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       },
     });
     tagServiceResource(loadBalancer);
+    loadBalancer.setAttribute('access_logs.s3.enabled', 'true');
+    loadBalancer.setAttribute('access_logs.s3.bucket', importFoundationOutput('AlbAccessLogBucketName'));
+    loadBalancer.setAttribute('access_logs.s3.prefix', 'alb');
 
     const listener = loadBalancer.addListener('HttpListener', {
       port: 80,
@@ -787,11 +709,11 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       description: 'Base Prometheus-compatible API endpoint for the AMP workspace',
     });
     new cdk.CfnOutput(this, 'GrafanaWorkspaceId', {
-      value: grafanaWorkspace.attrId,
+      value: grafanaWorkspaceId,
       description: 'Amazon Managed Grafana workspace ID',
     });
     new cdk.CfnOutput(this, 'GrafanaWorkspaceUrl', {
-      value: cdk.Fn.join('', ['https://', grafanaWorkspace.attrEndpoint]),
+      value: grafanaWorkspaceUrl,
       description: 'HTTPS URL for the Amazon Managed Grafana workspace',
     });
   }

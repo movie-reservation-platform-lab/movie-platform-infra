@@ -5,6 +5,10 @@ infrastructure repository.
 
 ## Runbooks
 
+- [Audit Demo Deploy, Investigate and Cleanup](./audit-demo.md): current
+  three-stack deployment, demo credentials, correlation queries and full cost
+  cleanup. Supersedes the old single-stack deployment sequence below.
+
 - [AWS Artifact Foundation Runbook](./aws-artifact-foundation.md): controlling
   path for the persistent ECR foundation, its deployment, verification,
   admission handoff, recovery, and guarded final cleanup.
@@ -13,7 +17,7 @@ infrastructure repository.
   access, and the temporary-Admin-to-Editor Grafana workflow.
 - [AWS CDK Deployment Runbook](./aws-cdk-deployment.md)
 - [Temporary Integrated AWS Demo Runbook](./temporary-integrated-demo.md):
-  controlling deadline path for six exact images, the seven-container task,
+  previous demo's artifact-copy and smoke background for six exact images,
   unified Grafana correlation, three-scenario smoke, and routine teardown.
 - [AWS Demo Release Checklist](./aws-demo-release-checklist.md): the offline
   repository gate followed by the separately approved live rehearsal.
