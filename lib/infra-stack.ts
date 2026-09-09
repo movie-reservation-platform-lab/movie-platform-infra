@@ -347,7 +347,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       environment: {
         AWS_REGION: cdk.Stack.of(this).region,
         AWS_STS_REGIONAL_ENDPOINTS: 'regional',
-        AMP_REMOTE_WRITE_ENDPOINT: cdk.Fn.join('', [ampWorkspace.attrPrometheusEndpoint, 'remote_write']),
+        AMP_REMOTE_WRITE_ENDPOINT: cdk.Fn.join('', [ampWorkspace.attrPrometheusEndpoint, 'api/v1/remote_write']),
         CLOUDWATCH_METRICS_NAMESPACE: cloudWatchApplicationMetricsNamespace,
         CLOUDWATCH_METRICS_LOG_GROUP_NAME: applicationMetricsLogGroup.logGroupName,
         DEPLOYMENT_ENVIRONMENT_NAME: platformConfig.environmentName,
