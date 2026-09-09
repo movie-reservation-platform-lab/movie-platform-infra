@@ -110,6 +110,9 @@ deploying, verifying, or finally deleting the persistent foundation.
 
 ## AWS Operator Access
 
+For the GitHub admission-role expansion and its independent rollout, see
+[container admission permissions](docs/operations/container-admission-permissions.md).
+
 Before a real AWS deployment, complete the
 [standalone-account access bootstrap](docs/operations/standalone-account-access-bootstrap.md).
 It creates the dedicated MFA-backed `movie-platform-demo` Identity Center

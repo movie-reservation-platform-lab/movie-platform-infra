@@ -172,7 +172,7 @@ test('creates one GitHub provider and two exact-claim roles', () => {
   });
 });
 
-test('scopes artifact admission to the trusted reservation repository', () => {
+test('scopes artifact admission to exactly the six approved container repositories', () => {
   const statements = policyStatements(createTemplate());
   const repositoryStatement = statements.find(
     ({ Sid }) => Sid === 'ReadAndWriteTrustedArtifactRepository',
@@ -191,9 +191,12 @@ test('scopes artifact admission to the trusted reservation repository', () => {
       'ecr:UploadLayerPart',
     ],
   });
-  expect(resolveTestArn(repositoryStatement?.Resource)).toBe(
-    'arn:aws:ecr:eu-central-1:111111111111:repository/movie-reservation-service',
-  );
+  const resources = (repositoryStatement?.Resource as unknown[]).map(resolveTestArn);
+  expect(resources).toEqual([
+    'reservation-service', 'reservation-web', 'reservation-agent',
+    'recommendation-service', 'reservation-mcp', 'recommendation-mcp',
+  ].map((component) => `arn:aws:ecr:eu-central-1:111111111111:repository/movie-${component}`));
+  expect(resources.every((resource) => !resource.includes('*'))).toBe(true);
   expect(statements).toContainEqual({
     Sid: 'RequestEcrAuthorizationToken',
     Effect: 'Allow',
