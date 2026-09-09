@@ -462,6 +462,7 @@ test('keeps Grafana read-only while granting approved AMP, metric, bounded log, 
     AccountAccessType: 'CURRENT_ACCOUNT',
     DataSources: ['CLOUDWATCH', 'PROMETHEUS', 'XRAY'],
     PermissionType: 'CUSTOMER_MANAGED',
+    PluginAdminEnabled: true,
   });
   const policies = resources(observabilityTemplate, 'AWS::IAM::Policy');
   const grafanaPolicy = policies.find(({ Properties }) =>

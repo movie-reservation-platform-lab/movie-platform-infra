@@ -147,6 +147,7 @@ export class ObservabilityStack extends cdk.Stack {
           vpceIds: [],
         },
         permissionType: 'CUSTOMER_MANAGED',
+        pluginAdminEnabled: true,
         roleArn: grafanaDataAccessRole.roleArn,
       });
       // roleArn creates a dependency on the role itself, not on its separately
