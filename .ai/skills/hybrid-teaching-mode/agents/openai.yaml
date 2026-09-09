@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hybrid Teaching Mode"
+  short_description: "Guided coding with meaningful learner ownership"
+  default_prompt: "Use $hybrid-teaching-mode to guide this implementation while leaving one meaningful slice for me to complete."
