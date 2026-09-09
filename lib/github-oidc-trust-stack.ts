@@ -37,7 +37,7 @@ export class GitHubOidcTrustStack extends cdk.Stack {
       'ArtifactAdmissionRole',
       provider,
       props.trustConfig.admission,
-      'Copies and verifies approved reservation artifacts in the trusted ECR repository',
+      'Copies and verifies approved container artifacts in the six trusted ECR repositories',
     );
     this.addAdmissionPermissions(admissionRole);
 
@@ -88,17 +88,28 @@ export class GitHubOidcTrustStack extends cdk.Stack {
   }
 
   private addAdmissionPermissions(role: iam.Role): void {
-    const reservationRepository = ARTIFACT_FOUNDATION_REPOSITORIES.find(
-      ({ componentId }) => componentId === 'reservation-service',
-    );
-    if (reservationRepository === undefined) {
-      throw new Error('The artifact foundation catalog must define the reservation-service repository.');
-    }
-
-    const repositoryArn = this.formatArn({
-      service: 'ecr',
-      resource: 'repository',
-      resourceName: reservationRepository.repositoryName,
+    // Admission authority is a separate allowlist: adding a foundation repository
+    // must not silently grant the CI role access to it.
+    const approvedComponents = [
+      'reservation-service',
+      'reservation-web',
+      'reservation-agent',
+      'recommendation-service',
+      'reservation-mcp',
+      'recommendation-mcp',
+    ] as const;
+    const repositoryArns = approvedComponents.map((componentId) => {
+      const repository = ARTIFACT_FOUNDATION_REPOSITORIES.find(
+        (entry) => entry.componentId === componentId,
+      );
+      if (repository === undefined) {
+        throw new Error('The artifact foundation catalog is missing an approved admission repository.');
+      }
+      return this.formatArn({
+        service: 'ecr',
+        resource: 'repository',
+        resourceName: repository.repositoryName,
+      });
     });
 
     role.addToPolicy(
@@ -113,7 +124,7 @@ export class GitHubOidcTrustStack extends cdk.Stack {
           'ecr:PutImage',
           'ecr:UploadLayerPart',
         ],
-        resources: [repositoryArn],
+        resources: repositoryArns,
       }),
     );
     role.addToPolicy(
