@@ -22,6 +22,7 @@ const CLOUDWATCH_LOG_SCOPED_READ_ACTIONS = [
 ];
 const XRAY_READ_ACTIONS = [
   'xray:BatchGetTraces',
+  'xray:GetGroups',
   'xray:GetInsight',
   'xray:GetInsightEvents',
   'xray:GetInsightImpactGraph',

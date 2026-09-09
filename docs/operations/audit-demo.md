@@ -248,6 +248,27 @@ ID, component logs, router rejection/retry logs, Firehose freshness alarm and
 delivery logs, S3 prefix and Athena UTC date. A 401 alone does not prove archival.
 Do not turn up body/header logging to troubleshoot authentication.
 
+### Missing AMP metrics or failed Grafana X-Ray health check
+
+If ADOT reports HTTP 404 from both application and ECS Prometheus remote-write
+exporters, inspect the collector's `AMP_REMOTE_WRITE_ENDPOINT` in the deployed
+task definition. The imported AMP workspace URL ends in `/workspaces/<id>/`;
+the workload must append `api/v1/remote_write`. Appending only `remote_write`
+produces an invalid endpoint. Synthesize and review a corrected workload
+assembly, deploy it, wait for ECS stability, and confirm new samples through
+the managed-metrics smoke check. Samples already dropped on the permanent 404
+error cannot be recovered by this fix; generate fresh traffic and use a time
+window after the task rollout when checking charts.
+
+If Grafana's X-Ray datasource reports `Plugin health check failed` during
+Save & test, check for an underlying `AccessDenied` for `xray:GetGroups`;
+the health check needs that read action. The observability stack
+grants it in the existing X-Ray read statement on `Resource: "*"`, with no
+write/admin actions or wildcard actions. Review and deploy the corrected
+observability assembly, then repeat Save & test. If a temporary inline policy
+provided this action during diagnosis, remove that temporary policy only after
+the CDK-owned policy is confirmed to contain the grant, and retest health.
+
 ## 6. Stop spending: drain and destroy in order
 
 Record stack outputs and resources before deleting anything. These files

@@ -447,6 +447,15 @@ test('uses separate disposable one-week logs for every component, ADOT, metrics,
   expect(containers(template).filter(({ LogConfiguration }) => LogConfiguration?.Options?.['awslogs-group'])).toHaveLength(2);
 });
 
+test('uses the imported AMP workspace API endpoint for collector remote write', () => {
+  expect(environment(container(template, 'adot-collector')).AMP_REMOTE_WRITE_ENDPOINT).toEqual({
+    'Fn::Join': ['', [
+      { 'Fn::ImportValue': 'MoviePlatformAwsDemo:AmpPrometheusEndpoint' },
+      'api/v1/remote_write',
+    ]],
+  });
+});
+
 test('keeps Grafana read-only while granting approved AMP, metric, bounded log, and X-Ray reads', () => {
   template.resourceCountIs('AWS::Grafana::Workspace', 0);
   observabilityTemplate.hasResourceProperties('AWS::Grafana::Workspace', {
@@ -473,11 +482,27 @@ test('keeps Grafana read-only while granting approved AMP, metric, bounded log, 
     ]),
   );
   expect(allActions.some((action) => /Put|Create|Delete|Update/.test(action))).toBe(false);
+  expect(allActions.some((action) => action.includes('*'))).toBe(false);
   const scopedLogs = document.Statement.find(({ Action }) => actions({ Action }).includes('logs:StartQuery'));
   expect(JSON.stringify(scopedLogs?.Resource)).toContain('/movie-platform/aws-demo/reservation-agent/app');
   expect(scopedLogs?.Resource).not.toBe('*');
   const xray = document.Statement.find(({ Action }) => actions({ Action }).includes('xray:BatchGetTraces'));
   expect(xray?.Resource).toBe('*');
+  expect(xray).toMatchObject({ Effect: 'Allow' });
+  const xrayActions = allActions.filter((action) => action.startsWith('xray:'));
+  expect(xrayActions.sort()).toEqual([
+    'xray:BatchGetTraces',
+    'xray:GetGroups',
+    'xray:GetInsight',
+    'xray:GetInsightEvents',
+    'xray:GetInsightImpactGraph',
+    'xray:GetInsightSummaries',
+    'xray:GetServiceGraph',
+    'xray:GetTimeSeriesServiceStatistics',
+    'xray:GetTraceGraph',
+    'xray:GetTraceSummaries',
+  ].sort());
+  expect(xray).toMatchObject({ Action: expect.arrayContaining(['xray:GetGroups']) });
 });
 
 test('task role can export telemetry but application images cannot mutate AWS', () => {
