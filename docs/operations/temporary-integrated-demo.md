@@ -262,7 +262,14 @@ the intended changes, and obtain explicit approval before this sequence.
    workspace's customer-managed data-access role.
 3. Create one **CloudWatch** data source in `eu-central-1` using the same role.
    It serves both CloudWatch metrics and Logs Insights.
-4. Create one **AWS X-Ray** data source in `eu-central-1` using the same role.
+4. In **Administration → Plugins and data → Plugins**, install **AWS Application
+   Signals** if not already installed (`grafana-x-ray-datasource`, formerly named
+   AWS X-Ray). Then create that data source in `eu-central-1` using the same role.
+   It provides the dashboard's X-Ray trace queries; it is not a separate fourth
+   data source. The observability stack enables plugin management, but plugin
+   installation remains an explicit workspace-admin action. This does not
+   provision AWS Application Signals service telemetry or its additional IAM
+   permissions.
 5. Test all three sources, downgrade the operator to Editor, start a fresh
    session, and verify that data-source administration is no longer available.
 6. Import `grafana/dashboards/movie-reservation-aws-overview.json`, mapping

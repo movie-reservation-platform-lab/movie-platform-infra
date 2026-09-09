@@ -367,8 +367,11 @@ has separate approval, `MovieReservationWorkloadStack` is deployed, and the work
 5. Promote that operator to **Admin** and verify the displayed role.
 6. Open the workspace URL in a fresh browser session and complete the
    MFA-backed Identity Center login.
-7. While Admin, create and test the Amazon Managed Service for Prometheus,
-   CloudWatch, and AWS X-Ray data sources in `eu-central-1`. Use the stack-created
+7. While Admin, create and test the Amazon Managed Service for Prometheus and
+   CloudWatch data sources in `eu-central-1`. In **Administration → Plugins and
+   data → Plugins**, install **AWS Application Signals** if not already installed
+   (`grafana-x-ray-datasource`, formerly named AWS X-Ray), and create it as the
+   third data source for AWS X-Ray trace queries. Use the stack-created
    customer-managed data-access role; do not enter human AWS credentials into
    Grafana. The CloudWatch source serves both metrics and Logs Insights.
 8. Confirm all three data sources return a successful test/query result.
@@ -390,6 +393,8 @@ References:
 
 - [Manage users and groups in Amazon Managed Grafana](https://docs.aws.amazon.com/grafana/latest/userguide/AMG-manage-users-and-groups-AMG.html)
 - [Amazon Managed Grafana user roles](https://docs.aws.amazon.com/grafana/latest/userguide/Grafana-user-roles.html)
+- [Plugin management prerequisites](https://docs.aws.amazon.com/grafana/latest/userguide/grafana-plugins.html)
+- [AWS Application Signals / X-Ray plugin](https://grafana.com/grafana/plugins/grafana-x-ray-datasource/)
 
 ## Phase 9: First-Rehearsal Exit Gate
 
