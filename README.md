@@ -8,6 +8,8 @@ build, test, and publish immutable artifacts; this CDK app consumes application
 images by private ECR digest and does not build sibling repository source during
 synth or deployment.
 
+New to the repository? Start with the [code and test reading guide](docs/architecture/code-reading-guide.md).
+
 ## Current Stacks
 
 The current CDK apps have separate lifecycle boundaries:
@@ -20,9 +22,12 @@ The current CDK apps have separate lifecycle boundaries:
 - `MovieReservationWorkloadStack` owns the disposable AWS demo reservation workload.
 - `ObservabilityStack` owns AMP, optional Grafana and operational log groups.
 - `AuditStack` owns Firehose, the S3 audit/ALB archives, CloudTrail and Athena.
+- `GitHubOidcTrustStack` owns the GitHub provider and separate artifact-admission
+  and workload-deployment entry roles.
 
 Start with the [audit demo deploy/destroy runbook](docs/operations/audit-demo.md)
-and [architecture](docs/architecture/audit-and-observability.md). Both foundations
+and [architecture](docs/architecture/audit-and-observability.md). The audit and
+observability foundations
 must exist before workload deployment. Their resources are not deleted by a
 workload-only teardown.
 
@@ -320,14 +325,21 @@ AWS_PROFILE="$AWS_PROFILE" AWS_REGION="$AWS_REGION" \
   npm run smoke:managed-metrics -- --report /tmp/managed-metrics-smoke.json
 ```
 
+The Container Insights check uses the deployed ECS service name and separately
+selects the reservation application container. AMP requests are terminated when
+the remaining `MANAGED_METRICS_SMOKE_METRIC_TIMEOUT_SECONDS` budget expires;
+a stalled request still produces an `amp_query` failure report.
+
 ## Teardown
 
-Use Gate 6 of the
-[temporary integrated demo runbook](docs/operations/temporary-integrated-demo.md#gate-6-teardown)
-with the same complete six-image context and a fresh explicit approval.
+Use the [current drain-and-destroy sequence](docs/operations/audit-demo.md#6-stop-spending-drain-and-destroy-in-order)
+with the reviewed assemblies and explicit operator approval. Destroy the workload
+before its audit and observability foundations because it imports their outputs.
 
-Confirm that the CloudFormation stack, ALB, ECS service/tasks, AMP and Grafana
-workspaces, Grafana role, VPC endpoints, and log groups are gone. The
+Workload-only teardown removes its ALB, ECS service/tasks, VPC and endpoints.
+AMP, Grafana, operational log groups and audit storage belong to independent
+foundations and require their own cleanup steps. Confirm those separately when
+performing full demo cleanup; retained audit objects have a distinct deletion opt-in. The
 customer-managed prefix list, CDK bootstrap, Organizations, and IAM Identity
 Center resources are account/Region-level and are not part of
 `MovieReservationWorkloadStack`. Follow the bootstrap runbook's first-rehearsal exit gate

@@ -79,7 +79,19 @@ Unit tests, CDK assertions, synth contracts, script checks, and smoke tests.
 - ...
 ```
 
-## Current Planning Priorities
+## Current Review Work
+
+- [Six-container admission and runtime compatibility](./six-container-admission.md):
+  PR #52's admission boundary and compatibility with current producer images.
+- [PR #52 review and onboarding](./pr-52-review-and-onboarding.md): four-agent
+  findings, fixes and verification.
+
+## Historical Implementation Plans
+
+The capabilities below are implemented. These plans explain their original
+delivery slices, not pending prerequisites. Consult the
+[current architecture](../architecture/README.md) and [operations](../operations/README.md)
+for today's stack ownership and commands.
 
 - [Reservation Artifact Copy Mechanics](./reservation-artifact-copy-mechanics.md):
   copy one approved single-image manifest from GHCR to ECR without rebuilding,
@@ -88,16 +100,15 @@ Unit tests, CDK assertions, synth contracts, script checks, and smoke tests.
   establish the approved persistent repository, guarded cleanup, cross-repo
   admission boundary, testing strategy, and five-PR delivery plan for issue #12.
 - [Standalone-Account Identity Center And Grafana Access Bootstrap](./standalone-account-identity-center-bootstrap.md):
-  establish the approved identity, preflight, lifecycle, testing, and staged
-  release contract for issue #14 before implementation begins.
+  original identity, preflight, lifecycle, testing, and staged release contract
+  for issue #14.
 - [Prefix List Ingress Allowlist](./prefix-list-ingress-allowlist.md): replace
   changing CIDR context with one externally owned list shared by the ALB and
   Managed Grafana.
-- Expand from the single reservation workload to the integrated web, agent,
-  recommendation, and MCP topology after application artifact contracts are
-  ready.
-- Consume environment manifest selections from `movie-platform-environments`
-  once the manifest schema and validation workflow are stable.
+- [Temporary Integrated AWS Demo](./temporary-integrated-aws-demo.md): the
+  expansion to web, agent, recommendation and MCP containers. Environment release
+  selection belongs to `movie-platform-environments`; this repository consumes
+  its reviewed digest/version inputs.
 - Add RDS Postgres and migration-task infrastructure as a separate slice.
 - Add SQS worker-signaling infrastructure as a separate slice.
 - Keep ingress allowlisting, teardown, observability, and cost controls explicit

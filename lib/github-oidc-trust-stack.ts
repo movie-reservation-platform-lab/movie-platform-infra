@@ -103,7 +103,7 @@ export class GitHubOidcTrustStack extends cdk.Stack {
         (entry) => entry.componentId === componentId,
       );
       if (repository === undefined) {
-        throw new Error('The artifact foundation catalog is missing an approved admission repository.');
+        throw new Error(`The artifact foundation catalog is missing the approved admission repository for "${componentId}".`);
       }
       return this.formatArn({
         service: 'ecr',

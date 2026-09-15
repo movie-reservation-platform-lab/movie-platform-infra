@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 
-import { ARTIFACT_FOUNDATION_REPOSITORIES } from '../lib/artifact-foundation-repositories';
+import * as artifactCatalog from '../lib/artifact-foundation-repositories';
+import type { ArtifactFoundationRepositoryDefinition } from '../lib/artifact-foundation-repositories';
 import { parseGitHubOidcTrustConfig } from '../lib/config/github-oidc-trust-config';
 import { GitHubOidcTrustStack } from '../lib/github-oidc-trust-stack';
 
@@ -38,6 +39,21 @@ function createTemplate(): Template {
 
 function cloneConfig(): Record<string, unknown> {
   return JSON.parse(JSON.stringify(VALID_CONFIG)) as Record<string, unknown>;
+}
+
+function withRepositoryCatalog(
+  repositories: readonly ArtifactFoundationRepositoryDefinition[],
+  check: () => void,
+): void {
+  // Deliberately vary the real catalog at the module boundary. Production's
+  // literal tuple type describes today's six entries, not these drift fixtures.
+  const replacement = jest.replaceProperty(artifactCatalog, 'ARTIFACT_FOUNDATION_REPOSITORIES',
+    repositories as typeof artifactCatalog.ARTIFACT_FOUNDATION_REPOSITORIES);
+  try {
+    check();
+  } finally {
+    replacement.restore();
+  }
 }
 
 function policyStatements(template: Template): PolicyStatement[] {
@@ -96,37 +112,37 @@ test('accepts an exact subject without coupling the parser to one GitHub subject
 test.each([
   ['unknown top-level key', (config: Record<string, unknown>): void => {
     config.extra = true;
-  }],
+  }, 'unexpected keys: extra'],
   ['placeholder value', (config: Record<string, unknown>) => {
     (config.admission as Record<string, unknown>).repository = 'your-org/your-repository';
-  }],
+  }, '"admission.repository" must be an exact non-placeholder value'],
   ['wildcard subject', (config: Record<string, unknown>) => {
     (config.admission as Record<string, unknown>).subject = 'repo:test-org/*';
-  }],
+  }, '"admission.subject" must be an exact non-placeholder value'],
   ['non-main ref', (config: Record<string, unknown>) => {
     (config.deployment as Record<string, unknown>).ref = 'refs/heads/release';
-  }],
+  }, '"deployment.ref" must be "refs/heads/main"'],
   ['malformed repository ID', (config: Record<string, unknown>) => {
     (config.admission as Record<string, unknown>).repositoryId = 'repo-1';
-  }],
+  }, '"admission.repositoryId" must be a positive numeric ID'],
   ['different control repository', (config: Record<string, unknown>) => {
     const deployment = config.deployment as Record<string, unknown>;
     deployment.repository = 'test-org/other-private-control';
     deployment.repositoryId = '2000001';
-  }],
+  }, 'Admission and deployment must use the same GitHub repository and owner identities'],
   ['different repository owner', (config: Record<string, unknown>) => {
     (config.deployment as Record<string, unknown>).repositoryOwnerId = '2000000';
-  }],
+  }, 'Admission and deployment must use the same GitHub repository and owner identities'],
   ['shared workflow', (config: Record<string, unknown>) => {
     (config.deployment as Record<string, unknown>).workflow = 'Artifact Admission Test';
-  }],
+  }, 'Admission and deployment must use different GitHub workflows'],
   ['shared environment', (config: Record<string, unknown>) => {
     (config.deployment as Record<string, unknown>).environment = 'artifact-admission-test';
-  }],
-] as const)('rejects %s', (_name, mutate) => {
+  }, 'Admission and deployment must use different GitHub Environments'],
+] as const)('rejects %s', (_name, mutate, expectedError) => {
   const config = cloneConfig();
   mutate(config);
-  expect(() => parseGitHubOidcTrustConfig(config)).toThrow();
+  expect(() => parseGitHubOidcTrustConfig(config)).toThrow(expectedError);
 });
 
 test('creates one GitHub provider and two exact-claim roles', () => {
@@ -265,16 +281,31 @@ test('attaches only admission statements to admission and bootstrap assumption t
   }
 });
 
-test('fails synthesis when an approved admission destination is missing from the catalog', () => {
-  const lookup = jest.spyOn(ARTIFACT_FOUNDATION_REPOSITORIES, 'find')
-    .mockReturnValueOnce(undefined);
-  try {
+test('names the missing recommendation MCP destination when the catalog drifts', () => {
+  const missingRecommendationMcp = artifactCatalog.ARTIFACT_FOUNDATION_REPOSITORIES.filter(
+    ({ componentId }) => componentId !== 'recommendation-mcp',
+  );
+  withRepositoryCatalog(missingRecommendationMcp, () => {
     expect(createTemplate).toThrow(
-      'The artifact foundation catalog is missing an approved admission repository.',
+      'The artifact foundation catalog is missing the approved admission repository for "recommendation-mcp".',
     );
-  } finally {
-    lookup.mockRestore();
-  }
+  });
+});
+
+test('adding a foundation repository does not grant admission authority to it', () => {
+  const originalRepositories = artifactCatalog.ARTIFACT_FOUNDATION_REPOSITORIES;
+  const expectedResources = policyStatements(createTemplate()).find(
+    ({ Sid }) => Sid === 'ReadAndWriteTrustedArtifactRepository',
+  )?.Resource;
+  withRepositoryCatalog([
+    ...originalRepositories,
+    { ...originalRepositories[0], componentId: 'future-service', repositoryName: 'movie-future-service' },
+  ], () => {
+    const repositoryStatement = policyStatements(createTemplate()).find(
+      ({ Sid }) => Sid === 'ReadAndWriteTrustedArtifactRepository',
+    );
+    expect(repositoryStatement?.Resource).toEqual(expectedResources);
+  });
 });
 
 test('publishes separate role discovery outputs', () => {

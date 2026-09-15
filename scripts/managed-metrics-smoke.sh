@@ -662,8 +662,31 @@ failure_stage='amp_metric'
 metric_deadline="$((SECONDS + metric_timeout_seconds))"
 amp_complete=0
 
+run_amp_query_with_timeout() {
+  local timeout_seconds="$1"
+  shift
+  # awscurl has no portable CLI timeout flag. Node is already a prerequisite;
+  # bound the actual process so a stalled request cannot hold the report open.
+  node - "${timeout_seconds}" "$@" <<'NODE'
+const { spawnSync } = require('node:child_process');
+const result = spawnSync('awscurl', process.argv.slice(3), {
+  stdio: ['ignore', 'inherit', 'inherit'],
+  timeout: Number(process.argv[2]) * 1000,
+  killSignal: 'SIGKILL',
+});
+if (result.error) {
+  console.error(result.error.code === 'ETIMEDOUT'
+    ? 'AMP query exceeded the remaining metric deadline.'
+    : 'Unable to execute the AMP query.');
+}
+process.exit(result.status ?? 1);
+NODE
+}
+
 while true; do
-  if ! awscurl \
+  amp_remaining_seconds="$((metric_deadline - SECONDS))"
+  ((amp_remaining_seconds > 0)) || break
+  if ! run_amp_query_with_timeout "${amp_remaining_seconds}" \
     --profile "${AWS_PROFILE}" \
     --region "${AWS_REGION}" \
     --service aps \
@@ -687,8 +710,9 @@ while true; do
     break
   fi
 
-  ((SECONDS < metric_deadline)) || break
-  sleep "${metric_poll_seconds}"
+  amp_remaining_seconds="$((metric_deadline - SECONDS))"
+  ((amp_remaining_seconds > 0)) || break
+  sleep "$((amp_remaining_seconds < metric_poll_seconds ? amp_remaining_seconds : metric_poll_seconds))"
 done
 
 if ((amp_complete == 0)); then
@@ -696,9 +720,11 @@ if ((amp_complete == 0)); then
 fi
 
 container_insights_query_json="$(
-  node - "${ecs_cluster_name}" "${ecs_service_name}" <<'NODE'
+  # The service hosts several containers; its name is not a container identity.
+  node - "${ecs_cluster_name}" "${ecs_service_name}" 'movie-reservation-service' <<'NODE'
 const clusterName = process.argv[2];
 const serviceName = process.argv[3];
+const reservationContainerName = process.argv[4];
 const dimension = (Name, Value) => ({ Name, Value });
 const taskDimensions = [
   dimension('ClusterName', clusterName),
@@ -706,7 +732,7 @@ const taskDimensions = [
 ];
 const containerDimensions = [
   ...taskDimensions,
-  dimension('ContainerName', serviceName),
+  dimension('ContainerName', reservationContainerName),
 ];
 const query = (id, metricName, dimensions) => ({
   Id: id,

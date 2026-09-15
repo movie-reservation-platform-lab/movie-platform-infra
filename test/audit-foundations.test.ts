@@ -9,6 +9,35 @@ const audit = (disposable = false): Template => Template.fromStack(new AuditStac
   env, config: resolveAuditConfig({ allowAuditDataDeletion: disposable }),
 }));
 
+test.each([
+  [1, 1], [3650, 3650], ['7', 7], [' 30 ', 30],
+] as const)('accepts explicit audit retention %p as %i days', (input, expectedDays) => {
+  expect(resolveAuditConfig({ auditRetentionDays: input }).auditRetentionDays).toBe(expectedDays);
+});
+
+test.each<{ name: string; value: unknown }>([
+  { name: 'boolean true', value: true },
+  { name: 'boolean false', value: false },
+  { name: 'null', value: null },
+  { name: 'empty array', value: [] },
+  { name: 'numeric array', value: [7] },
+  { name: 'object', value: {} },
+  { name: 'object with numeric coercion', value: { valueOf: () => 7 } },
+  { name: 'empty string', value: '' },
+  { name: 'whitespace', value: ' ' },
+  { name: 'nonnumeric string', value: 'seven' },
+  { name: 'zero', value: 0 },
+  { name: 'above maximum', value: 3651 },
+  { name: 'negative', value: -1 },
+  { name: 'fraction', value: 1.5 },
+  { name: 'NaN', value: Number.NaN },
+  { name: 'infinity', value: Number.POSITIVE_INFINITY },
+])('rejects audit retention $name instead of coercing it into a lifecycle', ({ value }) => {
+  expect(() => resolveAuditConfig({ auditRetentionDays: value })).toThrow(
+    'auditRetentionDays must be an integer from 1 through 3650.',
+  );
+});
+
 test('audit foundation is independent of workload networking, images and observability', () => {
   const template = audit();
   for (const type of ['AWS::ECS::Service', 'AWS::EC2::VPC', 'AWS::APS::Workspace', 'AWS::Grafana::Workspace', 'AWS::SQS::Queue', 'AWS::Lambda::Function']) {
@@ -99,10 +128,8 @@ test('observability has no workload or audit imports and optional Grafana is tru
   expect(JSON.stringify(template.toJSON())).not.toContain('Fn::ImportValue');
 });
 
-test('foundation settings reject accidental cleanup and invalid retention', () => {
+test('foundation settings retain audit data by default and reject ambiguous cleanup or ingress', () => {
   expect(resolveAuditConfig({})).toEqual({ allowAuditDataDeletion: false, auditRetentionDays: 30 });
   expect(() => resolveAuditConfig({ allowAuditDataDeletion: 'yes' })).toThrow();
-  expect(() => resolveAuditConfig({ auditRetentionDays: 0 })).toThrow();
-  expect(() => resolveAuditConfig({ auditRetentionDays: 3651 })).toThrow();
   expect(() => resolveObservabilityConfig({ allowedIngressPrefixListId: '*' })).toThrow();
 });

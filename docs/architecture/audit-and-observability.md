@@ -48,6 +48,9 @@ not just that container. Adding the router keeps the task at 2 vCPU / 4 GiB:
 Nginx's CPU reservation drops from 256 to 128 units to make room for the router.
 The router has 128 CPU units and 256 MiB. The six apps plus router are essential;
 ADOT remains nonessential. A router crash therefore triggers task replacement.
+Nonessential ADOT protects an already-running task from collector exit; it does
+not make startup independent of telemetry. Application dependencies require the
+collector to become healthy before the API/MCP/agent startup chain can complete.
 
 ## Event routing
 

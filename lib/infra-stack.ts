@@ -329,8 +329,8 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       );
     }
 
-    // This per-task collector is deliberately nonessential: telemetry loss
-    // must not make the demo application unavailable.
+    // Collector failure does not stop an already-running task. Initial startup
+    // still requires collector health through the application dependencies below.
     const adotContainer = taskDefinition.addContainer('AdotContainer', {
       containerName: 'adot-collector',
       image: ecs.ContainerImage.fromDockerImageAsset(adotImage),
@@ -381,7 +381,8 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         ROUTER_LOG_GROUP: routerLogGroup.logGroupName,
       },
     });
-    const componentLogging = (_component: (typeof APPLICATION_COMPONENTS)[number]) =>
+    // Routing uses container-derived FireLens tags in audit-router/platform.conf.
+    const createApplicationLogDriver = (): ecs.LogDriver =>
       ecs.LogDrivers.firelens({ options: { 'log-driver-buffer-limit': '1024' } });
     const healthCheck = (command: string[]): ecs.HealthCheck => ({
       command,
@@ -410,7 +411,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       essential: true,
       cpu: 384,
       memoryLimitMiB: 640,
-      logging: componentLogging('reservation-service'),
+      logging: createApplicationLogDriver(),
       secrets: demoAuthSecrets,
       environment: {
         ...demoAuthEnvironment,
@@ -446,7 +447,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       essential: true,
       cpu: 384,
       memoryLimitMiB: 512,
-      logging: componentLogging('recommendation-service'),
+      logging: createApplicationLogDriver(),
       secrets: demoAuthSecrets,
       environment: {
         ...demoAuthEnvironment,
@@ -475,7 +476,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       essential: true,
       cpu: 256,
       memoryLimitMiB: 384,
-      logging: componentLogging('reservation-mcp'),
+      logging: createApplicationLogDriver(),
       environment: {
         HOST: '0.0.0.0',
         PORT: '8091',
@@ -503,7 +504,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       essential: true,
       cpu: 256,
       memoryLimitMiB: 384,
-      logging: componentLogging('recommendation-mcp'),
+      logging: createApplicationLogDriver(),
       environment: {
         HOST: '0.0.0.0',
         PORT: '8092',
@@ -538,7 +539,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       essential: true,
       cpu: 384,
       memoryLimitMiB: 768,
-      logging: componentLogging('reservation-agent'),
+      logging: createApplicationLogDriver(),
       secrets: demoAuthSecrets,
       environment: {
         ...demoAuthEnvironment,
@@ -579,7 +580,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       essential: true,
       cpu: 128,
       memoryLimitMiB: 256,
-      logging: componentLogging('reservation-web'),
+      logging: createApplicationLogDriver(),
       environment: {
         SERVICE_VERSION: images.reservationWeb.serviceVersion,
       },

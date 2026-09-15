@@ -186,9 +186,10 @@ CDK Docker image assets hash the Docker build context. Keep `.dockerignore`
 accurate so docs, generated output, local tool directories, and unrelated
 workspaces do not perturb image hashes or slow synth/deploy.
 
-For this repository, the ADOT collector Dockerfile lives in `adot-collector/`
-and is the only repository-owned Docker image asset. Application images are
-external artifacts supplied by digest-pinned private ECR references.
+For this repository, the owned Docker image assets live in `adot-collector/`
+(telemetry collector) and `audit-router/` (FireLens/Fluent Bit routing).
+Application images are external artifacts supplied by digest-pinned private ECR
+references.
 
 ## Testing Guidance
 
