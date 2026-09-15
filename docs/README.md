@@ -4,6 +4,9 @@ This folder owns documentation for the standalone AWS CDK infrastructure
 repository. The root `README.md` stays as the quick start and command reference;
 this folder holds durable design, planning, and operations material.
 
+Start with the [code and test reading guide](architecture/code-reading-guide.md)
+to trace configuration through a stack into its synthesized assertions.
+
 ## Sections
 
 - `plans/`: issue-level implementation plans and review notes before

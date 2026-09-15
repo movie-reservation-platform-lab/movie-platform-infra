@@ -329,8 +329,8 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       );
     }
 
-    // This per-task collector is deliberately nonessential: telemetry loss
-    // must not make the demo application unavailable.
+    // Collector failure does not stop an already-running task. Initial startup
+    // still requires collector health through the application dependencies below.
     const adotContainer = taskDefinition.addContainer('AdotContainer', {
       containerName: 'adot-collector',
       image: ecs.ContainerImage.fromDockerImageAsset(adotImage),
@@ -381,7 +381,8 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         ROUTER_LOG_GROUP: routerLogGroup.logGroupName,
       },
     });
-    const componentLogging = (_component: (typeof APPLICATION_COMPONENTS)[number]) =>
+    // Routing uses container-derived FireLens tags in audit-router/platform.conf.
+    const createApplicationLogDriver = (): ecs.LogDriver =>
       ecs.LogDrivers.firelens({ options: { 'log-driver-buffer-limit': '1024' } });
     const healthCheck = (command: string[]): ecs.HealthCheck => ({
       command,
@@ -410,7 +411,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       essential: true,
       cpu: 384,
       memoryLimitMiB: 640,
-      logging: componentLogging('reservation-service'),
+      logging: createApplicationLogDriver(),
       secrets: demoAuthSecrets,
       environment: {
         ...demoAuthEnvironment,
@@ -446,7 +447,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       essential: true,
       cpu: 384,
       memoryLimitMiB: 512,
-      logging: componentLogging('recommendation-service'),
+      logging: createApplicationLogDriver(),
       secrets: demoAuthSecrets,
       environment: {
         ...demoAuthEnvironment,
@@ -475,7 +476,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       essential: true,
       cpu: 256,
       memoryLimitMiB: 384,
-      logging: componentLogging('reservation-mcp'),
+      logging: createApplicationLogDriver(),
       environment: {
         HOST: '0.0.0.0',
         PORT: '8091',
@@ -485,8 +486,10 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         SERVICE_VERSION: images.reservationMcp.serviceVersion,
       },
       healthCheck: healthCheck([
-        'CMD-SHELL',
-        'curl -fsS http://127.0.0.1:8091/health || exit 1',
+        'CMD',
+        'python',
+        '-c',
+        "from urllib.request import urlopen; urlopen('http://127.0.0.1:8091/health', timeout=2).close()",
       ]),
     });
     reservationMcp.addPortMappings({ containerPort: 8091, protocol: ecs.Protocol.TCP });
@@ -501,7 +504,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       essential: true,
       cpu: 256,
       memoryLimitMiB: 384,
-      logging: componentLogging('recommendation-mcp'),
+      logging: createApplicationLogDriver(),
       environment: {
         HOST: '0.0.0.0',
         PORT: '8092',
@@ -512,8 +515,10 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         ...otelEnvironment('movie-recommendation-mcp', 4320),
       },
       healthCheck: healthCheck([
-        'CMD-SHELL',
-        'curl -fsS http://127.0.0.1:8092/health || exit 1',
+        'CMD',
+        'python',
+        '-c',
+        "from urllib.request import urlopen; urlopen('http://127.0.0.1:8092/health', timeout=2).close()",
       ]),
     });
     recommendationMcp.addPortMappings({ containerPort: 8092, protocol: ecs.Protocol.TCP });
@@ -534,7 +539,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       essential: true,
       cpu: 384,
       memoryLimitMiB: 768,
-      logging: componentLogging('reservation-agent'),
+      logging: createApplicationLogDriver(),
       secrets: demoAuthSecrets,
       environment: {
         ...demoAuthEnvironment,
@@ -547,8 +552,10 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         ...otelEnvironment('movie-reservation-agent', 4319),
       },
       healthCheck: healthCheck([
-        'CMD-SHELL',
-        'curl -fsS http://127.0.0.1:8080/health || exit 1',
+        'CMD',
+        'python',
+        '-c',
+        "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/health', timeout=2).close()",
       ]),
     });
     reservationAgent.addPortMappings({ containerPort: 8080, protocol: ecs.Protocol.TCP });
@@ -573,7 +580,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       essential: true,
       cpu: 128,
       memoryLimitMiB: 256,
-      logging: componentLogging('reservation-web'),
+      logging: createApplicationLogDriver(),
       environment: {
         SERVICE_VERSION: images.reservationWeb.serviceVersion,
       },

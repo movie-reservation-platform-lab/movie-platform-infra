@@ -113,6 +113,25 @@ test('writes a sanitized dual-route success report with AMP and Container Insigh
     );
     expect(awscurlArguments).not.toContain('AWS_ACCESS_KEY_ID');
     expect(awscurlArguments).not.toContain('AWS_SECRET_ACCESS_KEY');
+
+    const containerQueries = readFileSync(fixture.awsArguments, 'utf8').split('\n')
+      .filter((argument) => argument.startsWith('[{'))
+      .map((argument) => JSON.parse(argument) as Array<{
+        Id: string;
+        MetricStat: { Metric: { Dimensions: Array<{ Name: string; Value: string }> } };
+      }>)
+      .find((queries) => queries.some(({ Id }) => Id === 'taskCpu'));
+    expect(containerQueries).toHaveLength(4);
+    for (const query of containerQueries ?? []) {
+      const expectedDimensions = [
+        { Name: 'ClusterName', Value: 'movie-reservation-platform-aws-demo' },
+        { Name: 'ServiceName', Value: 'movie-platform-demo' },
+      ];
+      if (query.Id.startsWith('container')) {
+        expectedDimensions.push({ Name: 'ContainerName', Value: 'movie-reservation-service' });
+      }
+      expect(query.MetricStat.Metric.Dimensions).toEqual(expectedDimensions);
+    }
   } finally {
     fixture.cleanup();
   }
@@ -167,6 +186,22 @@ test('rejects high-cardinality ECS identity labels returned by AMP', () => {
   }
 });
 
+test('bounds a stalled AMP process and still emits a failure report', () => {
+  const stalledAwscurl = `#!/usr/bin/env bash
+exec node -e 'setTimeout(() => process.exit(0), 5000)'
+`;
+  const fixture = createFixture(successfulAws, successfulCurl, stalledAwscurl);
+  try {
+    const result = runSmoke(fixture, { MANAGED_METRICS_SMOKE_METRIC_TIMEOUT_SECONDS: '1' });
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(1);
+    expect(parseReport(result).failure_stage).toBe('amp_query');
+    expect(result.stderr).toContain('AMP query exceeded the remaining metric deadline');
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test('requires all four enhanced Container Insights metrics', () => {
   const fixture = createFixture(emptyContainerInsightsAws, successfulCurl);
 
@@ -187,6 +222,7 @@ test('requires all four enhanced Container Insights metrics', () => {
 interface SmokeFixture {
   readonly directory: string;
   readonly awsMarker: string;
+  readonly awsArguments: string;
   readonly awscurlMarker: string;
   readonly awscurlArguments: string;
   readonly curlMarker: string;
@@ -200,11 +236,13 @@ function createFixture(
 ): SmokeFixture {
   const directory = mkdtempSync(path.join(tmpdir(), 'managed-metrics-smoke-'));
   const awsMarker = path.join(directory, 'aws-called');
+  const awsArguments = path.join(directory, 'aws-arguments');
   const awscurlMarker = path.join(directory, 'awscurl-called');
   const awscurlArguments = path.join(directory, 'awscurl-arguments');
   const curlMarker = path.join(directory, 'curl-called');
   const requestCounter = path.join(directory, 'request-counter');
   writeFileSync(awsMarker, '');
+  writeFileSync(awsArguments, '');
   writeFileSync(awscurlMarker, '');
   writeFileSync(awscurlArguments, '');
   writeFileSync(curlMarker, '');
@@ -216,6 +254,7 @@ function createFixture(
   return {
     directory,
     awsMarker,
+    awsArguments,
     awscurlMarker,
     awscurlArguments,
     curlMarker,
@@ -239,6 +278,7 @@ function runSmoke(
     AWS_PROFILE: 'test-profile',
     AWS_REGION: 'eu-central-1',
     AWS_MARKER: fixture.awsMarker,
+    AWS_ARGUMENTS: fixture.awsArguments,
     AWSCURL_MARKER: fixture.awscurlMarker,
     AWSCURL_ARGUMENTS: fixture.awscurlArguments,
     CURL_MARKER: fixture.curlMarker,
@@ -260,6 +300,9 @@ function runSmoke(
   return spawnSync('bash', [SMOKE_SCRIPT, '--base-url', 'http://example.test', ...extraArguments], {
     encoding: 'utf8',
     env,
+    // A regression must fail this test instead of hanging the Jest worker.
+    timeout: 15_000,
+    killSignal: 'SIGKILL',
   });
 }
 
@@ -303,13 +346,14 @@ const stackOutputs = JSON.stringify([
   },
   {
     OutputKey: 'EcsServiceName',
-    OutputValue: 'movie-reservation-service',
+    OutputValue: 'movie-platform-demo',
   },
 ]);
 
 const successfulAws = `#!/usr/bin/env bash
 set -euo pipefail
 printf called >"\${AWS_MARKER}"
+printf '%s\\n' "\$@" >>"\${AWS_ARGUMENTS}"
 if [[ "\${1:-}" == 'cloudformation' ]]; then
   printf '%s\\n' '${stackOutputs}'
 elif [[ "\${1:-}" == 'cloudwatch' ]]; then
@@ -359,8 +403,8 @@ fi
 
 const ampBaseLabels = {
   aws_ecs_cluster_name: 'movie-reservation-platform-aws-demo',
-  aws_ecs_service_name: 'movie-reservation-service',
-  aws_ecs_task_family: 'aws-demo-movie-reservation-service',
+  aws_ecs_service_name: 'movie-platform-demo',
+  aws_ecs_task_family: 'aws-demo-movie-platform-demo',
   cloud_region: 'eu-central-1',
 };
 const successfulAmpResponse = JSON.stringify({

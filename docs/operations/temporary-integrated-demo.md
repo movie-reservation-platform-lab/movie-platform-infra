@@ -21,7 +21,8 @@ for explicit approval. Record only sanitized outcomes in
 - One task couples the deployment, scaling, health, and rollback of all six
   components. Issue #6 owns the later independently deployable topology.
 - ECS health checks deliberately mirror the selected images' published runtime
-  contracts: `wget /health` for web, `curl /health` for the agent and MCPs,
+  contracts: `wget /health` for web, Python `urllib.request` against `/health`
+  with a two-second HTTP timeout for the agent and MCPs,
   `curl /ready` for recommendation service, and the distroless reservation
   service's `/nodejs/bin/node` plus `fetch(/ready)`. Changing a sibling base
   image, binary path, or health route can break this stack without changing this

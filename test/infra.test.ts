@@ -320,16 +320,22 @@ test('uses the health commands supported by the six published runtime images', (
     'curl -fsS http://127.0.0.1:8082/ready || exit 1',
   ]);
   expect(container(template, 'movie-reservation-mcp').HealthCheck?.Command).toEqual([
-    'CMD-SHELL',
-    'curl -fsS http://127.0.0.1:8091/health || exit 1',
+    'CMD',
+    'python',
+    '-c',
+    "from urllib.request import urlopen; urlopen('http://127.0.0.1:8091/health', timeout=2).close()",
   ]);
   expect(container(template, 'movie-recommendation-mcp').HealthCheck?.Command).toEqual([
-    'CMD-SHELL',
-    'curl -fsS http://127.0.0.1:8092/health || exit 1',
+    'CMD',
+    'python',
+    '-c',
+    "from urllib.request import urlopen; urlopen('http://127.0.0.1:8092/health', timeout=2).close()",
   ]);
   expect(container(template, 'movie-reservation-agent').HealthCheck?.Command).toEqual([
-    'CMD-SHELL',
-    'curl -fsS http://127.0.0.1:8080/health || exit 1',
+    'CMD',
+    'python',
+    '-c',
+    "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/health', timeout=2).close()",
   ]);
   expect(container(template, 'movie-reservation-web').HealthCheck?.Command).toEqual([
     'CMD-SHELL',
@@ -381,13 +387,14 @@ test('wires task-local URLs, deterministic behavior, faults, versions, and disti
   );
 });
 
-test('uses health-gated API-to-MCP-to-agent-to-web startup dependencies', () => {
+test('requires collector readiness before API-to-MCP-to-agent-to-web startup, but tolerates later collector exit', () => {
   const dependency = (name: string, upstream: string, condition = 'HEALTHY') =>
     expect(container(template, name).DependsOn).toContainEqual({
       ContainerName: upstream,
       Condition: condition,
     });
 
+  expect(container(template, 'adot-collector').Essential).toBe(false);
   dependency('movie-reservation-service', 'adot-collector');
   dependency('movie-recommendation-service', 'adot-collector');
   dependency('movie-reservation-mcp', 'movie-reservation-service');
@@ -506,17 +513,22 @@ test('keeps Grafana read-only while granting approved AMP, metric, bounded log, 
   expect(xray).toMatchObject({ Action: expect.arrayContaining(['xray:GetGroups']) });
 });
 
-test('task role can export telemetry but application images cannot mutate AWS', () => {
+test('shared task role allows telemetry and audit writes but not image publishing or workload deployment', () => {
   const policies = resources(template, 'AWS::IAM::Policy');
   const taskPolicy = policies.find(({ Properties }) =>
     String(Properties?.PolicyName).includes('TaskRoleDefaultPolicy'),
   );
-  const rendered = JSON.stringify(taskPolicy?.Properties?.PolicyDocument);
-  expect(rendered).toContain('xray:PutTraceSegments');
-  expect(rendered).toContain('aps:RemoteWrite');
-  expect(rendered).toContain('logs:PutLogEvents');
-  expect(rendered).not.toContain('ecr:PutImage');
-  expect(rendered).not.toContain('ecs:UpdateService');
+  expect(taskPolicy).toBeDefined();
+  const document = taskPolicy?.Properties?.PolicyDocument as {
+    readonly Statement: Array<{ readonly Action: string | string[] }>;
+  };
+  // Every container in the task shares this role, including the applications.
+  const allowedActions = document.Statement.flatMap(actions);
+  expect(allowedActions).toEqual(expect.arrayContaining([
+    'xray:PutTraceSegments', 'aps:RemoteWrite', 'logs:PutLogEvents', 'firehose:PutRecordBatch',
+  ]));
+  expect(allowedActions).not.toContain('ecr:PutImage');
+  expect(allowedActions).not.toContain('ecs:UpdateService');
 });
 
 test('enables ECS Exec and its endpoint only when explicitly requested', () => {

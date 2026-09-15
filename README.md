@@ -8,6 +8,8 @@ build, test, and publish immutable artifacts; this CDK app consumes application
 images by private ECR digest and does not build sibling repository source during
 synth or deployment.
 
+New to the repository? Start with the [code and test reading guide](docs/architecture/code-reading-guide.md).
+
 ## Current Stacks
 
 The current CDK apps have separate lifecycle boundaries:
@@ -20,9 +22,12 @@ The current CDK apps have separate lifecycle boundaries:
 - `MovieReservationWorkloadStack` owns the disposable AWS demo reservation workload.
 - `ObservabilityStack` owns AMP, optional Grafana and operational log groups.
 - `AuditStack` owns Firehose, the S3 audit/ALB archives, CloudTrail and Athena.
+- `GitHubOidcTrustStack` owns the GitHub provider and separate artifact-admission
+  and workload-deployment entry roles.
 
 Start with the [audit demo deploy/destroy runbook](docs/operations/audit-demo.md)
-and [architecture](docs/architecture/audit-and-observability.md). Both foundations
+and [architecture](docs/architecture/audit-and-observability.md). The audit and
+observability foundations
 must exist before workload deployment. Their resources are not deleted by a
 workload-only teardown.
 
@@ -48,6 +53,11 @@ The integrated task runs the Nginx frontend, deterministic reservation agent,
 two MCP servers, two APIs, ADOT and the audit router. Only web port 8088
 is registered with the ALB. This is a deadline demo shortcut, not the later
 independently deployable topology.
+
+The agent and both MCP health checks use Python's standard-library HTTP client,
+matching their minimized production images, which no longer include `curl`.
+When adopting those images, synthesize and review a fresh workload assembly so
+the ECS health commands match the runtime.
 
 ## Useful Commands
 
@@ -109,6 +119,9 @@ Follow the controlling
 deploying, verifying, or finally deleting the persistent foundation.
 
 ## AWS Operator Access
+
+For the GitHub admission-role expansion and its independent rollout, see
+[container admission permissions](docs/operations/container-admission-permissions.md).
 
 Before a real AWS deployment, complete the
 [standalone-account access bootstrap](docs/operations/standalone-account-access-bootstrap.md).
@@ -184,9 +197,13 @@ claim so private configuration can use GitHub's supported subject formats.
 Wildcards, placeholders, and non-main refs are rejected. Do not commit a real
 file, account ID, repository name, or workflow identity here.
 
-The admission role can authenticate to ECR and write/read only the
-infra-owned reservation-service repository. The deployment entry role has no
-admission permission; it can assume only the selected account and Region's
+The admission role can authenticate to ECR and write/read only the six explicitly
+approved, infra-owned container repositories listed in the
+[admission runbook](docs/operations/container-admission-permissions.md).
+Adding a foundation catalog entry does not automatically grant admission access.
+The environment consumer owns evidence verification and current vulnerability
+policy; evidence-version changes do not add AWS permissions. The deployment entry
+role has no admission permission; it can assume only the selected account and Region's
 exact modern CDK bootstrap roles. The bootstrap `CloudFormationExecutionRole`
 still determines effective deployment authority and requires a separate live
 policy review before use.
@@ -308,14 +325,21 @@ AWS_PROFILE="$AWS_PROFILE" AWS_REGION="$AWS_REGION" \
   npm run smoke:managed-metrics -- --report /tmp/managed-metrics-smoke.json
 ```
 
+The Container Insights check uses the deployed ECS service name and separately
+selects the reservation application container. AMP requests are terminated when
+the remaining `MANAGED_METRICS_SMOKE_METRIC_TIMEOUT_SECONDS` budget expires;
+a stalled request still produces an `amp_query` failure report.
+
 ## Teardown
 
-Use Gate 6 of the
-[temporary integrated demo runbook](docs/operations/temporary-integrated-demo.md#gate-6-teardown)
-with the same complete six-image context and a fresh explicit approval.
+Use the [current drain-and-destroy sequence](docs/operations/audit-demo.md#6-stop-spending-drain-and-destroy-in-order)
+with the reviewed assemblies and explicit operator approval. Destroy the workload
+before its audit and observability foundations because it imports their outputs.
 
-Confirm that the CloudFormation stack, ALB, ECS service/tasks, AMP and Grafana
-workspaces, Grafana role, VPC endpoints, and log groups are gone. The
+Workload-only teardown removes its ALB, ECS service/tasks, VPC and endpoints.
+AMP, Grafana, operational log groups and audit storage belong to independent
+foundations and require their own cleanup steps. Confirm those separately when
+performing full demo cleanup; retained audit objects have a distinct deletion opt-in. The
 customer-managed prefix list, CDK bootstrap, Organizations, and IAM Identity
 Center resources are account/Region-level and are not part of
 `MovieReservationWorkloadStack`. Follow the bootstrap runbook's first-rehearsal exit gate

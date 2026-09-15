@@ -105,7 +105,9 @@ npm run cdk -- --app .local/audit-demo/observability-assembly deploy Observabili
 
 Audit and ALB data expire after 30 days by default. Change with
 `-c auditRetentionDays=<1..3650>` when synthesizing audit. Query results expire
-after 7 days. Buckets retain on stack deletion unless explicitly changed in the
+after 7 days. Retention accepts an integer or a numeric CLI string; booleans,
+arrays, objects and blank values are rejected before synthesis. Buckets retain on
+stack deletion unless explicitly changed in the
 cleanup section. CloudTrail captures this Region's write-management events;
 check existing trails first because duplicate copies can add charges.
 
