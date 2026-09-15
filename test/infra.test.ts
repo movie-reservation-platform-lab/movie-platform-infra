@@ -320,16 +320,22 @@ test('uses the health commands supported by the six published runtime images', (
     'curl -fsS http://127.0.0.1:8082/ready || exit 1',
   ]);
   expect(container(template, 'movie-reservation-mcp').HealthCheck?.Command).toEqual([
-    'CMD-SHELL',
-    'curl -fsS http://127.0.0.1:8091/health || exit 1',
+    'CMD',
+    'python',
+    '-c',
+    "from urllib.request import urlopen; urlopen('http://127.0.0.1:8091/health', timeout=2).close()",
   ]);
   expect(container(template, 'movie-recommendation-mcp').HealthCheck?.Command).toEqual([
-    'CMD-SHELL',
-    'curl -fsS http://127.0.0.1:8092/health || exit 1',
+    'CMD',
+    'python',
+    '-c',
+    "from urllib.request import urlopen; urlopen('http://127.0.0.1:8092/health', timeout=2).close()",
   ]);
   expect(container(template, 'movie-reservation-agent').HealthCheck?.Command).toEqual([
-    'CMD-SHELL',
-    'curl -fsS http://127.0.0.1:8080/health || exit 1',
+    'CMD',
+    'python',
+    '-c',
+    "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/health', timeout=2).close()",
   ]);
   expect(container(template, 'movie-reservation-web').HealthCheck?.Command).toEqual([
     'CMD-SHELL',

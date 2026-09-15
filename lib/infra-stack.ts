@@ -485,8 +485,10 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         SERVICE_VERSION: images.reservationMcp.serviceVersion,
       },
       healthCheck: healthCheck([
-        'CMD-SHELL',
-        'curl -fsS http://127.0.0.1:8091/health || exit 1',
+        'CMD',
+        'python',
+        '-c',
+        "from urllib.request import urlopen; urlopen('http://127.0.0.1:8091/health', timeout=2).close()",
       ]),
     });
     reservationMcp.addPortMappings({ containerPort: 8091, protocol: ecs.Protocol.TCP });
@@ -512,8 +514,10 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         ...otelEnvironment('movie-recommendation-mcp', 4320),
       },
       healthCheck: healthCheck([
-        'CMD-SHELL',
-        'curl -fsS http://127.0.0.1:8092/health || exit 1',
+        'CMD',
+        'python',
+        '-c',
+        "from urllib.request import urlopen; urlopen('http://127.0.0.1:8092/health', timeout=2).close()",
       ]),
     });
     recommendationMcp.addPortMappings({ containerPort: 8092, protocol: ecs.Protocol.TCP });
@@ -547,8 +551,10 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         ...otelEnvironment('movie-reservation-agent', 4319),
       },
       healthCheck: healthCheck([
-        'CMD-SHELL',
-        'curl -fsS http://127.0.0.1:8080/health || exit 1',
+        'CMD',
+        'python',
+        '-c',
+        "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/health', timeout=2).close()",
       ]),
     });
     reservationAgent.addPortMappings({ containerPort: 8080, protocol: ecs.Protocol.TCP });

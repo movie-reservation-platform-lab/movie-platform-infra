@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 
+import { ARTIFACT_FOUNDATION_REPOSITORIES } from '../lib/artifact-foundation-repositories';
 import { parseGitHubOidcTrustConfig } from '../lib/config/github-oidc-trust-config';
 import { GitHubOidcTrustStack } from '../lib/github-oidc-trust-stack';
 
@@ -232,6 +233,48 @@ test('limits deployment to exact CDK bootstrap role assumption', () => {
   expect(actions).not.toContain('ecr:BatchDeleteImage');
   expect(actions).not.toContain('cloudformation:*');
   expect(actions).not.toContain('iam:PassRole');
+});
+
+test('attaches only admission statements to admission and bootstrap assumption to deployment', () => {
+  const template = createTemplate();
+  const outputs = template.toJSON().Outputs as Record<string, {
+    readonly Value: { readonly 'Fn::GetAtt': readonly [string, string] };
+  }>;
+  const admissionRoleId = outputs.ArtifactAdmissionRoleArn.Value['Fn::GetAtt'][0];
+  const deploymentRoleId = outputs.WorkloadDeploymentRoleArn.Value['Fn::GetAtt'][0];
+  const policies = Object.values(template.findResources('AWS::IAM::Policy'));
+
+  expect(policies).toHaveLength(2);
+  for (const [roleId, statementIds] of [
+    [admissionRoleId, ['ReadAndWriteTrustedArtifactRepository', 'RequestEcrAuthorizationToken']],
+    [deploymentRoleId, ['AssumeSelectedCdkBootstrapRoles']],
+  ] as const) {
+    const attached = policies.filter((policy) => {
+      const roles = policy.Properties.Roles as Array<{ readonly Ref: string }>;
+      return roles.some(({ Ref }) => Ref === roleId);
+    });
+    expect(attached).toHaveLength(1);
+    expect(attached[0].Properties.Roles).toEqual([{ Ref: roleId }]);
+    const statements = attached[0].Properties.PolicyDocument.Statement as PolicyStatement[];
+    expect(statements.map(({ Sid }) => Sid).sort()).toEqual([...statementIds].sort());
+  }
+
+  for (const role of Object.values(template.findResources('AWS::IAM::Role'))) {
+    expect(role.Properties.ManagedPolicyArns).toBeUndefined();
+    expect(role.Properties.Policies).toBeUndefined();
+  }
+});
+
+test('fails synthesis when an approved admission destination is missing from the catalog', () => {
+  const lookup = jest.spyOn(ARTIFACT_FOUNDATION_REPOSITORIES, 'find')
+    .mockReturnValueOnce(undefined);
+  try {
+    expect(createTemplate).toThrow(
+      'The artifact foundation catalog is missing an approved admission repository.',
+    );
+  } finally {
+    lookup.mockRestore();
+  }
 });
 
 test('publishes separate role discovery outputs', () => {

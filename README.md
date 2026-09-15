@@ -49,6 +49,11 @@ two MCP servers, two APIs, ADOT and the audit router. Only web port 8088
 is registered with the ALB. This is a deadline demo shortcut, not the later
 independently deployable topology.
 
+The agent and both MCP health checks use Python's standard-library HTTP client,
+matching their minimized production images, which no longer include `curl`.
+When adopting those images, synthesize and review a fresh workload assembly so
+the ECS health commands match the runtime.
+
 ## Useful Commands
 
 Run commands from this repository root:
@@ -187,9 +192,13 @@ claim so private configuration can use GitHub's supported subject formats.
 Wildcards, placeholders, and non-main refs are rejected. Do not commit a real
 file, account ID, repository name, or workflow identity here.
 
-The admission role can authenticate to ECR and write/read only the
-infra-owned reservation-service repository. The deployment entry role has no
-admission permission; it can assume only the selected account and Region's
+The admission role can authenticate to ECR and write/read only the six explicitly
+approved, infra-owned container repositories listed in the
+[admission runbook](docs/operations/container-admission-permissions.md).
+Adding a foundation catalog entry does not automatically grant admission access.
+The environment consumer owns evidence verification and current vulnerability
+policy; evidence-version changes do not add AWS permissions. The deployment entry
+role has no admission permission; it can assume only the selected account and Region's
 exact modern CDK bootstrap roles. The bootstrap `CloudFormationExecutionRole`
 still determines effective deployment authority and requires a separate live
 policy review before use.

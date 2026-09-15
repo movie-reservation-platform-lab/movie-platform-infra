@@ -74,6 +74,9 @@ jobs:
       - name: Run artifact-foundation CDK assertion tests
         run: npm run test:cdk:foundation
 
+      - name: Run GitHub OIDC trust and admission permission tests
+        run: npm run test:cdk:github-oidc-trust
+
       - name: Run audit and observability foundation tests
         run: npm run test:cdk:audit-foundations
 
@@ -147,6 +150,9 @@ jobs:
 
       - name: Run artifact-foundation offline synth contract
         run: npm run synth:artifact-foundation
+
+      - name: Run GitHub OIDC trust offline synth contract
+        run: npm run synth:github-oidc-trust
 
       - name: Synthesize independent audit foundation
         run: npm run synth:audit

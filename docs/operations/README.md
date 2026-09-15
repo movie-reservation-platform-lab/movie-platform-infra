@@ -16,6 +16,9 @@ infrastructure repository.
   persistent Organization/Identity Center prerequisites, MFA-backed operator
   access, and the temporary-Admin-to-Editor Grafana workflow.
 - [AWS CDK Deployment Runbook](./aws-cdk-deployment.md)
+- [Container Admission Permissions](./container-admission-permissions.md): exact
+  six-repository IAM boundary, pilot/v3 evidence prerequisites and independent
+  trust-stack rollout.
 - [Temporary Integrated AWS Demo Runbook](./temporary-integrated-demo.md):
   previous demo's artifact-copy and smoke background for six exact images,
   unified Grafana correlation, three-scenario smoke, and routine teardown.
