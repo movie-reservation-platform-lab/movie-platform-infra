@@ -80,6 +80,7 @@ export class ObservabilityStack extends cdk.Stack {
 
     let grafanaId = 'disabled';
     let grafanaUrl = 'disabled';
+    let grafanaRoleArn = 'disabled';
     if (platformConfig.enableGrafana) {
       // The workspace ARN is deliberately wildcarded in the trust policy to
       // avoid a CloudFormation cycle: Grafana needs this role ARN while creating
@@ -135,6 +136,7 @@ export class ObservabilityStack extends cdk.Stack {
           }),
         ],
       });
+      grafanaRoleArn = grafanaDataAccessRole.roleArn;
 
       const grafanaWorkspace = new grafana.CfnWorkspace(this, 'GrafanaWorkspace', {
         accountAccessType: 'CURRENT_ACCOUNT',
@@ -222,5 +224,6 @@ export class ObservabilityStack extends cdk.Stack {
     foundationOutput(this, 'AmpPrometheusEndpoint', ampWorkspace.attrPrometheusEndpoint);
     foundationOutput(this, 'GrafanaWorkspaceId', grafanaId);
     foundationOutput(this, 'GrafanaWorkspaceUrl', grafanaUrl);
+    foundationOutput(this, 'GrafanaDataAccessRoleArn', grafanaRoleArn);
   }
 }

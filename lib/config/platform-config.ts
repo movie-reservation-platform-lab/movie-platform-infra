@@ -39,6 +39,7 @@ export interface PlatformConfig {
   readonly vpcMaxAzs: 2;
   readonly workloadAzCount: 1;
   readonly enableEcsExec: boolean;
+  readonly enableTempo: boolean;
   readonly metricsExportIntervalSeconds: number;
   readonly demoAuthEnabled: boolean;
   readonly demoAuthSecretArn?: string;
@@ -61,6 +62,7 @@ export interface PlatformConfigContext {
   readonly recommendationServiceImageReference?: unknown;
   readonly recommendationServiceVersion?: unknown;
   readonly enableEcsExec?: unknown;
+  readonly enableTempo?: unknown;
   readonly metricsExportIntervalSeconds?: unknown;
   readonly demoAuthEnabled?: unknown;
   readonly demoAuthSecretArn?: unknown;
@@ -267,6 +269,7 @@ export function resolvePlatformConfig(
     vpcMaxAzs: 2,
     workloadAzCount: 1,
     enableEcsExec: parseBoolean(context.enableEcsExec, 'enableEcsExec'),
+    enableTempo: parseBoolean(context.enableTempo, 'enableTempo'),
     demoAuthEnabled,
     demoAuthSecretArn,
     metricsExportIntervalSeconds: parseIntegerInRange(

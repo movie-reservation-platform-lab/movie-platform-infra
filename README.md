@@ -21,6 +21,10 @@ The current CDK apps have separate lifecycle boundaries:
   discover sibling repositories from the workspace.
 - `MovieReservationWorkloadStack` owns the disposable AWS demo reservation workload.
 - `ObservabilityStack` owns AMP, optional Grafana and operational log groups.
+
+The opt-in [private Tempo rehearsal backend](docs/operations/private-tempo.md)
+adds native Grafana tracing while retaining AMP and X-Ray. It is disabled by
+default and requires explicit AMG attach/detach steps before workload teardown.
 - `AuditStack` owns Firehose, the S3 audit/ALB archives, CloudTrail and Athena.
 - `GitHubOidcTrustStack` owns the GitHub provider and separate artifact-admission
   and workload-deployment entry roles.

@@ -13,6 +13,7 @@ import { Construct } from 'constructs';
 
 import { resolveApplicationImage } from './application-image';
 import type { PlatformConfig } from './config/platform-config';
+import { PrivateTempo } from './private-tempo';
 
 const WEB_CONTAINER_PORT = 8088;
 const AMP_REMOTE_WRITE_ACTIONS = ['aps:RemoteWrite'];
@@ -164,6 +165,14 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         resources: ['*'],
       }),
     );
+    if (platformConfig.enableTempo) {
+      xrayEndpoint.addToPolicy(new iam.PolicyStatement({
+        principals: [new iam.AnyPrincipal()], resources: ['*'],
+        actions: ['xray:BatchGetTraces', 'xray:GetGroups', 'xray:GetInsight', 'xray:GetInsightEvents',
+          'xray:GetInsightImpactGraph', 'xray:GetInsightSummaries', 'xray:GetServiceGraph',
+          'xray:GetTimeSeriesServiceStatistics', 'xray:GetTraceGraph', 'xray:GetTraceSummaries'],
+      }));
+    }
     const ampWorkspaceEndpoint = vpc.addInterfaceEndpoint('AmpWorkspaceEndpoint', {
       ...interfaceEndpointProps,
       service: ec2.InterfaceVpcEndpointAwsService.PROMETHEUS_WORKSPACES,
@@ -175,6 +184,20 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         resources: [ampWorkspace.attrArn],
       }),
     );
+    if (platformConfig.enableTempo) {
+      ampWorkspaceEndpoint.addToPolicy(new iam.PolicyStatement({
+        principals: [new iam.AnyPrincipal()], resources: [ampWorkspace.attrArn],
+        actions: ['aps:QueryMetrics', 'aps:GetLabels', 'aps:GetMetricMetadata', 'aps:GetSeries'],
+      }));
+      // AMG sends all data-source requests through its VPC attachment, not just Tempo.
+      for (const [id, service] of [
+        ['CloudWatchMetricsEndpoint', ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_MONITORING],
+        ['Ec2Endpoint', ec2.InterfaceVpcEndpointAwsService.EC2],
+        ['AmpControlEndpoint', ec2.InterfaceVpcEndpointAwsService.PROMETHEUS],
+      ] as const) {
+        vpc.addInterfaceEndpoint(id, { ...interfaceEndpointProps, service });
+      }
+    }
     const firehoseEndpoint = vpc.addInterfaceEndpoint('FirehoseEndpoint', {
       ...interfaceEndpointProps,
       service: ec2.InterfaceVpcEndpointAwsService.KINESIS_FIREHOSE,
@@ -207,6 +230,12 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         resources: ['*'],
       }),
     );
+    if (platformConfig.enableTempo) {
+      stsEndpoint.addToPolicy(new iam.PolicyStatement({
+        principals: [new iam.AnyPrincipal()], actions: ['sts:AssumeRole'],
+        resources: [importFoundationOutput('GrafanaDataAccessRoleArn')],
+      }));
+    }
 
     if (platformConfig.enableEcsExec) {
       vpc.addInterfaceEndpoint('SsmMessagesEndpoint', {
@@ -223,6 +252,10 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
     });
 
     const repositoryRoot = process.cwd();
+    const tempo = platformConfig.enableTempo ? new PrivateTempo(this, 'Tempo', {
+      vpc, cluster, workloadSubnets: workloadSubnetSelection,
+      applicationSecurityGroup: serviceSecurityGroup, endpointSecurityGroup, repositoryRoot,
+    }) : undefined;
     const images = {
       reservationService: resolveApplicationImage(
         this,
@@ -334,6 +367,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
     const adotContainer = taskDefinition.addContainer('AdotContainer', {
       containerName: 'adot-collector',
       image: ecs.ContainerImage.fromDockerImageAsset(adotImage),
+      command: tempo ? ['--config=/etc/adot/adot-config.yaml', '--config=/etc/adot/tempo-overlay.yaml'] : undefined,
       essential: false,
       cpu: 128,
       memoryLimitMiB: 384,
@@ -345,6 +379,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         streamPrefix: 'adot',
       }),
       environment: {
+        ...(tempo ? { TEMPO_OTLP_ENDPOINT: tempo.otlpEndpoint } : {}),
         AWS_REGION: cdk.Stack.of(this).region,
         AWS_STS_REGIONAL_ENDPOINTS: 'regional',
         AMP_REMOTE_WRITE_ENDPOINT: cdk.Fn.join('', [ampWorkspace.attrPrometheusEndpoint, 'api/v1/remote_write']),
