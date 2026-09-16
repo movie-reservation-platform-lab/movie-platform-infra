@@ -23,7 +23,7 @@ npm run --silent render:interview-grafana -- \
   --grafana-url "$GRAFANA_URL" \
   --runbook-url "$PUBLIC_PINNED_RUNBOOK_URL" \
   --environment aws-demo \
-  --tempo-uid demo-tempo > /tmp/interview-grafana.json
+  --tempo-uid "$TEMPO_DATASOURCE_UID" > /tmp/interview-grafana.json
 
 jq '.dashboard' /tmp/interview-grafana.json > /tmp/interview-dashboard.json
 jq '.ruleGroup' /tmp/interview-grafana.json > /tmp/interview-alert-group.json
@@ -31,6 +31,9 @@ jq '.ruleGroup' /tmp/interview-grafana.json > /tmp/interview-alert-group.json
 
 Omit `--tempo-uid` until Tempo is reachable in AMG. Its absence must not block the
 real AMP alert. The Tempo search link uses native Explore/TraceQL, not an X-Ray ID.
+Use the actual data-source UID shown by Grafana, not its display name. `demo-tempo`
+is only the suggested UID when explicitly set during API/provisioned creation;
+UI creation can assign a different UID.
 If the installed plugin ignores the link query, select `demo-tempo` in Explore
 and paste `{ resource.service.name = "movie-recommendation-service" }` manually.
 
