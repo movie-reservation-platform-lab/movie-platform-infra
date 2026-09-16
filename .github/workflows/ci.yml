@@ -107,6 +107,9 @@ jobs:
       - name: Validate ADOT image
         run: npm run validate:adot-image
 
+      - name: Validate real ADOT to Tempo trace path without AWS network
+        run: npm run validate:tempo-image
+
       - name: Validate audit router with real Fluent Bit and no AWS network
         run: npm run validate:audit-router
 

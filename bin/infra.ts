@@ -26,6 +26,7 @@ const platformConfig = resolvePlatformConfig(
     recommendationServiceImageReference: app.node.tryGetContext('recommendationServiceImageReference'),
     recommendationServiceVersion: app.node.tryGetContext('recommendationServiceVersion'),
     enableEcsExec: app.node.tryGetContext('enableEcsExec'),
+    enableTempo: app.node.tryGetContext('enableTempo'),
     metricsExportIntervalSeconds: app.node.tryGetContext('metricsExportIntervalSeconds'),
     demoAuthEnabled: app.node.tryGetContext('demoAuthEnabled'),
     demoAuthSecretArn: app.node.tryGetContext('demoAuthSecretArn'),

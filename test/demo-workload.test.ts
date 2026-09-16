@@ -32,6 +32,11 @@ test('prepares only offline synth with the exact selected six-image composition'
   expect(prepareWorkloadSynth(release(), { ...options, selection: 'previous' }, {}).args).toContain('applicationServiceVersion=previous-version');
 });
 
+test('Tempo is an explicit synth opt-in outside the immutable application image contract', () => {
+  expect(prepareWorkloadSynth(release(), options, {}).args).not.toContain('enableTempo=true');
+  expect(prepareWorkloadSynth(release(), { ...options, enableTempo: true }, {}).args).toContain('enableTempo=true');
+});
+
 test('rejects conflicting target, misleading authority and unknown context keys', () => {
   expect(() => prepareWorkloadSynth(release(), options, { AWS_REGION: 'us-east-1' })).toThrow('conflicts');
   const document = release();

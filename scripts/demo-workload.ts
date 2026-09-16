@@ -13,6 +13,7 @@ interface SynthOptions {
   readonly output: string;
   readonly prefixListId: string;
   readonly demoAuthSecretArn?: string;
+  readonly enableTempo?: boolean;
 }
 
 interface SynthInvocation {
@@ -66,6 +67,7 @@ export function prepareWorkloadSynth(
     allowedIngressPrefixListId: options.prefixListId,
     demoAuthEnabled: options.demoAuthSecretArn !== undefined,
     demoAuthSecretArn: options.demoAuthSecretArn,
+    enableTempo: options.enableTempo,
   };
   const config = resolvePlatformConfig(platformContext, { account, region });
   if (!Array.isArray(composition.components) || composition.components.length !== 6) {
@@ -92,6 +94,7 @@ export function prepareWorkloadSynth(
   const args = ['synth', 'MovieReservationWorkloadStack', '--no-lookups', '--quiet', '--output', output];
   for (const key of CONTEXT_KEYS) args.push('-c', `${key}=${context[key]}`);
   args.push('-c', `allowedIngressPrefixListId=${options.prefixListId}`);
+  if (config.enableTempo) args.push('-c', 'enableTempo=true');
   if (options.demoAuthSecretArn) {
     args.push('-c', 'demoAuthEnabled=true', '-c', `demoAuthSecretArn=${options.demoAuthSecretArn}`);
   }
@@ -107,11 +110,12 @@ function main(): number {
       release: { type: 'string' }, selection: { type: 'string', default: 'proposed' },
       output: { type: 'string' }, 'prefix-list-id': { type: 'string' },
       'demo-auth-secret-arn': { type: 'string' }, help: { type: 'boolean' },
+      'enable-tempo': { type: 'boolean', default: false },
     },
     allowPositionals: false,
   });
   if (values.help) {
-    console.log('Usage: npm run demo:workload -- --release FILE --selection proposed|previous --output DIRECTORY --prefix-list-id pl-ID [--demo-auth-secret-arn ARN]');
+    console.log('Usage: npm run demo:workload -- --release FILE --selection proposed|previous --output DIRECTORY --prefix-list-id pl-ID [--demo-auth-secret-arn ARN] [--enable-tempo]');
     console.log('Validates the local release and synthesizes into a new directory. Never deploys or contacts registries.');
     return 0;
   }
@@ -123,6 +127,7 @@ function main(): number {
     output: string(values.output, '--output'),
     prefixListId: string(values['prefix-list-id'], '--prefix-list-id'),
     demoAuthSecretArn: values['demo-auth-secret-arn'],
+    enableTempo: values['enable-tempo'],
   });
   const result = spawnSync(process.execPath, [require.resolve('aws-cdk/bin/cdk'), ...invocation.args], {
     env: invocation.env, stdio: 'inherit', shell: false,

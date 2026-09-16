@@ -25,6 +25,10 @@ The current CDK apps have separate lifecycle boundaries:
 - `GitHubOidcTrustStack` owns the GitHub provider and separate artifact-admission
   and workload-deployment entry roles.
 
+The opt-in [private Tempo rehearsal backend](docs/operations/private-tempo.md)
+adds native Grafana tracing while retaining AMP and X-Ray. It is disabled by
+default and requires explicit AMG attach/detach steps before workload teardown.
+
 Start with the [audit demo deploy/destroy runbook](docs/operations/audit-demo.md)
 and [architecture](docs/architecture/audit-and-observability.md). The audit and
 observability foundations
