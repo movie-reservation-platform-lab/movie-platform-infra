@@ -122,6 +122,9 @@ jobs:
       - name: Validate Grafana dashboard
         run: npm run validate:grafana-dashboard
 
+      - name: Evaluate interview alert PromQL against synthetic scenarios
+        run: npm run validate:interview-promql
+
   # Synthesizes offline CDK contracts only after infra and tooling checks pass,
   # proving the repository can produce deployable CloudFormation templates.
   synth:
