@@ -2,7 +2,7 @@
 
 ## Summary and goals
 
-Add native tracing to the interview demo without replacing AMP, X-Ray, audit
+Add native tracing to the service demo without replacing AMP, X-Ray, audit
 routing or the six-image release contract. A separate private Fargate monolith
 is sufficient for a short, low-traffic rehearsal. Disabled is the default.
 

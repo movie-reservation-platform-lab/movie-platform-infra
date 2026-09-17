@@ -1,5 +1,5 @@
 /** Offline artifact construction. This module does not contact Grafana or AWS. */
-export interface InterviewGrafanaConfig {
+export interface ServiceGrafanaConfig {
   ampUid: string;
   folderUid: string;
   grafanaUrl: string;
@@ -11,7 +11,7 @@ export interface InterviewGrafanaConfig {
   pendingSeconds?: number;
 }
 
-const dashboardUid = 'sre-interview';
+const dashboardUid = 'service-observability';
 const ruleUid = 'sre-recommendation-errors';
 const service = 'movie-recommendation-service';
 const counter = 'movie_recommendation_service_http_requests_total';
@@ -38,7 +38,7 @@ function integer(value: number, name: string, minimum: number, maximum: number):
   return value;
 }
 
-export function renderInterviewGrafana(config: InterviewGrafanaConfig) {
+export function renderServiceGrafana(config: ServiceGrafanaConfig) {
   const ampUid = identifier(config.ampUid, 'ampUid');
   const folderUid = identifier(config.folderUid, 'folderUid');
   const environment = identifier(config.environment ?? 'aws-demo', 'environment');
@@ -76,8 +76,8 @@ export function renderInterviewGrafana(config: InterviewGrafanaConfig) {
     targets: [{ refId: 'A', datasource, expr, range: true, instant: false, legendFormat: '{{http_status_code}}' }],
   });
   const dashboard = {
-    uid: dashboardUid, title: 'SRE interview — recommendation service', schemaVersion: 39,
-    version: 1, editable: true, tags: ['sre-interview'], timezone: 'browser',
+    uid: dashboardUid, title: 'Service observability — recommendation service', schemaVersion: 39,
+    version: 1, editable: true, tags: ['service-observability'], timezone: 'browser',
     refresh: '15s', time: { from: 'now-15m', to: 'now' }, links,
     panels: [
       panel(1, 'Recommendation 5xx — estimated requests / 2m', errorCount, 'short', `Alert threshold >= ${minimumErrors}; pending ${pendingSeconds}s. No data is not a healthy zero.`),
@@ -88,10 +88,10 @@ export function renderInterviewGrafana(config: InterviewGrafanaConfig) {
   };
   const rule = {
     uid: ruleUid, title: 'Recommendation requests are failing', folderUID: folderUid,
-    ruleGroup: 'sre-interview', orgID: 1, condition: 'B',
+    ruleGroup: 'service-observability', orgID: 1, condition: 'B',
     for: `${pendingSeconds}s`, isPaused: true,
     noDataState: 'NoData', execErrState: 'Error',
-    labels: { exercise: 'sre-interview', environment, service, severity: 'warning' },
+    labels: { exercise: 'service-observability', environment, service, severity: 'warning' },
     annotations: {
       summary: 'Recommendation requests are returning server errors',
       description: `At least ${minimumErrors} estimated 5xx requests in 2 minutes, sustained for ${pendingSeconds}s. Agent-assisted booking may be affected. Investigate the time window; metrics do not identify one trace.`,
@@ -108,10 +108,10 @@ export function renderInterviewGrafana(config: InterviewGrafanaConfig) {
   return {
     dashboard,
     // This is the HTTP rule-group PUT shape, not provisioning-file/export JSON.
-    ruleGroup: { name: 'sre-interview', folderUid, interval: evaluationSeconds, rules: [rule] },
+    ruleGroup: { name: 'service-observability', folderUid, interval: evaluationSeconds, rules: [rule] },
     setup: {
-      folderTitle: 'SRE interview',
-      ruleGroupApiPath: `/api/v1/provisioning/folder/${folderUid}/rule-groups/sre-interview`,
+      folderTitle: 'Service observability',
+      ruleGroupApiPath: `/api/v1/provisioning/folder/${folderUid}/rule-groups/service-observability`,
       pausedOnImport: true,
       notificationSafety: 'Create and verify a silence on the dedicated grafana_folder before unpausing; cover generated DatasourceNoData/DatasourceError instances. Pause before silence expiry.',
       windowSeconds: 120, freshnessSeconds: 90,

@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { renderInterviewGrafana } from '../grafana/interview';
+import { renderServiceGrafana } from '../grafana/service';
 
 /** Stdio adapter only: emits reviewable JSON, never updates Grafana. */
 export function main(args: string[]): void {
@@ -18,7 +18,7 @@ export function main(args: string[]): void {
   for (const key of ['amp-uid', 'folder-uid', 'grafana-url', 'runbook-url'] as const) {
     if (!values[key]) throw new Error(`Missing --${key}`);
   }
-  const result = renderInterviewGrafana({
+  const result = renderServiceGrafana({
     ampUid: values['amp-uid']!, folderUid: values['folder-uid']!,
     grafanaUrl: values['grafana-url']!, runbookUrl: values['runbook-url']!,
     environment: values.environment, tempoUid: values['tempo-uid'],

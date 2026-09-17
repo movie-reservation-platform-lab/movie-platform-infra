@@ -374,8 +374,8 @@ test another cadence.
 
 ## Reference Docs
 
-For the SRE rehearsal, see the [Grafana symptom alert setup](docs/operations/sre-interview-grafana.md)
-and [participant investigation guide](docs/operations/sre-investigation.md).
+For service observability, see the [Grafana symptom alert setup](docs/operations/service-grafana.md)
+and [service troubleshooting guide](docs/operations/sre-investigation.md).
 The offline renderer creates a dashboard and paused rule; it does not configure
 Grafana or grant access. Real alert firing/recovery requires the separate live checks.
 

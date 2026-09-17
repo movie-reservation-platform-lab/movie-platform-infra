@@ -1,8 +1,8 @@
-import { renderInterviewGrafana } from '../grafana/interview';
+import { renderServiceGrafana } from '../grafana/service';
 
 // promtool accepts JSON as YAML. Reuse the real rendered expression rather than
 // maintaining a second copy of the alert's policy in test fixtures.
-const query = renderInterviewGrafana({
+const query = renderServiceGrafana({
   ampUid: 'test-amp', folderUid: 'test-folder', grafanaUrl: 'https://grafana.example.test',
   runbookUrl: 'https://example.test/runbook',
 }).ruleGroup.rules[0].data[0].model.expr!;
