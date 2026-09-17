@@ -1,14 +1,14 @@
-# Implementation plan: interview symptom alert
+# Implementation plan: service symptom alert
 
 Tracking: #53. Implementation authorized; cloud changes are not.
 
-Coordination: [platform rehearsal #15](https://github.com/movie-reservation-platform-lab/.github/issues/15).
-Independent companion: #54 (Tempo). Public candidate pack is tracked in
+Coordination: [platform observability #15](https://github.com/movie-reservation-platform-lab/.github/issues/15).
+Independent companion: #54 (Tempo). Platform architecture documentation is tracked in
 [organization docs #16](https://github.com/movie-reservation-platform-lab/.github/issues/16).
 
 ## Summary, goals and non-goals
 
-Render an importable interview dashboard and paused Grafana-managed alert using
+Render an importable service dashboard and paused Grafana-managed alert using
 existing AMP metrics. The goal is a real, repeatable service-symptom alert visible
 in Managed Grafana, with no external notifications. No new collector, application
 image, Mimir, Loki, notification integration or deployment automation.
@@ -20,9 +20,9 @@ image, Mimir, Loki, notification integration or deployment automation.
 Recommendation-service emits `movie_recommendation_service_http_requests_total`
 with `http.route`/`http.status_code`, normalized to `http_route`/`http_status_code`.
 Its duration histogram is milliseconds. Live AMP labels still need verification.
-No existing dashboard covers this incident as a small interview exercise.
+No existing dashboard covers this incident as a focused service view.
 
-Proposed rehearsal defaults: at least three 5xx requests in two minutes, 15-second evaluation,
+Proposed validation defaults: at least three 5xx requests in two minutes, 15-second evaluation,
 30-second pending, dashboard/runbook links, and real firing/recovery. Tempo uses
 the independently configured `demo-tempo` UID and is optional to this artifact.
 
@@ -41,10 +41,10 @@ automation introduces credentials and ownership beyond this bounded slice.
 
 ## Interfaces and data
 
-`npm run --silent render:interview-grafana -- --help` documents input flags.
+`npm run --silent render:service-grafana -- --help` documents input flags.
 Output is one JSON object with `dashboard`, `ruleGroup` and `setup` sections.
 No credentials, persistent state or schema migration. Stable IDs are
-`sre-interview` (dashboard) and `sre-recommendation-errors` (rule).
+`service-observability` (dashboard) and `sre-recommendation-errors` (rule).
 
 ## Security, reliability and performance
 
@@ -57,9 +57,9 @@ Queries are bounded to one environment/service/route and short windows.
 
 ## Steps and testing
 
-1. Add `grafana/interview.ts` pure artifact construction and validation.
-2. Add `scripts/render-interview-grafana.ts` argument/stdio adapter.
-3. Add `test/interview-grafana.test.ts` for selectors, safeguards, thresholds,
+1. Add `grafana/service.ts` pure artifact construction and validation.
+2. Add `scripts/render-service-grafana.ts` argument/stdio adapter.
+3. Add `test/service-grafana.test.ts` for selectors, safeguards, thresholds,
    stable IDs, links and unsafe input rejection; wire into existing tooling CI.
 4. Add operations setup/rollback and candidate-safe symptom investigation docs.
 5. Run build, tooling tests, existing dashboard validation and the actual rendered

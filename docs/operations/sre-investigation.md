@@ -1,8 +1,8 @@
 # Recommendation failures: investigation guide
 
-Audience: investigation-only participant. Use synthetic demo data and your named
-account. Propose mitigations; the operator performs approved changes. Do not
-restart services, change IAM, retrieve secrets, deploy, or delete resources.
+Use an authorized account and synthetic demo data. Review the impact and
+authorization for any operational change before executing it. Preserve useful
+evidence before restarting tasks or replacing resources.
 
 ## Establish impact
 
@@ -11,8 +11,7 @@ restart services, change IAM, retrieve secrets, deploy, or delete resources.
    and latency over the same interval. Confirm telemetry is fresh. A green health
    endpoint does not prove the user workflow is healthy; NoData is not recovery.
 3. Establish which user flows fail and which still succeed. Avoid repeated booking
-   attempts that could create duplicate synthetic reservations. Ask the operator
-   for a bounded reproduction and record its request/correlation ID if available.
+   attempts that could create duplicate synthetic reservations. Use a bounded reproduction and record its request/correlation ID if available.
 
 ## Follow evidence
 
@@ -33,7 +32,7 @@ restart services, change IAM, retrieve secrets, deploy, or delete resources.
 ## Recommend and verify
 
 Explain likely user impact, failure boundary, evidence, a reversible mitigation
-and its risks. Ask the operator to execute an agreed change. Confirm the user
+and its risks. Execute only an authorized, reviewed change. Confirm the user
 workflow succeeds, telemetry remains fresh, and the error window clears to Normal.
 An alert disappearing because telemetry stopped is not a successful mitigation.
 Summarize the timeline, diagnosis confidence and one longer-term improvement.

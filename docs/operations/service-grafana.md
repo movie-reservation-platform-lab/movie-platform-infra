@@ -1,4 +1,4 @@
-# Set up the Grafana interview dashboard and alert
+# Set up the Grafana service dashboard and alert
 
 This is an operator procedure, not an automatic deployment. The renderer makes
 no network calls. Importing, creating a silence and activating a rule are live
@@ -9,24 +9,24 @@ changes that require the operator's approval. Keep the existing AWS overview.
 - Record the Managed Grafana version and confirm Grafana-managed alerting and
   the existing AMP Prometheus data source work. AMP data-source-managed rules
   and Grafana-managed rules are different; this procedure uses the latter.
-- Create a **dedicated** `SRE interview` folder and record its UID. Use a new
-  `sre-interview` evaluation group, not a group containing unrelated rules.
+- Create a **dedicated** `Service observability` folder and record its UID. Use a new
+  `service-observability` evaluation group, not a group containing unrelated rules.
 - Verify the metric/labels below in Explore for the selected environment. The
   collector disables added suffixes, so do not add another `_total` or `_milliseconds`.
 - Select a public runbook URL pinned to the merged infra commit. Do not publish
   workspace URLs, credentials, tokens or rendered local state in the repository.
 
 ```bash
-npm run --silent render:interview-grafana -- \
+npm run --silent render:service-grafana -- \
   --amp-uid "$AMP_DATASOURCE_UID" \
-  --folder-uid "$INTERVIEW_FOLDER_UID" \
+  --folder-uid "$SERVICE_FOLDER_UID" \
   --grafana-url "$GRAFANA_URL" \
   --runbook-url "$PUBLIC_PINNED_RUNBOOK_URL" \
   --environment aws-demo \
-  --tempo-uid "$TEMPO_DATASOURCE_UID" > /tmp/interview-grafana.json
+  --tempo-uid "$TEMPO_DATASOURCE_UID" > /tmp/service-grafana.json
 
-jq '.dashboard' /tmp/interview-grafana.json > /tmp/interview-dashboard.json
-jq '.ruleGroup' /tmp/interview-grafana.json > /tmp/interview-alert-group.json
+jq '.dashboard' /tmp/service-grafana.json > /tmp/service-dashboard.json
+jq '.ruleGroup' /tmp/service-grafana.json > /tmp/service-alert-group.json
 ```
 
 Omit `--tempo-uid` until Tempo is reachable in AMG. Its absence must not block the
@@ -37,13 +37,13 @@ UI creation can assign a different UID.
 If the installed plugin ignores the link query, select `demo-tempo` in Explore
 and paste `{ resource.service.name = "movie-recommendation-service" }` manually.
 
-Import `/tmp/interview-dashboard.json` through Dashboards → New → Import into the
-dedicated folder. UID is `sre-interview`; review rather than overwrite a collision.
+Import `/tmp/service-dashboard.json` through Dashboards → New → Import into the
+dedicated folder. UID is `service-observability`; review rather than overwrite a collision.
 
 ## Alert import contract (paused)
 
 The generated `ruleGroup` is the **HTTP provisioning API** payload for
-`PUT /api/v1/provisioning/folder/<folderUID>/rule-groups/sre-interview`.
+`PUT /api/v1/provisioning/folder/<folderUID>/rule-groups/service-observability`.
 It is NOT a provisioning-file/export payload, nor dashboard-import JSON. AMG
 does not give access to Grafana's filesystem. Use the installed version's API
 with authorized operator tooling, or create an equivalent Grafana-managed rule
@@ -71,8 +71,8 @@ prove suppression: existing default policies can route alerts elsewhere.
    Use the built-in **Grafana** Alertmanager for this Grafana-managed rule.
    Do not replace the global routing tree or mute unrelated alerts.
 2. Alerting → Silences → Create silence: start now; set a finite end after the
-   rehearsal (for example four hours); use exact matcher
-   `grafana_folder = SRE interview`. Match the actual dedicated folder label
+   validation run (for example four hours); use exact matcher
+   `grafana_folder = Service observability`. Match the actual dedicated folder label
    shown by this workspace, including any nested path; do not assume its UID is
    the label value. Do not add `alertname` or `exercise` constraints: those can
    miss the generated `DatasourceNoData`/`DatasourceError` instances.
@@ -87,7 +87,7 @@ prove suppression: existing default policies can route alerts elsewhere.
    through recovery, including any resolved-notification processing.
 5. **Pause the rule before silence expiry, teardown or ending the exercise.**
    Confirm paused, then retire the silence. Record its expiry in the handover;
-   tomorrow's rehearsal needs a fresh verified silence.
+   a later validation run needs a fresh verified silence.
 
 AMG version-10 [silence documentation](https://docs.aws.amazon.com/grafana/latest/userguide/v10-alerting-silences.html)
 explains evaluation versus suppression. Check the corresponding installed-version
@@ -97,7 +97,7 @@ distinguishes HTTP requests from file-export schemas.
 ## Metric semantics and live acceptance
 
 Offline checks: `npm run build`, `npm run test:tooling`,
-`npm run validate:grafana-dashboard` and `npm run validate:interview-promql`.
+`npm run validate:grafana-dashboard` and `npm run validate:service-promql`.
 The last command uses a digest-pinned Prometheus 3.5.0 tooling container (Docker
 required, image pulled if absent) with networking disabled. It evaluates the
 actual rendered query for fresh healthy traffic, failures/recovery, counter reset,
@@ -144,5 +144,13 @@ Acceptance (record timestamps, rule URL and observed query values):
 Pause the rule and verify it is paused before stopping the workload or allowing
 the silence to expire. If removing the artifacts, delete only rule
 `sre-recommendation-errors`, its now-empty dedicated group and dashboard
-`sre-interview`. Preserve existing AMP/Grafana data sources, dashboards, routes
+`service-observability`. Preserve existing AMP/Grafana data sources, dashboards, routes
 and the audit/observability stacks. No AWS deployment is performed by this code.
+
+## Existing generated artifacts
+
+The service renderer uses the `service-observability` dashboard/group namespace
+and the `Service observability` folder title. Existing imported objects are not
+renamed, deleted or updated by this offline tool. Snapshot current Grafana state
+and explicitly review UID/group/label differences before importing a new bundle;
+update notification matchers deliberately and avoid duplicate active rules.
