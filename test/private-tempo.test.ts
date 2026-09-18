@@ -86,3 +86,29 @@ test('optional collector overlay keeps X-Ray and bounds failed Tempo export', ()
   expect(overlay).toContain('otlp/reservation_mcp');
   expect(readFileSync('adot-collector/adot-config.yaml', 'utf8')).toContain('exporters: [awsxray]');
 });
+
+test('Tempo generator writes only to retained AMP using its task role', () => {
+  const t = template(true);
+  const resources = t.toJSON().Resources;
+  const task = resources.TempoTaskDefinition.Properties;
+  const roleId = task.TaskRoleArn['Fn::GetAtt'][0];
+  t.hasResourceProperties('AWS::IAM::Policy', {
+    Roles: [{ Ref: roleId }],
+    PolicyDocument: {
+      Version: '2012-10-17',
+      Statement: [{
+        Effect: 'Allow', Action: 'aps:RemoteWrite',
+        Resource: { 'Fn::ImportValue': 'MoviePlatformAwsDemo:AmpWorkspaceArn' },
+      }],
+    },
+  });
+  expect(task.ContainerDefinitions[0].Environment).toEqual(expect.arrayContaining([
+    { Name: 'AWS_REGION', Value: target.region },
+    { Name: 'AMP_REMOTE_WRITE_ENDPOINT', Value: {
+      'Fn::Join': ['', [
+        { 'Fn::ImportValue': 'MoviePlatformAwsDemo:AmpPrometheusEndpoint' },
+        'api/v1/remote_write',
+      ]],
+    } },
+  ]));
+});
