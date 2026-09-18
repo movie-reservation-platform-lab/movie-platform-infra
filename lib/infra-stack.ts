@@ -255,6 +255,8 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
     const tempo = platformConfig.enableTempo ? new PrivateTempo(this, 'Tempo', {
       vpc, cluster, workloadSubnets: workloadSubnetSelection,
       applicationSecurityGroup: serviceSecurityGroup, endpointSecurityGroup, repositoryRoot,
+      ampWorkspaceArn: ampWorkspace.attrArn,
+      ampRemoteWriteEndpoint: `${ampWorkspace.attrPrometheusEndpoint}api/v1/remote_write`,
     }) : undefined;
     const images = {
       reservationService: resolveApplicationImage(

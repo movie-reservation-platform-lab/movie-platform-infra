@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as discovery from 'aws-cdk-lib/aws-servicediscovery';
 import { Construct } from 'constructs';
@@ -14,6 +15,8 @@ interface PrivateTempoProps {
   readonly applicationSecurityGroup: ec2.SecurityGroup;
   readonly endpointSecurityGroup: ec2.SecurityGroup;
   readonly repositoryRoot: string;
+  readonly ampWorkspaceArn: string;
+  readonly ampRemoteWriteEndpoint: string;
 }
 
 /** Disposable monolith. Its restart must not restart the application task. */
@@ -46,9 +49,17 @@ export class PrivateTempo extends Construct {
       runtimePlatform: { cpuArchitecture: ecs.CpuArchitecture.X86_64, operatingSystemFamily: ecs.OperatingSystemFamily.LINUX },
     });
     (task.node.defaultChild as ecs.CfnTaskDefinition).overrideLogicalId('TempoTaskDefinition');
+    task.addToTaskRolePolicy(new iam.PolicyStatement({
+      actions: ['aps:RemoteWrite'], resources: [props.ampWorkspaceArn],
+    }));
     task.addContainer('Tempo', {
       containerName: 'tempo', image: ecs.ContainerImage.fromDockerImageAsset(image),
       essential: true, user: '10001', memoryLimitMiB: 1024,
+      environment: {
+        AWS_REGION: cdk.Stack.of(this).region,
+        AWS_STS_REGIONAL_ENDPOINTS: 'regional',
+        AMP_REMOTE_WRITE_ENDPOINT: props.ampRemoteWriteEndpoint,
+      },
       logging: ecs.LogDrivers.awsLogs({
         streamPrefix: 'tempo', logGroup: new logs.LogGroup(this, 'Logs', {
           retention: logs.RetentionDays.ONE_WEEK, removalPolicy: cdk.RemovalPolicy.DESTROY,

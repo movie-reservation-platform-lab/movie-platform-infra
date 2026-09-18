@@ -9,7 +9,12 @@ cleanup() {
 }
 trap cleanup EXIT
 docker build -t movie-platform-tempo-validation:local "$repo_dir/tempo"
-tempo_container="$(docker run --detach --network none --user 10001 movie-platform-tempo-validation:local)"
+tempo_container="$(docker run --detach --network none --user 10001 \
+  --env AWS_ACCESS_KEY_ID=validation --env AWS_SECRET_ACCESS_KEY=validation \
+  --env AWS_EC2_METADATA_DISABLED=true --env AWS_REGION=us-east-1 \
+  --env AWS_STS_REGIONAL_ENDPOINTS=regional \
+  --env AMP_REMOTE_WRITE_ENDPOINT=http://127.0.0.1:1/api/v1/remote_write \
+  movie-platform-tempo-validation:local)"
 for attempt in {1..60}; do
   if docker exec "$tempo_container" /busybox wget -q -T 3 -O /dev/null http://127.0.0.1:3200/ready; then
     printf 'Pinned Tempo image parsed its configuration and passed /ready as non-root.\n'

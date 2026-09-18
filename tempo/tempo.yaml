@@ -25,3 +25,27 @@ storage:
       path: /tmp/tempo/blocks
 usage_report:
   reporting_enabled: false
+
+# Service graphs and span metrics are stored in the retained AMP workspace.
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      deployment_environment: aws-demo
+  processor:
+    service_graphs:
+      wait: 10s
+      max_items: 1000
+  storage:
+    path: /tmp/tempo/generator/wal
+    remote_write_add_org_id_header: false
+    remote_write:
+      - url: ${AMP_REMOTE_WRITE_ENDPOINT}
+        sigv4:
+          region: ${AWS_REGION}
+  traces_storage:
+    path: /tmp/tempo/generator/traces
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics]

@@ -18,9 +18,11 @@ AWS query paths must be made reachable before attachment.
 
 Use a repository-owned immutable Tempo 2.10.8 image asset, separate 0.5 vCPU /
 1 GiB task, Cloud Map private DNS, local ephemeral trace storage and 24-hour
-retention. Data is lost when the Tempo task is replaced; this is not an audit
-store. Keep application ADOT export to X-Ray and add a bounded OTLP queue only
-when enabled. No new application instrumentation is required.
+retention. Enable Tempo's service-graph and span-metrics processors and use
+SigV4 remote write to the retained AMP workspace. Trace storage, the generator
+WAL and its working set are lost when the Tempo task is replaced; this is not an
+audit store. Keep application ADOT export to X-Ray and add a bounded OTLP queue
+only when enabled. No new application instrumentation is required.
 
 Rejected: public unauthenticated Tempo; a new HA telemetry stack; replacing AMP;
 and adding Tempo inside the application task (couples their failure lifecycles).
@@ -36,16 +38,20 @@ production use. Private trusted VPC HTTP is explicitly a disposable-demo choice.
    `GrafanaVpcSubnetIds` (CSV of two private AZ subnets), `GrafanaVpcSecurityGroupId`.
 4. Additional monitoring, EC2 and AMP control-plane endpoints; existing
    endpoint query policies for AMP/X-Ray/STS. IAM remains independently enforced.
-5. `adot-collector/tempo-overlay.yaml`: additive pipeline with bounded retries.
-6. Operator explicitly attaches AMG using concrete output IDs and snapshots the
+5. Tempo generator: fixed source/environment labels, bounded service-graph edge
+   store, no custom high-cardinality dimensions, and task-role-only
+   `aps:RemoteWrite` permission on the imported AMP workspace.
+6. `adot-collector/tempo-overlay.yaml`: additive pipeline with bounded retries.
+7. Operator explicitly attaches AMG using concrete output IDs and snapshots the
    previous configuration. Environments tooling refuses teardown while attached.
    This acknowledged temporary drift is not hidden inside a deployment hook.
 
 ## Security, reliability and cost
 
 No public IP, public trace ports, NAT, app role broadening or secrets. Endpoint
-security group permits the AMG connection and Tempo to reach AWS HTTPS. Tempo
-needs image pulls/logging only; its task role has no application permissions.
+security group permits the AMG connection and Tempo to reach AWS HTTPS. Tempo's
+task execution role pulls its image and writes logs; its task role can only
+remote-write generated metrics to the imported AMP workspace.
 One task and extra interface endpoints incur charges until workload teardown.
 The single-AZ runtime is not highly available; DNS TTL and bounded ADOT retries
 can lose traces during restart. Demo traffic only; trace payloads may contain
