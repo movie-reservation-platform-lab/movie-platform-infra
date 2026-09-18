@@ -16,6 +16,7 @@ flowchart LR
   ADOT --> XRay[AWS X-Ray]
   ADOT --> AMP[AMP metrics]
   ADOT -->|private OTLP 4317| Tempo[Separate Tempo task]
+  Tempo -->|SigV4 remote write| AMP
   AMG[Managed Grafana] -->|two private subnet ENIs| SG[Grafana connection SG]
   SG -->|HTTP 3200| Tempo
   SG --> VPCE[AWS query VPC endpoints]
@@ -29,10 +30,20 @@ allow ingestion only from the application task, and query only from the Grafana
 connection. Never publish these ports or widen ingress to an internet CIDR.
 This does not grant candidate AWS/Grafana access; named access is separate.
 
+Tempo's metrics generator derives service-graph edges and span metrics from
+ingested traces and writes them to the retained AMP workspace. Its task role has
+only `aps:RemoteWrite` on that workspace. The generator adds fixed `source=tempo`
+and `deployment_environment=aws-demo` labels and does not add custom
+high-cardinality dimensions. In Grafana, configure the Tempo data source's
+service-graph Prometheus source to the existing AMP data source.
+
 ## Limits and cost
 
 One 0.5-vCPU/1-GiB Fargate task; 24-hour local retention on ephemeral task storage.
 **Replacing or stopping Tempo loses all its traces.** X-Ray remains a fallback.
+The generator WAL and its trace working set are also ephemeral, so service-graph
+and span-metric history begins again after replacement; old stored traces are not
+retroactively converted.
 Deployments stop the old task before starting the replacement (0% minimum / 100%
 maximum) to avoid two independent ingesters sharing one DNS name. Expect a gap;
 ADOT queue128/retry15s bounds failure impact but does not guarantee delivery.
@@ -110,6 +121,10 @@ reach this private hostname and is not the right probe.
 
 - Trigger one real browser/agent request and locate the same 32-hex trace ID in
   Tempo. X-Ray's `1-xxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxx` notation is not Tempo's ID.
+- In AMP, confirm fresh `traces_service_graph_request_total` and
+  `traces_spanmetrics_calls_total` series with `source="tempo"`. A nonempty graph
+  proves generation and remote write, but it does not prove every service emits
+  compatible client/server span pairs.
 - Verify native trace search and span inspection. Do not claim spans for
   components without instrumentation or automatic CloudWatch log correlation.
 - Immediately exercise existing AMP PromQL, CloudWatch metric query, CloudWatch
