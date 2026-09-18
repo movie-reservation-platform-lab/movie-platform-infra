@@ -17,6 +17,6 @@ exporters:
 service:
   pipelines:
     traces/tempo:
-      receivers: [otlp/reservation_service, otlp/reservation_agent, otlp/recommendation_mcp, otlp/recommendation_service]
+      receivers: [otlp/reservation_service, otlp/reservation_agent, otlp/reservation_mcp, otlp/recommendation_mcp, otlp/recommendation_service]
       processors: [memory_limiter, batch]
       exporters: [otlp/tempo]

@@ -83,5 +83,6 @@ test('optional collector overlay keeps X-Ray and bounds failed Tempo export', ()
   const overlay = readFileSync('adot-collector/tempo-overlay.yaml', 'utf8');
   expect(overlay).toContain('queue_size: 128');
   expect(overlay).toContain('max_elapsed_time: 15s');
+  expect(overlay).toContain('otlp/reservation_mcp');
   expect(readFileSync('adot-collector/adot-config.yaml', 'utf8')).toContain('exporters: [awsxray]');
 });

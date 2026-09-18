@@ -28,7 +28,7 @@ if ! grep --fixed-strings --quiet 'endpoint: 127.0.0.1:13133' "${collector_direc
   printf 'ADOT health extension must remain bound to task loopback on port 13133\n' >&2
   exit 1
 fi
-for port in 4318 4319 4320 4321; do
+for port in 4318 4319 4320 4321 4322; do
   if ! grep --fixed-strings --quiet "endpoint: 127.0.0.1:${port}" "${collector_directory}/adot-config.yaml"; then
     printf 'ADOT OTLP/HTTP receiver must remain bound to task loopback on port %s\n' "${port}" >&2
     exit 1
@@ -40,7 +40,7 @@ if ! grep --extended-regexp --quiet '^    traces:$' <<<"${pipeline_block}"; then
   printf 'ADOT config must contain the traces pipeline\n' >&2
   exit 1
 fi
-for component in reservation_service reservation_agent recommendation_mcp recommendation_service; do
+for component in reservation_service reservation_agent reservation_mcp recommendation_mcp recommendation_service; do
   if ! grep --fixed-strings --quiet "    metrics/${component}/cloudwatch:" <<<"${pipeline_block}"; then
     printf 'ADOT config must contain the %s CloudWatch metrics pipeline\n' "${component}" >&2
     exit 1
@@ -97,8 +97,8 @@ if ! grep --fixed-strings --quiet '    dimension_rollup_option: NoDimensionRollu
   printf 'ADOT CloudWatch metrics must disable automatic dimension rollups\n' >&2
   exit 1
 fi
-if [[ "$(grep --extended-regexp --count '^[[:space:]]+- \^.+\$$' "${collector_directory}/adot-config.yaml")" -ne 10 ]]; then
-  printf 'ADOT CloudWatch metrics must declare exactly ten application instruments\n' >&2
+if [[ "$(grep --extended-regexp --count '^[[:space:]]+- \^.+\$$' "${collector_directory}/adot-config.yaml")" -ne 21 ]]; then
+  printf 'ADOT CloudWatch metrics must declare exactly 21 observed application instruments\n' >&2
   exit 1
 fi
 
