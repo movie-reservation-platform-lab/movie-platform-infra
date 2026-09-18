@@ -1,0 +1,218 @@
+{
+  "contractVersion": "five-backend-signals-v1",
+  "producers": [
+    {
+      "serviceName": "movie-reservation-service",
+      "receiver": "reservation_service",
+      "port": 4318,
+      "evidence": {
+        "url": "https://github.com/movie-reservation-platform-lab/movie-reservation-service/pull/43",
+        "mergeCommit": "28089afd36cf3694b857a5605756ee97bf11a5c5",
+        "source": "docs/observability.md"
+      },
+      "metrics": [
+        {
+          "name": "http_request_total",
+          "type": "cumulative-monotonic-sum",
+          "unit": "",
+          "attributes": ["http_method", "http_route", "http_status_code", "status_family", "outcome"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "http_method", "http_route", "status_family"]
+        },
+        {
+          "name": "http_request_duration_ms",
+          "type": "cumulative-histogram",
+          "unit": "ms",
+          "attributes": ["http_method", "http_route", "http_status_code", "status_family", "outcome"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "http_method", "http_route", "status_family"]
+        },
+        {
+          "name": "graphql_operation_total",
+          "type": "cumulative-monotonic-sum",
+          "unit": "",
+          "attributes": ["business_operation", "graphql_operation_type", "outcome"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "business_operation", "graphql_operation_type", "outcome"]
+        },
+        {
+          "name": "graphql_operation_duration_ms",
+          "type": "cumulative-histogram",
+          "unit": "ms",
+          "attributes": ["business_operation", "graphql_operation_type", "outcome"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "business_operation", "graphql_operation_type", "outcome"]
+        },
+        {
+          "name": "graphql_operation_exceptions_total",
+          "type": "cumulative-monotonic-sum",
+          "unit": "",
+          "attributes": ["business_operation", "exception_type"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "business_operation", "exception_type"]
+        },
+        {
+          "name": "reservation_request_created_total",
+          "type": "cumulative-monotonic-sum",
+          "unit": "",
+          "attributes": ["business_operation"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "business_operation"]
+        },
+        {
+          "name": "reservation_processor_claim_total",
+          "type": "cumulative-monotonic-sum",
+          "unit": "",
+          "attributes": [],
+          "cloudWatchDimensions": ["ServiceName", "Environment"]
+        },
+        {
+          "name": "reservation_processor_outcome_total",
+          "type": "cumulative-monotonic-sum",
+          "unit": "",
+          "attributes": ["outcome"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "outcome"]
+        },
+        {
+          "name": "reservation_processor_duration_ms",
+          "type": "cumulative-histogram",
+          "unit": "ms",
+          "attributes": ["outcome"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "outcome"]
+        },
+        {
+          "name": "reservation_processor_exceptions_total",
+          "type": "cumulative-monotonic-sum",
+          "unit": "",
+          "attributes": ["exception_type"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "exception_type"]
+        }
+      ]
+    },
+    {
+      "serviceName": "movie-reservation-agent",
+      "receiver": "reservation_agent",
+      "port": 4319,
+      "evidence": {
+        "url": "https://github.com/movie-reservation-platform-lab/movie-reservation-agent/pull/22",
+        "mergeCommit": "a1452c2bec70495dfc7a85a3fd5f4c91a0a2503b",
+        "source": "docs/architecture/native-http-metrics.md"
+      },
+      "metrics": [
+        {
+          "name": "http.server.active_requests",
+          "type": "up-down-sum",
+          "unit": "{request}",
+          "attributes": ["http.method"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "http.method"]
+        },
+        {
+          "name": "http.server.duration",
+          "type": "cumulative-histogram",
+          "unit": "ms",
+          "attributes": ["http.method", "http.target", "http.status_code"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "http.method", "http.target", "http.status_code"]
+        },
+        {
+          "name": "http.server.response.size",
+          "type": "cumulative-histogram",
+          "unit": "By",
+          "attributes": ["http.method", "http.target", "http.status_code"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "http.method", "http.target", "http.status_code"]
+        },
+        {
+          "name": "movie_reservation_agent.http.server.requests",
+          "type": "cumulative-monotonic-sum",
+          "unit": "{request}",
+          "attributes": ["http.request.method", "http.route", "http.response.status_class", "outcome"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "http.request.method", "http.route", "http.response.status_class", "outcome"]
+        }
+      ]
+    },
+    {
+      "serviceName": "movie-reservation-mcp",
+      "receiver": "reservation_mcp",
+      "port": 4322,
+      "evidence": {
+        "url": "https://github.com/movie-reservation-platform-lab/movie-reservation-mcp/pull/15",
+        "mergeCommit": "21040e2597806d99735e05610b1ec7551d870199",
+        "source": "docs/observability/local-signal-evidence.md"
+      },
+      "metrics": [
+        {
+          "name": "movie_reservation_mcp_tool_calls",
+          "type": "cumulative-monotonic-sum",
+          "unit": "{call}",
+          "attributes": ["mcp.tool.name", "outcome"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "mcp.tool.name", "outcome"]
+        },
+        {
+          "name": "movie_reservation_mcp_tool_duration",
+          "type": "cumulative-histogram",
+          "unit": "s",
+          "attributes": ["mcp.tool.name", "outcome"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "mcp.tool.name", "outcome"]
+        }
+      ]
+    },
+    {
+      "serviceName": "movie-recommendation-mcp",
+      "receiver": "recommendation_mcp",
+      "port": 4320,
+      "evidence": {
+        "url": "https://github.com/movie-reservation-platform-lab/movie-recommendation-mcp/pull/14",
+        "mergeCommit": "6135e02f2ae03abcdd757f57a3f47eddb5efca6a",
+        "source": "docs/observability/recommendation-mcp-emitted-signals.md"
+      },
+      "metrics": [
+        {
+          "name": "axum_tools_mcp_tool_calls_total",
+          "type": "cumulative-monotonic-sum",
+          "unit": "{call}",
+          "attributes": ["mcp.tool.name", "outcome"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "mcp.tool.name", "outcome"]
+        },
+        {
+          "name": "axum_tools_mcp_tool_duration_ms",
+          "type": "cumulative-histogram",
+          "unit": "ms",
+          "attributes": ["mcp.tool.name", "outcome"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "mcp.tool.name", "outcome"]
+        }
+      ]
+    },
+    {
+      "serviceName": "movie-recommendation-service",
+      "receiver": "recommendation_service",
+      "port": 4321,
+      "evidence": {
+        "url": "https://github.com/movie-reservation-platform-lab/movie-recommendation-service/pull/18",
+        "mergeCommit": "43e829414fcc3ecd73e98395a33b82956c50f5f7",
+        "source": "docs/observability.md"
+      },
+      "metrics": [
+        {
+          "name": "movie_recommendation_service_http_requests_total",
+          "type": "cumulative-monotonic-sum",
+          "unit": "",
+          "attributes": ["http.route", "http.status_code", "http.status_class", "outcome"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "http.route", "http.status_code", "http.status_class", "outcome"]
+        },
+        {
+          "name": "movie_recommendation_service_http_request_duration_ms",
+          "type": "cumulative-histogram",
+          "unit": "ms",
+          "attributes": ["http.route", "http.status_code", "http.status_class", "outcome"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "http.route", "http.status_code", "http.status_class", "outcome"]
+        },
+        {
+          "name": "movie_recommendation_service_recommendations_total",
+          "type": "cumulative-monotonic-sum",
+          "unit": "",
+          "attributes": ["preference.present"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "preference.present"]
+        }
+      ]
+    }
+  ],
+  "stages": {
+    "expected": "verified",
+    "emitted": "verified",
+    "accepted": "verified-offline",
+    "queryable": "pending-live-acceptance"
+  }
+}

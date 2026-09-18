@@ -14,6 +14,10 @@ receivers:
     protocols:
       http:
         endpoint: 127.0.0.1:4319
+  otlp/reservation_mcp:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:4322
   otlp/recommendation_mcp:
     protocols:
       http:
@@ -48,6 +52,14 @@ processors:
       - key: Environment
         value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
         action: upsert
+  attributes/reservation_mcp_cloudwatch:
+    actions:
+      - key: ServiceName
+        value: movie-reservation-mcp
+        action: upsert
+      - key: Environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
+        action: upsert
   attributes/recommendation_mcp_cloudwatch:
     actions:
       - key: ServiceName
@@ -76,6 +88,14 @@ processors:
     actions:
       - key: service_name
         value: movie-reservation-agent
+        action: upsert
+      - key: deployment_environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
+        action: upsert
+  attributes/reservation_mcp_amp:
+    actions:
+      - key: service_name
+        value: movie-reservation-mcp
         action: upsert
       - key: deployment_environment
         value: ${env:DEPLOYMENT_ENVIRONMENT_NAME}
@@ -238,6 +258,35 @@ exporters:
           - [ServiceName, Environment, exception_type]
         metric_name_selectors:
           - ^reservation_processor_exceptions_total$
+      - dimensions:
+          - [ServiceName, Environment, http.method]
+        metric_name_selectors:
+          - ^http\.server\.active_requests$
+      - dimensions:
+          - [ServiceName, Environment, http.method, http.target, http.status_code]
+        metric_name_selectors:
+          - ^http\.server\.duration$
+          - ^http\.server\.response\.size$
+      - dimensions:
+          - [ServiceName, Environment, http.request.method, http.route, http.response.status_class, outcome]
+        metric_name_selectors:
+          - ^movie_reservation_agent\.http\.server\.requests$
+      - dimensions:
+          - [ServiceName, Environment, mcp.tool.name, outcome]
+        metric_name_selectors:
+          - ^movie_reservation_mcp_tool_calls$
+          - ^movie_reservation_mcp_tool_duration$
+          - ^axum_tools_mcp_tool_calls_total$
+          - ^axum_tools_mcp_tool_duration_ms$
+      - dimensions:
+          - [ServiceName, Environment, http.route, http.status_code, http.status_class, outcome]
+        metric_name_selectors:
+          - ^movie_recommendation_service_http_requests_total$
+          - ^movie_recommendation_service_http_request_duration_ms$
+      - dimensions:
+          - [ServiceName, Environment, preference.present]
+        metric_name_selectors:
+          - ^movie_recommendation_service_recommendations_total$
   prometheusremotewrite/application:
     endpoint: ${env:AMP_REMOTE_WRITE_ENDPOINT}
     auth:
@@ -286,7 +335,7 @@ service:
   extensions: [health_check, sigv4auth]
   pipelines:
     traces:
-      receivers: [otlp/reservation_service, otlp/reservation_agent, otlp/recommendation_mcp, otlp/recommendation_service]
+      receivers: [otlp/reservation_service, otlp/reservation_agent, otlp/reservation_mcp, otlp/recommendation_mcp, otlp/recommendation_service]
       processors: [memory_limiter, batch]
       exporters: [awsxray]
     metrics/reservation_service/cloudwatch:
@@ -296,6 +345,10 @@ service:
     metrics/reservation_agent/cloudwatch:
       receivers: [otlp/reservation_agent]
       processors: [memory_limiter, attributes/reservation_agent_cloudwatch, batch/application_cloudwatch]
+      exporters: [awsemf/application]
+    metrics/reservation_mcp/cloudwatch:
+      receivers: [otlp/reservation_mcp]
+      processors: [memory_limiter, attributes/reservation_mcp_cloudwatch, batch/application_cloudwatch]
       exporters: [awsemf/application]
     metrics/recommendation_mcp/cloudwatch:
       receivers: [otlp/recommendation_mcp]
@@ -312,6 +365,10 @@ service:
     metrics/reservation_agent/amp:
       receivers: [otlp/reservation_agent]
       processors: [memory_limiter, attributes/reservation_agent_amp, resource/application_amp, batch/application_amp]
+      exporters: [prometheusremotewrite/application]
+    metrics/reservation_mcp/amp:
+      receivers: [otlp/reservation_mcp]
+      processors: [memory_limiter, attributes/reservation_mcp_amp, resource/application_amp, batch/application_amp]
       exporters: [prometheusremotewrite/application]
     metrics/recommendation_mcp/amp:
       receivers: [otlp/recommendation_mcp]

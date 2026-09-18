@@ -369,6 +369,10 @@ test('wires task-local URLs, deterministic behavior, faults, versions, and disti
     MOVIE_RESERVATION_GRAPHQL_URL: 'http://127.0.0.1:3000/graphql',
     MOVIE_RESERVATION_HEALTH_URL: 'http://127.0.0.1:3000/health',
     MOVIE_RESERVATION_API_TIMEOUT_SECONDS: '10',
+    SERVICE_NAMESPACE: 'movie-reservation-platform',
+    DEPLOYMENT_ENVIRONMENT: 'aws-demo',
+    SERVICE_VERSION: 'reservation-mcp-v1',
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4322',
   });
   expect(environment(container(template, 'movie-recommendation-mcp'))).toMatchObject({
     MOVIE_RECOMMENDATION_API_URL: 'http://127.0.0.1:8082',
@@ -382,9 +386,34 @@ test('wires task-local URLs, deterministic behavior, faults, versions, and disti
     OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4319',
   });
   expect(environment(container(template, 'movie-reservation-agent'))).not.toHaveProperty('NO_LLM');
-  expect(environment(container(template, 'movie-reservation-mcp'))).not.toHaveProperty(
-    'OTEL_EXPORTER_OTLP_ENDPOINT',
-  );
+
+  const telemetryContracts = [
+    ['movie-reservation-service', 'reservation-v1', 4318],
+    ['movie-reservation-agent', 'agent-v1', 4319],
+    ['movie-recommendation-mcp', 'recommendation-mcp-v1', 4320],
+    ['movie-recommendation-service', 'recommendation-v1', 4321],
+    ['movie-reservation-mcp', 'reservation-mcp-v1', 4322],
+  ] as const;
+  expect(new Set(telemetryContracts.map(([, , port]) => port)).size).toBe(telemetryContracts.length);
+  const mappedContainerPorts = containers(template)
+    .flatMap(definition => definition.PortMappings ?? [])
+    .map(({ ContainerPort }) => ContainerPort);
+  for (const [serviceName, serviceVersion, port] of telemetryContracts) {
+    expect(mappedContainerPorts).not.toContain(port);
+    expect(environment(container(template, serviceName))).toMatchObject({
+      DEPLOYMENT_ENVIRONMENT: 'aws-demo',
+      SERVICE_VERSION: serviceVersion,
+      OTEL_SERVICE_NAME: serviceName,
+      OTEL_TRACES_EXPORTER: 'otlp',
+      OTEL_METRICS_EXPORTER: 'otlp',
+      OTEL_LOGS_EXPORTER: 'none',
+      OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${port}`,
+      OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
+      OTEL_PROPAGATORS: 'tracecontext,baggage',
+      OTEL_RESOURCE_ATTRIBUTES:
+        'deployment.environment.name=aws-demo,service.namespace=movie-reservation-platform',
+    });
+  }
 });
 
 test('requires collector readiness before API-to-MCP-to-agent-to-web startup, but tolerates later collector exit', () => {
@@ -398,6 +427,7 @@ test('requires collector readiness before API-to-MCP-to-agent-to-web startup, bu
   dependency('movie-reservation-service', 'adot-collector');
   dependency('movie-recommendation-service', 'adot-collector');
   dependency('movie-reservation-mcp', 'movie-reservation-service');
+  dependency('movie-reservation-mcp', 'adot-collector');
   dependency('movie-recommendation-mcp', 'movie-recommendation-service');
   dependency('movie-reservation-agent', 'movie-reservation-mcp');
   dependency('movie-reservation-agent', 'movie-recommendation-mcp');

@@ -519,6 +519,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         MOVIE_RESERVATION_HEALTH_URL: 'http://127.0.0.1:3000/health',
         MOVIE_RESERVATION_API_TIMEOUT_SECONDS: '10',
         SERVICE_VERSION: images.reservationMcp.serviceVersion,
+        SERVICE_NAMESPACE: platformConfig.platformName,
+        DEPLOYMENT_ENVIRONMENT: platformConfig.environmentName,
+        ...otelEnvironment('movie-reservation-mcp', 4322),
       },
       healthCheck: healthCheck([
         'CMD',
@@ -528,10 +531,16 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       ]),
     });
     reservationMcp.addPortMappings({ containerPort: 8091, protocol: ecs.Protocol.TCP });
-    reservationMcp.addContainerDependencies({
-      container: reservationService,
-      condition: ecs.ContainerDependencyCondition.HEALTHY,
-    });
+    reservationMcp.addContainerDependencies(
+      {
+        container: reservationService,
+        condition: ecs.ContainerDependencyCondition.HEALTHY,
+      },
+      {
+        container: adotContainer,
+        condition: ecs.ContainerDependencyCondition.HEALTHY,
+      },
+    );
 
     const recommendationMcp = taskDefinition.addContainer('RecommendationMcpContainer', {
       containerName: 'movie-recommendation-mcp',

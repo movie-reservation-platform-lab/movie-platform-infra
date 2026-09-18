@@ -11,7 +11,7 @@
     "watch": "tsc -w",
     "test": "jest",
     "test:cdk": "npm run test:cdk:workload && npm run test:cdk:foundation && npm run test:cdk:github-oidc-trust && npm run test:cdk:audit-foundations",
-    "test:cdk:workload": "jest --runInBand --runTestsByPath test/infra.test.ts test/private-tempo.test.ts",
+    "test:cdk:workload": "jest --runInBand --runTestsByPath test/infra.test.ts test/private-tempo.test.ts test/collector-signal-contract.test.ts",
     "test:cdk:foundation": "jest --runInBand --runTestsByPath test/artifact-foundation.test.ts",
     "test:cdk:github-oidc-trust": "jest --runInBand --runTestsByPath test/github-oidc-trust.test.ts",
     "test:tooling": "jest --runInBand --runTestsByPath test/xray-smoke.test.ts test/managed-metrics-smoke.test.ts test/demo-workload.test.ts test/service-grafana.test.ts",
