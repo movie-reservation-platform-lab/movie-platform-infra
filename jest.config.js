@@ -5,6 +5,18 @@ module.exports = {
   maxWorkers: 1,
   roots: ['<rootDir>/test'],
   testMatch: ['**/*.test.ts'],
+  moduleFileExtensions: [
+    'ts',
+    'mts',
+    'cts',
+    'tsx',
+    'js',
+    'mjs',
+    'cjs',
+    'jsx',
+    'json',
+    'node',
+  ],
   transform: {
     '^.+\\.tsx?$': 'ts-jest'
   },

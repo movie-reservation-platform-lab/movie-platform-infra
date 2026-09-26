@@ -68,6 +68,12 @@ jobs:
       - name: Build CDK application
         run: npm run build
 
+      - name: Validate workspace dependency direction
+        run: npm run validate:workspace-boundaries
+
+      - name: Test workspace dependency rules
+        run: npm run test:workspace-boundaries
+
       - name: Run workload CDK assertion tests
         run: npm run test:cdk:workload
 

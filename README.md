@@ -95,6 +95,13 @@ Jest tests under `test/`. The account-preflight, artifact-foundation cleanup,
 and artifact-copy automation packages have their own TypeScript and Jest
 configurations, so CI validates them separately and before CDK or tooling tests.
 
+The repository is also the root of an npm workspace. New deployable composition
+roots belong under `apps/*`; reusable CDK capabilities belong under `packages/*`.
+The directories remain empty until the first real capability is introduced, so
+existing stack entrypoints and commands keep their current behavior. Run
+`npm run validate:workspace-boundaries` to enforce the dependency direction:
+apps may consume packages, while packages may not depend on apps.
+
 `npm run validate:artifact-copy` is credential-free and performs no registry
 mutation. It validates strict single-manifest copy and existing-content
 verification mechanics, the no-shell Skopeo adapter contract, and the sanitized

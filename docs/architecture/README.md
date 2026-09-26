@@ -28,6 +28,13 @@ operational telemetry and audit evidence have different lifecycles:
 
 The [audit and observability architecture](./audit-and-observability.md) is the
 current source of truth for these ownership boundaries and correlation paths.
+The [Security Lake custom-source ingestion comparison](./security-lake-custom-source-ingestion-options.md)
+records the preferred EventBridge-to-Firehose direction and the conditions that
+would justify an SQS-backed custom processor. It is a discussion record, not a
+description of deployed infrastructure.
+The [modular CDK repository strategy](./modular-cdk-repository-strategy.md)
+defines how new capabilities become independently buildable packages and apps
+before later repository extraction.
 
 The current applications intentionally do not yet own:
 
@@ -57,4 +64,6 @@ The current applications intentionally do not yet own:
 
 - [Code and Test Reading Guide](./code-reading-guide.md)
 - [Audit and Observability](./audit-and-observability.md)
+- [Modular CDK Repository Strategy](./modular-cdk-repository-strategy.md)
+- [Security Lake Custom-Source Ingestion Options](./security-lake-custom-source-ingestion-options.md)
 - [Historical AWS Resource Topology](./aws-resource-topology.md)
