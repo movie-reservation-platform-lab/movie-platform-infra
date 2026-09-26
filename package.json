@@ -1,6 +1,11 @@
 {
   "name": "movie-platform-infra",
   "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "bin": {
     "movie-platform-infra": "bin/infra.js",
     "movie-platform-artifact-foundation": "bin/artifact-foundation.js",
@@ -10,6 +15,8 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
+    "test:workspace-boundaries": "jest --runInBand --runTestsByPath test/workspace-boundaries.test.ts",
+    "validate:workspace-boundaries": "ts-node --prefer-ts-exts scripts/validate-workspace-boundaries.ts",
     "test:cdk": "npm run test:cdk:workload && npm run test:cdk:foundation && npm run test:cdk:github-oidc-trust && npm run test:cdk:audit-foundations",
     "test:cdk:workload": "jest --runInBand --runTestsByPath test/infra.test.ts test/private-tempo.test.ts test/collector-signal-contract.test.ts",
     "test:cdk:foundation": "jest --runInBand --runTestsByPath test/artifact-foundation.test.ts",
@@ -46,7 +53,7 @@
     "synth:github-oidc-trust": "AWS_REGION=eu-central-1 CDK_DEFAULT_ACCOUNT=111111111111 CDK_DEFAULT_REGION=eu-central-1 cdk --app \"npx ts-node --prefer-ts-exts bin/github-oidc-trust.ts\" synth GitHubOidcTrustStack --no-lookups -c githubOidcTrustConfigFile=test/fixtures/github-oidc-trust-config.json",
     "cdk": "cdk",
     "cdk:foundation": "cdk --app \"npx ts-node --prefer-ts-exts bin/artifact-foundation.ts\"",
-    "ci": "npm run validate:aws-account-preflight && npm run validate:artifact-foundation-cleanup && npm run validate:artifact-copy && npm run build && npm run test:cdk && npm run test:tooling && npm run validate:adot-image && npm run validate:xray-smoke && npm run validate:managed-metrics-smoke && npm run validate:integrated-demo-smoke && npm run validate:grafana-dashboard && npm run synth:ecr-contract && npm run synth:artifact-foundation && npm run synth:github-oidc-trust && npm run synth:audit && npm run synth:observability && npm run validate:audit-router",
+    "ci": "npm run validate:aws-account-preflight && npm run validate:artifact-foundation-cleanup && npm run validate:artifact-copy && npm run build && npm run validate:workspace-boundaries && npm run test:workspace-boundaries && npm run test:cdk && npm run test:tooling && npm run validate:adot-image && npm run validate:xray-smoke && npm run validate:managed-metrics-smoke && npm run validate:integrated-demo-smoke && npm run validate:grafana-dashboard && npm run synth:ecr-contract && npm run synth:artifact-foundation && npm run synth:github-oidc-trust && npm run synth:audit && npm run synth:observability && npm run validate:audit-router",
     "cdk:audit": "cdk --app \"npx ts-node --prefer-ts-exts bin/audit.ts\"",
     "cdk:observability": "cdk --app \"npx ts-node --prefer-ts-exts bin/observability.ts\"",
     "test:cdk:audit-foundations": "jest --runInBand --runTestsByPath test/audit-foundations.test.ts",
