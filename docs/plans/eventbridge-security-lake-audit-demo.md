@@ -626,13 +626,16 @@ merge dependencies are stated explicitly.
 ### PR 1: npm workspace and architecture foundation
 
 - Change: introduce `apps/` and `packages/` workspace conventions, dependency
-  rules, package-local synth/test commands, and root orchestration without moving
-  production stacks yet.
-- Likely files/modules: root `package.json`, lockfile, `tsconfig` references,
-  lint/test configuration, `docs/architecture/modular-cdk-repository-strategy.md`,
-  `docs/README.md`.
-- Verification: existing synth/tests still pass; a minimal package fixture builds
-  independently; dependency rule rejects package-to-app imports.
+  rules, root validation commands, and CI orchestration without moving production
+  stacks or adding placeholder workspace members.
+- Likely files/modules: root `package.json`, lockfile, TypeScript/Jest
+  configuration, workspace-boundary scripts and tests, CI configuration,
+  `docs/architecture/modular-cdk-repository-strategy.md`, and repository indexes.
+- Verification: existing builds, tests, and offline synth contracts still pass;
+  focused graph tests prove app-to-package dependencies are allowed,
+  package-to-app dependencies are rejected, external dependencies are ignored,
+  and all violations are reported deterministically. Package-local build and
+  synth commands begin with the first real workspace member.
 - Review boundary: repository mechanics only; no AWS topology change.
 
 ### PR 2: relocate the current custom lake as the legacy app
