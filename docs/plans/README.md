@@ -81,6 +81,9 @@ Unit tests, CDK assertions, synth contracts, script checks, and smoke tests.
 
 ## Current Review Work
 
+- [EventBridge to Security Lake audit demo](./eventbridge-security-lake-audit-demo.md):
+  cross-repository SDK, dedicated audit account, managed ingestion, migration,
+  teardown, and thirteen-PR delivery plan.
 - [Six-container admission and runtime compatibility](./six-container-admission.md):
   PR #52's admission boundary and compatibility with current producer images.
 - [PR #52 review and onboarding](./pr-52-review-and-onboarding.md): four-agent
