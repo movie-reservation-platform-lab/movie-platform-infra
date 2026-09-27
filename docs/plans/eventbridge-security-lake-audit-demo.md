@@ -87,10 +87,11 @@ and is retained when the sink becomes asynchronous.
 
 ### Infrastructure
 
-`lib/audit-stack.ts` currently implements a custom audit lake: Firehose DirectPut
-to JSONL/Gzip in S3, Glue/Athena resources, CloudTrail delivery, and ALB access
-logs. `bin/audit.ts` composes it and `test/audit-foundations.test.ts` asserts its
-template. The repository is one npm package without workspace boundaries.
+`apps/legacy-audit-demo/lib/audit-stack.ts` implements the existing custom audit
+lake: Firehose DirectPut to JSONL/Gzip in S3, Glue/Athena resources, CloudTrail
+delivery, and ALB access logs. Its workspace-local entrypoint and tests preserve
+the original `AuditStack` identity and synthesized template while root commands
+remain compatibility wrappers.
 
 The current workload places six containers behind one ECS task role. Granting
 that role `events:PutEvents` therefore grants all six containers the technical
