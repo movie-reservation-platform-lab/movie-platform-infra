@@ -32,7 +32,7 @@ access to it. Tests vary the catalog to demonstrate this boundary.
 | --- | --- | --- |
 | `bin/artifact-foundation.ts` | `ArtifactFoundationStack` | Retained ECR destinations |
 | `bin/github-oidc-trust.ts` | `GitHubOidcTrustStack` | GitHub OIDC identity and admission/deployment entry roles |
-| `bin/audit.ts` | `AuditStack` | Audit delivery, archives and queries |
+| [`apps/legacy-audit-demo/bin/audit.ts`](../../apps/legacy-audit-demo/bin/audit.ts) | `AuditStack` | Legacy custom-lake audit delivery, archives and queries |
 | `bin/observability.ts` | `ObservabilityStack` | Operational logs, AMP and optional Grafana |
 | `bin/infra.ts` | `MovieReservationWorkloadStack` | Disposable network, ALB and shared Fargate task |
 

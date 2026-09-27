@@ -1,0 +1,25 @@
+{
+  "name": "@movie-platform/legacy-audit-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Legacy audit stack using a custom data lake (not aws security lake)",
+  "keywords": [
+    "audit",
+    "custom-data-lake",
+    "fluent-bit",
+    "firehose",
+    "aws-cdk"
+  ],
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "scripts": {
+    "test": "jest --config jest.config.js --runInBand",
+    "build": "tsc --project tsconfig.json",
+    "cdk": "cdk",
+    "synth": "AWS_REGION=eu-central-1 CDK_DEFAULT_ACCOUNT=111111111111 CDK_DEFAULT_REGION=eu-central-1 npm run cdk -- synth AuditStack --no-lookups --output ../../cdk.out/audit"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.244.0",
+    "constructs": "^10.5.1"
+  }
+}

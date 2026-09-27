@@ -21,7 +21,8 @@ The current CDK apps have separate lifecycle boundaries:
   discover sibling repositories from the workspace.
 - `MovieReservationWorkloadStack` owns the disposable AWS demo reservation workload.
 - `ObservabilityStack` owns AMP, optional Grafana and operational log groups.
-- `AuditStack` owns Firehose, the S3 audit/ALB archives, CloudTrail and Athena.
+- The legacy audit-demo workspace's `AuditStack` owns Firehose, the S3 audit/ALB
+  archives, CloudTrail and Athena.
 - `GitHubOidcTrustStack` owns the GitHub provider and separate artifact-admission
   and workload-deployment entry roles.
 
@@ -90,15 +91,17 @@ npm run synth:observability
 npm run ci
 ```
 
-`npm test` remains the convenience command for all CDK and repository-tooling
-Jest tests under `test/`. The account-preflight, artifact-foundation cleanup,
-and artifact-copy automation packages have their own TypeScript and Jest
-configurations, so CI validates them separately and before CDK or tooling tests.
+`npm test` remains the convenience command for the root CDK/repository-tooling
+Jest tests and now also invokes test scripts in npm workspaces. The
+account-preflight, artifact-foundation cleanup, and artifact-copy automation
+packages have their own TypeScript and Jest configurations, so CI validates
+them separately and before CDK or tooling tests.
 
-The repository is also the root of an npm workspace. New deployable composition
+The repository is also the root of an npm workspace. Deployable composition
 roots belong under `apps/*`; reusable CDK capabilities belong under `packages/*`.
-The directories remain empty until the first real capability is introduced, so
-existing stack entrypoints and commands keep their current behavior. Run
+The existing custom audit lake is the first real workspace at
+[`apps/legacy-audit-demo`](apps/legacy-audit-demo/README.md). Its package-local
+commands are available alongside the existing root compatibility commands. Run
 `npm run validate:workspace-boundaries` to enforce the dependency direction:
 apps may consume packages, while packages may not depend on apps.
 

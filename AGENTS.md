@@ -13,6 +13,7 @@ of hiding them behind broad abstractions.
 ## Repository Layout
 
 - `bin/`: CDK app entrypoint.
+- `apps/`: independently buildable and synthesizable CDK application workspaces.
 - `lib/`: stack, configuration boundary, and infrastructure helpers.
 - `adot-collector/`: repository-owned ADOT collector Docker image asset.
 - `grafana/dashboards/`: dashboard artifacts for managed observability.
@@ -28,7 +29,8 @@ of hiding them behind broad abstractions.
 ## Dev Environment Tips
 
 - Use `npm`, not pnpm or yarn.
-- This is a standalone package, not an npm workspace.
+- This is a private npm workspace repository. Deployable applications live in
+  `apps/*`; reusable packages live in `packages/*`.
 - Run commands from this repository root.
 - Check `package.json` before inventing commands or assuming tooling.
 - Read existing docs and source before asking questions the repository can answer.
