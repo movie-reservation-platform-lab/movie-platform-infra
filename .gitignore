@@ -26,6 +26,3 @@ cdk.out
 
 # Operator-owned acceptance journals and sanitized live-AWS notes.
 /.local/
-
-# Local Grafana exports captured before editing dashboards.
-/grafana/dashboards/dashboard_backup/

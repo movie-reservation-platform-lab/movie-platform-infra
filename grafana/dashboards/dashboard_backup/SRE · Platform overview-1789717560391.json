@@ -1,0 +1,1487 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": 11,
+  "links": [
+    {
+      "title": "SRE interview folder",
+      "type": "link",
+      "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/dashboards/f/efyeyqxlgiewwb/sre-interview"
+    },
+    {
+      "includeVars": true,
+      "keepTime": true,
+      "title": "Platform overview",
+      "type": "link",
+      "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/d/sre-demo-overview"
+    },
+    {
+      "includeVars": true,
+      "keepTime": true,
+      "title": "Reservation service",
+      "type": "link",
+      "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/d/sre-demo-reservation-service"
+    },
+    {
+      "includeVars": true,
+      "keepTime": true,
+      "title": "Reservation agent",
+      "type": "link",
+      "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/d/sre-demo-reservation-agent"
+    },
+    {
+      "includeVars": true,
+      "keepTime": true,
+      "title": "Recommendation service",
+      "type": "link",
+      "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/d/sre-demo-recommendation-service"
+    },
+    {
+      "includeVars": true,
+      "keepTime": true,
+      "title": "Reservation MCP",
+      "type": "link",
+      "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/d/sre-demo-reservation-mcp"
+    },
+    {
+      "includeVars": true,
+      "keepTime": true,
+      "title": "Recommendation MCP",
+      "type": "link",
+      "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/d/sre-demo-recommendation-mcp"
+    },
+    {
+      "targetBlank": true,
+      "title": "Investigation runbook",
+      "type": "link",
+      "url": "https://github.com/movie-reservation-platform-lab/movie-platform-infra/blob/652e5560c26b4bb5ee5f91d6a62424e55a409dee/docs/operations/sre-investigation.md"
+    }
+  ],
+  "panels": [
+    {
+      "description": "",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "**Start here:** check whether any service recorded an error in the previous hour, then compare traffic, latency, and error trends. Open the service graph for topology and edge health, or use a panel link to continue in Explore.\n\n**Signal sources:** application and trace-generated metrics are in **AMP**; traces are in **Tempo**. The health cards report observed error spans only. **No errors** means no error span was recorded in the fixed one-hour lookback; it does not prove availability, traffic, or complete instrumentation. The browser has no Faro/RUM coverage.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "10.4.7",
+      "title": "On-call overview",
+      "type": "text"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "id": 18,
+      "panels": [],
+      "title": "Platform health · errors observed in previous 1h",
+      "type": "row"
+    },
+    {
+      "description": "",
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 31,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "**Fixed one-hour lookback:** green = no `STATUS_CODE_ERROR` span observed; red = one or more error spans observed. The result is independent of the dashboard time picker. A green card is an error-presence indicator, not an availability or telemetry-freshness SLO.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "10.4.7",
+      "title": "How to read platform health",
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "efxm3kgu1x81sc"
+      },
+      "description": "Binary error-presence indicator over the fixed previous hour, derived from Tempo span metrics in AMP. No errors does not prove availability or telemetry completeness.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "No errors"
+                },
+                "1": {
+                  "color": "red",
+                  "text": "Errors"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "No errors",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 19,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.4.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "((sum(increase(traces_spanmetrics_calls_total{source=\"tempo\",deployment_environment=\"aws-demo\",service=~\"movie-(reservation-(service|agent|mcp|web)|recommendation-(service|mcp))\",status_code=\"STATUS_CODE_ERROR\"}[1h])) or vector(0)) > bool 0)",
+          "instant": true,
+          "legendFormat": "value",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Platform · errors observed in previous 1h",
+      "type": "stat",
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Explore and adjust query · last 1h",
+          "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/explore?left=%7B%22datasource%22%3A%22efxm3kgu1x81sc%22%2C%22queries%22%3A%5B%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22%28%28sum%28increase%28traces_spanmetrics_calls_total%7Bsource%3D%5C%22tempo%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Cservice%3D~%5C%22movie-%28reservation-%28service%7Cagent%7Cmcp%7Cweb%29%7Crecommendation-%28service%7Cmcp%29%29%5C%22%2Cstatus_code%3D%5C%22STATUS_CODE_ERROR%5C%22%7D%5B1h%5D%29%29%20or%20vector%280%29%29%20%3E%20bool%200%29%22%2C%22instant%22%3Atrue%2C%22legendFormat%22%3A%22value%22%2C%22range%22%3Afalse%2C%22refId%22%3A%22A%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "efxm3kgu1x81sc"
+      },
+      "description": "Binary error-presence indicator over the fixed previous hour, derived from Tempo span metrics in AMP. No errors does not prove availability or telemetry completeness.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "No errors"
+                },
+                "1": {
+                  "color": "red",
+                  "text": "Errors"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "No errors",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 12
+      },
+      "id": 20,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.4.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "((sum(increase(traces_spanmetrics_calls_total{source=\"tempo\",deployment_environment=\"aws-demo\",service=~\"movie-reservation-service\",status_code=\"STATUS_CODE_ERROR\"}[1h])) or vector(0)) > bool 0)",
+          "instant": true,
+          "legendFormat": "value",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "reservation-service",
+      "type": "stat",
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Explore and adjust query · last 1h",
+          "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/explore?left=%7B%22datasource%22%3A%22efxm3kgu1x81sc%22%2C%22queries%22%3A%5B%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22%28%28sum%28increase%28traces_spanmetrics_calls_total%7Bsource%3D%5C%22tempo%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Cservice%3D~%5C%22movie-reservation-service%5C%22%2Cstatus_code%3D%5C%22STATUS_CODE_ERROR%5C%22%7D%5B1h%5D%29%29%20or%20vector%280%29%29%20%3E%20bool%200%29%22%2C%22instant%22%3Atrue%2C%22legendFormat%22%3A%22value%22%2C%22range%22%3Afalse%2C%22refId%22%3A%22A%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "efxm3kgu1x81sc"
+      },
+      "description": "Binary error-presence indicator over the fixed previous hour, derived from Tempo span metrics in AMP. No errors does not prove availability or telemetry completeness.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "No errors"
+                },
+                "1": {
+                  "color": "red",
+                  "text": "Errors"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "No errors",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 12
+      },
+      "id": 21,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.4.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "((sum(increase(traces_spanmetrics_calls_total{source=\"tempo\",deployment_environment=\"aws-demo\",service=~\"movie-reservation-agent\",status_code=\"STATUS_CODE_ERROR\"}[1h])) or vector(0)) > bool 0)",
+          "instant": true,
+          "legendFormat": "value",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "reservation-agent",
+      "type": "stat",
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Explore and adjust query · last 1h",
+          "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/explore?left=%7B%22datasource%22%3A%22efxm3kgu1x81sc%22%2C%22queries%22%3A%5B%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22%28%28sum%28increase%28traces_spanmetrics_calls_total%7Bsource%3D%5C%22tempo%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Cservice%3D~%5C%22movie-reservation-agent%5C%22%2Cstatus_code%3D%5C%22STATUS_CODE_ERROR%5C%22%7D%5B1h%5D%29%29%20or%20vector%280%29%29%20%3E%20bool%200%29%22%2C%22instant%22%3Atrue%2C%22legendFormat%22%3A%22value%22%2C%22range%22%3Afalse%2C%22refId%22%3A%22A%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "efxm3kgu1x81sc"
+      },
+      "description": "Binary error-presence indicator over the fixed previous hour, derived from Tempo span metrics in AMP. No errors does not prove availability or telemetry completeness.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "No errors"
+                },
+                "1": {
+                  "color": "red",
+                  "text": "Errors"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "No errors",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 12
+      },
+      "id": 22,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.4.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "((sum(increase(traces_spanmetrics_calls_total{source=\"tempo\",deployment_environment=\"aws-demo\",service=~\"movie-recommendation-service\",status_code=\"STATUS_CODE_ERROR\"}[1h])) or vector(0)) > bool 0)",
+          "instant": true,
+          "legendFormat": "value",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "recommendation-service",
+      "type": "stat",
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Explore and adjust query · last 1h",
+          "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/explore?left=%7B%22datasource%22%3A%22efxm3kgu1x81sc%22%2C%22queries%22%3A%5B%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22%28%28sum%28increase%28traces_spanmetrics_calls_total%7Bsource%3D%5C%22tempo%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Cservice%3D~%5C%22movie-recommendation-service%5C%22%2Cstatus_code%3D%5C%22STATUS_CODE_ERROR%5C%22%7D%5B1h%5D%29%29%20or%20vector%280%29%29%20%3E%20bool%200%29%22%2C%22instant%22%3Atrue%2C%22legendFormat%22%3A%22value%22%2C%22range%22%3Afalse%2C%22refId%22%3A%22A%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "efxm3kgu1x81sc"
+      },
+      "description": "Binary error-presence indicator over the fixed previous hour, derived from Tempo span metrics in AMP. No errors does not prove availability or telemetry completeness.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "No errors"
+                },
+                "1": {
+                  "color": "red",
+                  "text": "Errors"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "No errors",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 12
+      },
+      "id": 23,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.4.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "((sum(increase(traces_spanmetrics_calls_total{source=\"tempo\",deployment_environment=\"aws-demo\",service=~\"movie-reservation-mcp\",status_code=\"STATUS_CODE_ERROR\"}[1h])) or vector(0)) > bool 0)",
+          "instant": true,
+          "legendFormat": "value",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "reservation-mcp",
+      "type": "stat",
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Explore and adjust query · last 1h",
+          "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/explore?left=%7B%22datasource%22%3A%22efxm3kgu1x81sc%22%2C%22queries%22%3A%5B%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22%28%28sum%28increase%28traces_spanmetrics_calls_total%7Bsource%3D%5C%22tempo%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Cservice%3D~%5C%22movie-reservation-mcp%5C%22%2Cstatus_code%3D%5C%22STATUS_CODE_ERROR%5C%22%7D%5B1h%5D%29%29%20or%20vector%280%29%29%20%3E%20bool%200%29%22%2C%22instant%22%3Atrue%2C%22legendFormat%22%3A%22value%22%2C%22range%22%3Afalse%2C%22refId%22%3A%22A%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "efxm3kgu1x81sc"
+      },
+      "description": "Binary error-presence indicator over the fixed previous hour, derived from Tempo span metrics in AMP. No errors does not prove availability or telemetry completeness.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "No errors"
+                },
+                "1": {
+                  "color": "red",
+                  "text": "Errors"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "No errors",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 12
+      },
+      "id": 24,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.4.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "((sum(increase(traces_spanmetrics_calls_total{source=\"tempo\",deployment_environment=\"aws-demo\",service=~\"movie-recommendation-mcp\",status_code=\"STATUS_CODE_ERROR\"}[1h])) or vector(0)) > bool 0)",
+          "instant": true,
+          "legendFormat": "value",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "recommendation-mcp",
+      "type": "stat",
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Explore and adjust query · last 1h",
+          "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/explore?left=%7B%22datasource%22%3A%22efxm3kgu1x81sc%22%2C%22queries%22%3A%5B%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22%28%28sum%28increase%28traces_spanmetrics_calls_total%7Bsource%3D%5C%22tempo%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Cservice%3D~%5C%22movie-recommendation-mcp%5C%22%2Cstatus_code%3D%5C%22STATUS_CODE_ERROR%5C%22%7D%5B1h%5D%29%29%20or%20vector%280%29%29%20%3E%20bool%200%29%22%2C%22instant%22%3Atrue%2C%22legendFormat%22%3A%22value%22%2C%22range%22%3Afalse%2C%22refId%22%3A%22A%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "efxm3kgu1x81sc"
+      },
+      "description": "Binary error-presence indicator over the fixed previous hour, derived from Tempo span metrics in AMP. No errors does not prove availability or telemetry completeness.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "No errors"
+                },
+                "1": {
+                  "color": "red",
+                  "text": "Errors"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "No errors",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 12
+      },
+      "id": 25,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.4.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "((sum(increase(traces_spanmetrics_calls_total{source=\"tempo\",deployment_environment=\"aws-demo\",service=~\"movie-reservation-web\",status_code=\"STATUS_CODE_ERROR\"}[1h])) or vector(0)) > bool 0)",
+          "instant": true,
+          "legendFormat": "value",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "reservation-web",
+      "type": "stat",
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Explore and adjust query · last 1h",
+          "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/explore?left=%7B%22datasource%22%3A%22efxm3kgu1x81sc%22%2C%22queries%22%3A%5B%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22%28%28sum%28increase%28traces_spanmetrics_calls_total%7Bsource%3D%5C%22tempo%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Cservice%3D~%5C%22movie-reservation-web%5C%22%2Cstatus_code%3D%5C%22STATUS_CODE_ERROR%5C%22%7D%5B1h%5D%29%29%20or%20vector%280%29%29%20%3E%20bool%200%29%22%2C%22instant%22%3Atrue%2C%22legendFormat%22%3A%22value%22%2C%22range%22%3Afalse%2C%22refId%22%3A%22A%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 27,
+      "panels": [],
+      "title": "Traffic",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "efxm3kgu1x81sc"
+      },
+      "description": "Native application request/tool-call rates for the five backend producers in AMP. Health/readiness excluded where the producer contract defines it.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "noValue": "No data",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "id": 3,
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Explore and adjust query · last 1h",
+          "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/explore?left=%7B%22datasource%22%3A%22efxm3kgu1x81sc%22%2C%22queries%22%3A%5B%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22sum%28rate%28http_request_total%7Bservice_name%3D%5C%22movie-reservation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%21~%5C%22/%28health%7Cready%29%28%5B%3F%5D.%2A%29%3F%5C%22%7D%5B2m%5D%29%29%20and%20%28max%28timestamp%28http_request_total%7Bservice_name%3D%5C%22movie-reservation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%21~%5C%22/%28health%7Cready%29%28%5B%3F%5D.%2A%29%3F%5C%22%7D%29%29%20%3E%20time%28%29%20-%2090%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22reservation-service%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22A%22%7D%2C%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22sum%28rate%28movie_reservation_agent_http_server_requests%7Bservice_name%3D%5C%22movie-reservation-agent%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%5B2m%5D%29%29%20and%20%28max%28timestamp%28movie_reservation_agent_http_server_requests%7Bservice_name%3D%5C%22movie-reservation-agent%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%29%29%20%3E%20time%28%29%20-%2090%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22reservation-agent%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22B%22%7D%2C%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22sum%28rate%28movie_reservation_mcp_tool_calls%7Bservice_name%3D%5C%22movie-reservation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%5B2m%5D%29%29%20and%20%28max%28timestamp%28movie_reservation_mcp_tool_calls%7Bservice_name%3D%5C%22movie-reservation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%29%29%20%3E%20time%28%29%20-%2090%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22reservation-mcp%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22C%22%7D%2C%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22sum%28rate%28movie_recommendation_service_http_requests_total%7Bservice_name%3D%5C%22movie-recommendation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%3D%5C%22/recommendations%5C%22%7D%5B2m%5D%29%29%20and%20%28max%28timestamp%28movie_recommendation_service_http_requests_total%7Bservice_name%3D%5C%22movie-recommendation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%3D%5C%22/recommendations%5C%22%7D%29%29%20%3E%20time%28%29%20-%2090%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22recommendation-service%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22D%22%7D%2C%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22sum%28rate%28axum_tools_mcp_tool_calls_total%7Bservice_name%3D%5C%22movie-recommendation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%5B2m%5D%29%29%20and%20%28max%28timestamp%28axum_tools_mcp_tool_calls_total%7Bservice_name%3D%5C%22movie-recommendation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%29%29%20%3E%20time%28%29%20-%2090%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22recommendation-mcp%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22E%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(http_request_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",http_route!~\"/(health|ready)([?].*)?\"}[2m])) and (max(timestamp(http_request_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",http_route!~\"/(health|ready)([?].*)?\"})) > time() - 90)",
+          "instant": false,
+          "legendFormat": "reservation-service",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(movie_reservation_agent_http_server_requests{service_name=\"movie-reservation-agent\",deployment_environment=\"aws-demo\"}[2m])) and (max(timestamp(movie_reservation_agent_http_server_requests{service_name=\"movie-reservation-agent\",deployment_environment=\"aws-demo\"})) > time() - 90)",
+          "instant": false,
+          "legendFormat": "reservation-agent",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(movie_reservation_mcp_tool_calls{service_name=\"movie-reservation-mcp\",deployment_environment=\"aws-demo\"}[2m])) and (max(timestamp(movie_reservation_mcp_tool_calls{service_name=\"movie-reservation-mcp\",deployment_environment=\"aws-demo\"})) > time() - 90)",
+          "instant": false,
+          "legendFormat": "reservation-mcp",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(movie_recommendation_service_http_requests_total{service_name=\"movie-recommendation-service\",deployment_environment=\"aws-demo\",http_route=\"/recommendations\"}[2m])) and (max(timestamp(movie_recommendation_service_http_requests_total{service_name=\"movie-recommendation-service\",deployment_environment=\"aws-demo\",http_route=\"/recommendations\"})) > time() - 90)",
+          "instant": false,
+          "legendFormat": "recommendation-service",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(axum_tools_mcp_tool_calls_total{service_name=\"movie-recommendation-mcp\",deployment_environment=\"aws-demo\"}[2m])) and (max(timestamp(axum_tools_mcp_tool_calls_total{service_name=\"movie-recommendation-mcp\",deployment_environment=\"aws-demo\"})) > time() - 90)",
+          "instant": false,
+          "legendFormat": "recommendation-mcp",
+          "range": true,
+          "refId": "E"
+        }
+      ],
+      "title": "Traffic · requests or tool calls / second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "efxm3kgu1x81sc"
+      },
+      "description": "Seconds since the latest native application metric sample. Use this beside the binary error cards to detect stale signal paths.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "noValue": "No data",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "id": 6,
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Explore and adjust query · last 1h",
+          "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/explore?left=%7B%22datasource%22%3A%22efxm3kgu1x81sc%22%2C%22queries%22%3A%5B%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22time%28%29%20-%20max%28timestamp%28http_request_total%7Bservice_name%3D%5C%22movie-reservation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%21~%5C%22/%28health%7Cready%29%28%5B%3F%5D.%2A%29%3F%5C%22%7D%29%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22reservation-service%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22A%22%7D%2C%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22time%28%29%20-%20max%28timestamp%28movie_reservation_agent_http_server_requests%7Bservice_name%3D%5C%22movie-reservation-agent%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%29%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22reservation-agent%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22B%22%7D%2C%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22time%28%29%20-%20max%28timestamp%28movie_reservation_mcp_tool_calls%7Bservice_name%3D%5C%22movie-reservation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%29%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22reservation-mcp%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22C%22%7D%2C%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22time%28%29%20-%20max%28timestamp%28movie_recommendation_service_http_requests_total%7Bservice_name%3D%5C%22movie-recommendation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%3D%5C%22/recommendations%5C%22%7D%29%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22recommendation-service%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22D%22%7D%2C%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22time%28%29%20-%20max%28timestamp%28axum_tools_mcp_tool_calls_total%7Bservice_name%3D%5C%22movie-recommendation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%29%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22recommendation-mcp%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22E%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "time() - max(timestamp(http_request_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",http_route!~\"/(health|ready)([?].*)?\"}))",
+          "instant": false,
+          "legendFormat": "reservation-service",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "time() - max(timestamp(movie_reservation_agent_http_server_requests{service_name=\"movie-reservation-agent\",deployment_environment=\"aws-demo\"}))",
+          "instant": false,
+          "legendFormat": "reservation-agent",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "time() - max(timestamp(movie_reservation_mcp_tool_calls{service_name=\"movie-reservation-mcp\",deployment_environment=\"aws-demo\"}))",
+          "instant": false,
+          "legendFormat": "reservation-mcp",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "time() - max(timestamp(movie_recommendation_service_http_requests_total{service_name=\"movie-recommendation-service\",deployment_environment=\"aws-demo\",http_route=\"/recommendations\"}))",
+          "instant": false,
+          "legendFormat": "recommendation-service",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "time() - max(timestamp(axum_tools_mcp_tool_calls_total{service_name=\"movie-recommendation-mcp\",deployment_environment=\"aws-demo\"}))",
+          "instant": false,
+          "legendFormat": "recommendation-mcp",
+          "range": true,
+          "refId": "E"
+        }
+      ],
+      "title": "Latest application metric sample age",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "id": 28,
+      "panels": [],
+      "title": "Latency",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "efxm3kgu1x81sc"
+      },
+      "description": "Per-boundary histogram estimates. Sparse observations may produce NaN; not end-to-end user latency.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "spanNulls": false
+          },
+          "min": 0,
+          "noValue": "No data",
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "id": 5,
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Explore this query · last 15m",
+          "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/explore?left=%7B%22datasource%22%3A%22efxm3kgu1x81sc%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22histogram_quantile(0.95%2C%20sum%20by%20(le)%20(rate(http_request_duration_ms_bucket%7Bservice_name%3D%5C%22movie-reservation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route!~%5C%22%2F(health%7Cready)(%5B%3F%5D.*)%3F%5C%22%7D%5B2m%5D)))%20and%20(max(timestamp(http_request_total%7Bservice_name%3D%5C%22movie-reservation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route!~%5C%22%2F(health%7Cready)(%5B%3F%5D.*)%3F%5C%22%7D))%20%3E%20time()%20-%2090)%22%2C%22legendFormat%22%3A%22reservation-service%22%2C%22range%22%3Atrue%2C%22instant%22%3Afalse%7D%2C%7B%22refId%22%3A%22B%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22histogram_quantile(0.95%2C%20sum%20by%20(le)%20(rate(movie_recommendation_service_http_request_duration_ms_bucket%7Bservice_name%3D%5C%22movie-recommendation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%3D%5C%22%2Frecommendations%5C%22%7D%5B2m%5D)))%20and%20(max(timestamp(movie_recommendation_service_http_requests_total%7Bservice_name%3D%5C%22movie-recommendation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%3D%5C%22%2Frecommendations%5C%22%7D))%20%3E%20time()%20-%2090)%22%2C%22legendFormat%22%3A%22recommendation-service%22%2C%22range%22%3Atrue%2C%22instant%22%3Afalse%7D%2C%7B%22refId%22%3A%22C%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22histogram_quantile(0.95%2C%20sum%20by%20(le)%20(rate(axum_tools_mcp_tool_duration_ms_bucket%7Bservice_name%3D%5C%22movie-recommendation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%5B2m%5D)))%20and%20(max(timestamp(axum_tools_mcp_tool_calls_total%7Bservice_name%3D%5C%22movie-recommendation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D))%20%3E%20time()%20-%2090)%22%2C%22legendFormat%22%3A%22recommendation-mcp%22%2C%22range%22%3Atrue%2C%22instant%22%3Afalse%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-15m%22%2C%22to%22%3A%22now%22%7D%7D"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_ms_bucket{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",http_route!~\"/(health|ready)([?].*)?\"}[2m]))) and (max(timestamp(http_request_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",http_route!~\"/(health|ready)([?].*)?\"})) > time() - 90)",
+          "instant": false,
+          "legendFormat": "reservation-service",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(movie_recommendation_service_http_request_duration_ms_bucket{service_name=\"movie-recommendation-service\",deployment_environment=\"aws-demo\",http_route=\"/recommendations\"}[2m]))) and (max(timestamp(movie_recommendation_service_http_requests_total{service_name=\"movie-recommendation-service\",deployment_environment=\"aws-demo\",http_route=\"/recommendations\"})) > time() - 90)",
+          "instant": false,
+          "legendFormat": "recommendation-service",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(axum_tools_mcp_tool_duration_ms_bucket{service_name=\"movie-recommendation-mcp\",deployment_environment=\"aws-demo\"}[2m]))) and (max(timestamp(axum_tools_mcp_tool_calls_total{service_name=\"movie-recommendation-mcp\",deployment_environment=\"aws-demo\"})) > time() - 90)",
+          "instant": false,
+          "legendFormat": "recommendation-mcp",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Latency · p95 by boundary",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "id": 29,
+      "panels": [],
+      "title": "Errors",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "efxm3kgu1x81sc"
+      },
+      "description": "Producer-owned HTTP 5xx or failed tool-call percentage. Requires fresh positive traffic; missing or idle data is not coerced to healthy zero.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "spanNulls": false
+          },
+          "min": 0,
+          "noValue": "No data",
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 35
+      },
+      "id": 4,
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Explore and adjust query · last 1h",
+          "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/explore?left=%7B%22datasource%22%3A%22efxm3kgu1x81sc%22%2C%22queries%22%3A%5B%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22%28100%20%2A%20%28%28sum%28increase%28http_request_total%7Bservice_name%3D%5C%22movie-reservation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%21~%5C%22/%28health%7Cready%29%28%5B%3F%5D.%2A%29%3F%5C%22%2Cstatus_family%3D%5C%225xx%5C%22%7D%5B2m%5D%29%29%20or%20%280%20%2A%20sum%28increase%28http_request_total%7Bservice_name%3D%5C%22movie-reservation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%21~%5C%22/%28health%7Cready%29%28%5B%3F%5D.%2A%29%3F%5C%22%7D%5B2m%5D%29%29%29%29%20/%20sum%28increase%28http_request_total%7Bservice_name%3D%5C%22movie-reservation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%21~%5C%22/%28health%7Cready%29%28%5B%3F%5D.%2A%29%3F%5C%22%7D%5B2m%5D%29%29%29%29%20and%20%28sum%28increase%28http_request_total%7Bservice_name%3D%5C%22movie-reservation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%21~%5C%22/%28health%7Cready%29%28%5B%3F%5D.%2A%29%3F%5C%22%7D%5B2m%5D%29%29%20%3E%200%29%20and%20%28max%28timestamp%28http_request_total%7Bservice_name%3D%5C%22movie-reservation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%21~%5C%22/%28health%7Cready%29%28%5B%3F%5D.%2A%29%3F%5C%22%7D%29%29%20%3E%20time%28%29%20-%2090%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22reservation-service%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22A%22%7D%2C%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22%28100%20%2A%20%28%28sum%28increase%28movie_reservation_agent_http_server_requests%7Bservice_name%3D%5C%22movie-reservation-agent%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_response_status_class%3D%5C%225xx%5C%22%7D%5B2m%5D%29%29%20or%20%280%20%2A%20sum%28increase%28movie_reservation_agent_http_server_requests%7Bservice_name%3D%5C%22movie-reservation-agent%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%5B2m%5D%29%29%29%29%20/%20sum%28increase%28movie_reservation_agent_http_server_requests%7Bservice_name%3D%5C%22movie-reservation-agent%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%5B2m%5D%29%29%29%29%20and%20%28sum%28increase%28movie_reservation_agent_http_server_requests%7Bservice_name%3D%5C%22movie-reservation-agent%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%5B2m%5D%29%29%20%3E%200%29%20and%20%28max%28timestamp%28movie_reservation_agent_http_server_requests%7Bservice_name%3D%5C%22movie-reservation-agent%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%29%29%20%3E%20time%28%29%20-%2090%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22reservation-agent%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22B%22%7D%2C%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22%28100%20%2A%20%28%28sum%28increase%28movie_reservation_mcp_tool_calls%7Bservice_name%3D%5C%22movie-reservation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Coutcome%21%3D%5C%22success%5C%22%7D%5B2m%5D%29%29%20or%20%280%20%2A%20sum%28increase%28movie_reservation_mcp_tool_calls%7Bservice_name%3D%5C%22movie-reservation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%5B2m%5D%29%29%29%29%20/%20sum%28increase%28movie_reservation_mcp_tool_calls%7Bservice_name%3D%5C%22movie-reservation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%5B2m%5D%29%29%29%29%20and%20%28sum%28increase%28movie_reservation_mcp_tool_calls%7Bservice_name%3D%5C%22movie-reservation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%5B2m%5D%29%29%20%3E%200%29%20and%20%28max%28timestamp%28movie_reservation_mcp_tool_calls%7Bservice_name%3D%5C%22movie-reservation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%29%29%20%3E%20time%28%29%20-%2090%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22reservation-mcp%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22C%22%7D%2C%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22%28100%20%2A%20%28%28sum%28increase%28movie_recommendation_service_http_requests_total%7Bservice_name%3D%5C%22movie-recommendation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%3D%5C%22/recommendations%5C%22%2Chttp_status_code%3D~%5C%225..%5C%22%7D%5B2m%5D%29%29%20or%20%280%20%2A%20sum%28increase%28movie_recommendation_service_http_requests_total%7Bservice_name%3D%5C%22movie-recommendation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%3D%5C%22/recommendations%5C%22%7D%5B2m%5D%29%29%29%29%20/%20sum%28increase%28movie_recommendation_service_http_requests_total%7Bservice_name%3D%5C%22movie-recommendation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%3D%5C%22/recommendations%5C%22%7D%5B2m%5D%29%29%29%29%20and%20%28sum%28increase%28movie_recommendation_service_http_requests_total%7Bservice_name%3D%5C%22movie-recommendation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%3D%5C%22/recommendations%5C%22%7D%5B2m%5D%29%29%20%3E%200%29%20and%20%28max%28timestamp%28movie_recommendation_service_http_requests_total%7Bservice_name%3D%5C%22movie-recommendation-service%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Chttp_route%3D%5C%22/recommendations%5C%22%7D%29%29%20%3E%20time%28%29%20-%2090%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22recommendation-service%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22D%22%7D%2C%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22%28100%20%2A%20%28%28sum%28increase%28axum_tools_mcp_tool_calls_total%7Bservice_name%3D%5C%22movie-recommendation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Coutcome%21%3D%5C%22success%5C%22%7D%5B2m%5D%29%29%20or%20%280%20%2A%20sum%28increase%28axum_tools_mcp_tool_calls_total%7Bservice_name%3D%5C%22movie-recommendation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%5B2m%5D%29%29%29%29%20/%20sum%28increase%28axum_tools_mcp_tool_calls_total%7Bservice_name%3D%5C%22movie-recommendation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%5B2m%5D%29%29%29%29%20and%20%28sum%28increase%28axum_tools_mcp_tool_calls_total%7Bservice_name%3D%5C%22movie-recommendation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%5B2m%5D%29%29%20%3E%200%29%20and%20%28max%28timestamp%28axum_tools_mcp_tool_calls_total%7Bservice_name%3D%5C%22movie-recommendation-mcp%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%29%29%20%3E%20time%28%29%20-%2090%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22recommendation-mcp%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22E%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "(100 * ((sum(increase(http_request_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",http_route!~\"/(health|ready)([?].*)?\",status_family=\"5xx\"}[2m])) or (0 * sum(increase(http_request_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",http_route!~\"/(health|ready)([?].*)?\"}[2m])))) / sum(increase(http_request_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",http_route!~\"/(health|ready)([?].*)?\"}[2m])))) and (sum(increase(http_request_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",http_route!~\"/(health|ready)([?].*)?\"}[2m])) > 0) and (max(timestamp(http_request_total{service_name=\"movie-reservation-service\",deployment_environment=\"aws-demo\",http_route!~\"/(health|ready)([?].*)?\"})) > time() - 90)",
+          "instant": false,
+          "legendFormat": "reservation-service",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "(100 * ((sum(increase(movie_reservation_agent_http_server_requests{service_name=\"movie-reservation-agent\",deployment_environment=\"aws-demo\",http_response_status_class=\"5xx\"}[2m])) or (0 * sum(increase(movie_reservation_agent_http_server_requests{service_name=\"movie-reservation-agent\",deployment_environment=\"aws-demo\"}[2m])))) / sum(increase(movie_reservation_agent_http_server_requests{service_name=\"movie-reservation-agent\",deployment_environment=\"aws-demo\"}[2m])))) and (sum(increase(movie_reservation_agent_http_server_requests{service_name=\"movie-reservation-agent\",deployment_environment=\"aws-demo\"}[2m])) > 0) and (max(timestamp(movie_reservation_agent_http_server_requests{service_name=\"movie-reservation-agent\",deployment_environment=\"aws-demo\"})) > time() - 90)",
+          "instant": false,
+          "legendFormat": "reservation-agent",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "(100 * ((sum(increase(movie_reservation_mcp_tool_calls{service_name=\"movie-reservation-mcp\",deployment_environment=\"aws-demo\",outcome!=\"success\"}[2m])) or (0 * sum(increase(movie_reservation_mcp_tool_calls{service_name=\"movie-reservation-mcp\",deployment_environment=\"aws-demo\"}[2m])))) / sum(increase(movie_reservation_mcp_tool_calls{service_name=\"movie-reservation-mcp\",deployment_environment=\"aws-demo\"}[2m])))) and (sum(increase(movie_reservation_mcp_tool_calls{service_name=\"movie-reservation-mcp\",deployment_environment=\"aws-demo\"}[2m])) > 0) and (max(timestamp(movie_reservation_mcp_tool_calls{service_name=\"movie-reservation-mcp\",deployment_environment=\"aws-demo\"})) > time() - 90)",
+          "instant": false,
+          "legendFormat": "reservation-mcp",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "(100 * ((sum(increase(movie_recommendation_service_http_requests_total{service_name=\"movie-recommendation-service\",deployment_environment=\"aws-demo\",http_route=\"/recommendations\",http_status_code=~\"5..\"}[2m])) or (0 * sum(increase(movie_recommendation_service_http_requests_total{service_name=\"movie-recommendation-service\",deployment_environment=\"aws-demo\",http_route=\"/recommendations\"}[2m])))) / sum(increase(movie_recommendation_service_http_requests_total{service_name=\"movie-recommendation-service\",deployment_environment=\"aws-demo\",http_route=\"/recommendations\"}[2m])))) and (sum(increase(movie_recommendation_service_http_requests_total{service_name=\"movie-recommendation-service\",deployment_environment=\"aws-demo\",http_route=\"/recommendations\"}[2m])) > 0) and (max(timestamp(movie_recommendation_service_http_requests_total{service_name=\"movie-recommendation-service\",deployment_environment=\"aws-demo\",http_route=\"/recommendations\"})) > time() - 90)",
+          "instant": false,
+          "legendFormat": "recommendation-service",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "(100 * ((sum(increase(axum_tools_mcp_tool_calls_total{service_name=\"movie-recommendation-mcp\",deployment_environment=\"aws-demo\",outcome!=\"success\"}[2m])) or (0 * sum(increase(axum_tools_mcp_tool_calls_total{service_name=\"movie-recommendation-mcp\",deployment_environment=\"aws-demo\"}[2m])))) / sum(increase(axum_tools_mcp_tool_calls_total{service_name=\"movie-recommendation-mcp\",deployment_environment=\"aws-demo\"}[2m])))) and (sum(increase(axum_tools_mcp_tool_calls_total{service_name=\"movie-recommendation-mcp\",deployment_environment=\"aws-demo\"}[2m])) > 0) and (max(timestamp(axum_tools_mcp_tool_calls_total{service_name=\"movie-recommendation-mcp\",deployment_environment=\"aws-demo\"})) > time() - 90)",
+          "instant": false,
+          "legendFormat": "recommendation-mcp",
+          "range": true,
+          "refId": "E"
+        }
+      ],
+      "title": "Native server/tool errors (%) · rolling 2m",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "efxm3kgu1x81sc"
+      },
+      "description": "Tempo span-error percentage by service. This cross-checks native signals and includes failed internal/client spans, so it is not identical to HTTP 5xx.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "spanNulls": false
+          },
+          "min": 0,
+          "noValue": "No data",
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "id": 9,
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Explore and adjust query · last 1h",
+          "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/explore?left=%7B%22datasource%22%3A%22efxm3kgu1x81sc%22%2C%22queries%22%3A%5B%7B%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22efxm3kgu1x81sc%22%7D%2C%22editorMode%22%3A%22code%22%2C%22expr%22%3A%22100%20%2A%20%28%28sum%20by%20%28service%29%20%28rate%28traces_spanmetrics_calls_total%7Bsource%3D%5C%22tempo%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Cservice%3D~%5C%22movie-%28reservation-%28service%7Cagent%7Cmcp%7Cweb%29%7Crecommendation-%28service%7Cmcp%29%29%5C%22%2Cstatus_code%3D%5C%22STATUS_CODE_ERROR%5C%22%7D%5B2m%5D%29%29%29%20or%20%280%20%2A%20sum%20by%20%28service%29%20%28rate%28traces_spanmetrics_calls_total%7Bsource%3D%5C%22tempo%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Cservice%3D~%5C%22movie-%28reservation-%28service%7Cagent%7Cmcp%7Cweb%29%7Crecommendation-%28service%7Cmcp%29%29%5C%22%7D%5B2m%5D%29%29%29%29%20/%20clamp_min%28sum%20by%20%28service%29%20%28rate%28traces_spanmetrics_calls_total%7Bsource%3D%5C%22tempo%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%2Cservice%3D~%5C%22movie-%28reservation-%28service%7Cagent%7Cmcp%7Cweb%29%7Crecommendation-%28service%7Cmcp%29%29%5C%22%7D%5B2m%5D%29%29%2C%201e-9%29%22%2C%22instant%22%3Afalse%2C%22legendFormat%22%3A%22%7B%7Bservice%7D%7D%22%2C%22range%22%3Atrue%2C%22refId%22%3A%22A%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "efxm3kgu1x81sc"
+          },
+          "editorMode": "code",
+          "expr": "100 * ((sum by (service) (rate(traces_spanmetrics_calls_total{source=\"tempo\",deployment_environment=\"aws-demo\",service=~\"movie-(reservation-(service|agent|mcp|web)|recommendation-(service|mcp))\",status_code=\"STATUS_CODE_ERROR\"}[2m]))) or (0 * sum by (service) (rate(traces_spanmetrics_calls_total{source=\"tempo\",deployment_environment=\"aws-demo\",service=~\"movie-(reservation-(service|agent|mcp|web)|recommendation-(service|mcp))\"}[2m])))) / clamp_min(sum by (service) (rate(traces_spanmetrics_calls_total{source=\"tempo\",deployment_environment=\"aws-demo\",service=~\"movie-(reservation-(service|agent|mcp|web)|recommendation-(service|mcp))\"}[2m])), 1e-9)",
+          "instant": false,
+          "legendFormat": "{{service}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Error spans (%) · trace-generated rolling 2m",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 43
+      },
+      "id": 32,
+      "panels": [],
+      "title": "Service graph · trace-generated",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "tempo",
+        "uid": "afyev6yuj12wwc"
+      },
+      "description": "Tempo service graph for the selected dashboard time range. Edges require compatible paired client/server spans; absent edges can indicate missing traffic or propagation/instrumentation gaps.",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "id": 33,
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Open service graph in Explore · last 1h",
+          "url": "https://g-49dcd96804.grafana-workspace.eu-central-1.amazonaws.com/explore?left=%7B%22datasource%22%3A%22afyev6yuj12wwc%22%2C%22queries%22%3A%5B%7B%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22afyev6yuj12wwc%22%7D%2C%22queryType%22%3A%22serviceMap%22%2C%22refId%22%3A%22A%22%2C%22serviceMapIncludeNamespace%22%3Afalse%2C%22serviceMapQuery%22%3A%22%7Bsource%3D%5C%22tempo%5C%22%2Cdeployment_environment%3D%5C%22aws-demo%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D"
+        }
+      ],
+      "options": {
+        "edges": {},
+        "nodes": {}
+      },
+      "pluginVersion": "10.4.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "afyev6yuj12wwc"
+          },
+          "queryType": "serviceMap",
+          "refId": "A",
+          "serviceMapIncludeNamespace": false,
+          "serviceMapQuery": "{source=\"tempo\",deployment_environment=\"aws-demo\"}"
+        }
+      ],
+      "title": "Platform service graph · Tempo",
+      "type": "nodeGraph"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "sre-interview",
+    "amp-tempo"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "label": "Trace / request ID (logs)",
+        "name": "trace_id",
+        "options": [],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "SRE · Platform overview",
+  "uid": "sre-demo-overview",
+  "version": 2,
+  "weekStart": ""
+}
