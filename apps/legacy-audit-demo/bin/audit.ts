@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { AuditStack } from '../lib/audit-stack';
-import { resolveAuditConfig } from '../lib/config/foundation-config';
+import { resolveAuditConfig } from '../lib/audit-config';
 
 const app = new cdk.App();
 new AuditStack(app, 'AuditStack', {
