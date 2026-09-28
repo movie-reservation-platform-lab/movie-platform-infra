@@ -43,6 +43,10 @@ flowchart TD
 Dependencies point downward. A lower layer must not import an account app,
 read its configuration files or assume its deployment workflow.
 
+Repository automation invokes an app through documented commands rather than an
+npm import. Shared configuration and validation used by both layers live in a
+package, keeping deployable composition separate from operator process logic.
+
 | Layer | Owns | Does not own |
 | --- | --- | --- |
 | Construct module | One focused AWS resource pattern | Account selection, organization policy or deployment |

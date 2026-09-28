@@ -24,6 +24,9 @@ operational telemetry and audit evidence have different lifecycles:
 - `ObservabilityStack` owns operational log groups, AMP and optional Grafana.
 - The [`legacy-audit-demo`](../../apps/legacy-audit-demo/README.md) workspace's
   `AuditStack` owns Firehose, S3 evidence, CloudTrail, Glue and Athena.
+- The [`audit-account`](../../apps/audit-account/README.md) workspace establishes
+  the future dedicated account's configuration and deployment boundary. Its
+  `AuditAccountStack` intentionally owns no AWS resources yet.
 - `GitHubOidcTrustStack` owns the GitHub OIDC provider and separate admission and
   deployment entry roles. It does not create ECR repositories or select releases.
 

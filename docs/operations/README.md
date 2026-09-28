@@ -12,6 +12,9 @@ infrastructure repository.
 - [AWS Artifact Foundation Runbook](./aws-artifact-foundation.md): controlling
   path for the persistent ECR foundation, its deployment, verification,
   admission handoff, recovery, and guarded final cleanup.
+- [Dedicated Audit Account Bootstrap](./audit-account-bootstrap.md): member-account
+  ownership, private configuration, read-only targeting checks, delegated
+  administration, budget boundary, and guarded CDK bootstrap.
 - [Standalone-Account Identity Center And Grafana Access Bootstrap](./standalone-account-access-bootstrap.md):
   persistent Organization/Identity Center prerequisites, MFA-backed operator
   access, and the temporary-Admin-to-Editor Grafana workflow.

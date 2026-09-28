@@ -14,6 +14,9 @@ of hiding them behind broad abstractions.
 
 - `bin/`: CDK app entrypoint.
 - `apps/`: independently buildable and synthesizable CDK application workspaces.
+- `packages/`: reusable workspace packages that deployable apps may consume.
+- `automation/`: independently tested operator and CI commands; workspace tools
+  consume packages without importing deployable apps.
 - `lib/`: stack, configuration boundary, and infrastructure helpers.
 - `adot-collector/`: repository-owned ADOT collector Docker image asset.
 - `grafana/dashboards/`: dashboard artifacts for managed observability.
@@ -30,7 +33,8 @@ of hiding them behind broad abstractions.
 
 - Use `npm`, not pnpm or yarn.
 - This is a private npm workspace repository. Deployable applications live in
-  `apps/*`; reusable packages live in `packages/*`.
+  `apps/*`, reusable packages in `packages/*`, and operator/CI tools in
+  `automation/*`.
 - Run commands from this repository root.
 - Check `package.json` before inventing commands or assuming tooling.
 - Read existing docs and source before asking questions the repository can answer.

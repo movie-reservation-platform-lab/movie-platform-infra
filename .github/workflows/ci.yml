@@ -15,10 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Validates repository-owned operational automation before the infra and tooling
-  # jobs run, including AWS account preflight and cleanup helper checks.
-  automation:
-    name: automation
+  # Validates reusable packages and the dependency rules that keep them
+  # independent from deployable apps and operator automation.
+  packages:
+    name: packages
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -35,8 +35,41 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate account preflight automation
+      - name: Validate workspace dependency direction
+        run: npm run validate:workspace-boundaries
+
+      - name: Test workspace dependency rules
+        run: npm run test:workspace-boundaries
+
+      - name: Validate AWS account preflight package
         run: npm run validate:aws-account-preflight
+
+      - name: Validate audit-account configuration package
+        run: npm run validate:audit-account-config
+
+  # Validates repository-owned operational commands after their reusable
+  # package dependencies have passed.
+  automation:
+    name: automation
+    needs: packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate audit-account operator
+        run: npm run validate:audit-account-operator
 
       - name: Validate artifact-foundation cleanup automation
         run: npm run validate:artifact-foundation-cleanup
@@ -44,11 +77,10 @@ jobs:
       - name: Validate artifact-copy automation
         run: npm run validate:artifact-copy
 
-  # Builds and tests the CDK infrastructure definitions after automation checks
-  # pass, covering both workload and artifact-foundation stacks.
+  # Builds and tests the deployable apps and the root CDK infrastructure.
   infra:
-    name: infra
-    needs: automation
+    name: apps and root infrastructure
+    needs: packages
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -65,14 +97,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build CDK application
-        run: npm run build
+      - name: Build root CDK infrastructure
+        run: npm run build:root
 
-      - name: Validate workspace dependency direction
-        run: npm run validate:workspace-boundaries
-
-      - name: Test workspace dependency rules
-        run: npm run test:workspace-boundaries
+      - name: Build deployable app workspaces
+        run: npm run build:apps
 
       - name: Run workload CDK assertion tests
         run: npm run test:cdk:workload
@@ -85,6 +114,9 @@ jobs:
 
       - name: Run audit and observability foundation tests
         run: npm run test:cdk:audit-foundations
+
+      - name: Run audit-account foundation tests
+        run: npm run test:cdk:audit-account
 
   # Validates repository tooling that supports deployability and operations,
   # including image, smoke-test, metrics, and dashboard checks.
@@ -168,6 +200,9 @@ jobs:
 
       - name: Synthesize independent audit foundation
         run: npm run synth:audit
+
+      - name: Synthesize audit-account foundation
+        run: npm run synth:audit-account
 
       - name: Synthesize independent observability foundation
         run: npm run synth:observability
