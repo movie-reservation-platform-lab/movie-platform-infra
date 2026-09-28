@@ -1,6 +1,6 @@
 import { fromIni } from '@aws-sdk/credential-providers';
 
-import type { ValidatedAwsAccess } from '../../aws-account-preflight/src';
+import type { ValidatedAwsAccess } from '@movie-platform/aws-account-preflight';
 
 /**
  * Build the explicit AWS SDK credential provider shared by read and mutation

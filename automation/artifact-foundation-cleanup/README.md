@@ -107,5 +107,5 @@ account-level Organizations and IAM Identity Center resources are outside the
 mutation adapter by construction.
 
 It uses the same private mode-`0600` target file as
-`automation/aws-account-preflight`. Real account identifiers and results must
+`packages/aws-account-preflight`. Real account identifiers and results must
 remain outside Git.
