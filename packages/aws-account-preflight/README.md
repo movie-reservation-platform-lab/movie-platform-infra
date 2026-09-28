@@ -1,8 +1,8 @@
 # AWS Account Preflight Automation
 
-This directory is an isolated automation building block. It is not imported by
-the CDK application under `bin/` or `lib/`, and its tests are not part of the
-ordinary infrastructure test suite under `test/`.
+This directory is an independently buildable workspace package. It is not
+imported by the root CDK application under `bin/` or `lib/`; account-specific
+apps consume only its public exports.
 
 The building block owns one read-only safety contract for human-operated AWS
 mutations:
@@ -60,7 +60,6 @@ Downstream SDK clients must use the returned profile, Region, and config-file
 paths together; resolving those files again from ambient process state would
 break the identity guarantee.
 
-If deployment automation later moves to a dedicated building-block repository,
-move this source, its tests, its local TypeScript/Jest configuration, and its CI
-gate together. Do not move only the executable and leave its regression suite
-behind.
+If this package later moves to a dedicated repository, move its source, tests,
+local TypeScript/Jest configuration, and CI gate together. Do not move only the
+executable and leave its regression suite behind.

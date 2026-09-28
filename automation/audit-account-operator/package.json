@@ -1,0 +1,24 @@
+{
+  "name": "@movie-platform/audit-account-operator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Guarded audit-account preflight, status, and bootstrap automation",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "main": "dist/operator-cli.js",
+  "types": "dist/operator-cli.d.ts",
+  "bin": {
+    "audit-account-operator": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "test": "jest --config jest.config.cjs --runInBand",
+    "preflight": "ts-node --project tsconfig.json --prefer-ts-exts src/main.ts preflight",
+    "status": "ts-node --project tsconfig.json --prefer-ts-exts src/main.ts status",
+    "bootstrap": "ts-node --project tsconfig.json --prefer-ts-exts src/main.ts bootstrap"
+  },
+  "dependencies": {
+    "@movie-platform/audit-account-config": "0.1.0",
+    "@movie-platform/aws-account-preflight": "0.1.0"
+  }
+}

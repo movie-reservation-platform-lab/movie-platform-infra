@@ -88,7 +88,7 @@ work. Run `npm run ci` for the full repository gate before handing off a change.
 ## Other automation and historical documents
 
 The three `automation/` packages have their own README, types and tests:
-[account preflight](../../automation/aws-account-preflight/README.md),
+[account preflight](../../packages/aws-account-preflight/README.md),
 [artifact copy](../../automation/artifact-copy/README.md) and
 [guarded cleanup](../../automation/artifact-foundation-cleanup/README.md).
 Their `src/main.ts` files connect CLI inputs to the implementations; follow the

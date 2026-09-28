@@ -186,6 +186,8 @@ Install dependencies and run the offline checks:
 ```bash
 npm ci
 npm run validate:aws-account-preflight
+npm run validate:audit-account-config
+npm run validate:audit-account-operator
 npm run validate:artifact-foundation-cleanup
 npm run build
 npm run test:cdk
@@ -199,11 +201,11 @@ npm run synth:artifact-foundation
 ```
 
 `npm run ci` runs this ordered, credential-free repository suite as one local
-convenience command. In GitHub Actions, automation, CDK assertions, repository
-tooling, and synth are separate checks so failures keep their ownership
-boundary. The synth contract itself is offline and uses `--no-lookups`; package
-installation and the pinned ADOT base-image download can still require internet
-access.
+convenience command. In GitHub Actions, reusable packages, operator automation,
+deployable apps/root infrastructure, repository tooling, and synth are separate
+checks so failures keep their ownership boundary. The synth contract itself is
+offline and uses `--no-lookups`; package installation and the pinned ADOT
+base-image download can still require internet access.
 
 `npm run synth:ecr-contract` uses fake account and digest values with
 `--no-lookups`. It verifies the CDK contract offline; it does not prove that the

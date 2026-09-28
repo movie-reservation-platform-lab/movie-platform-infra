@@ -11,7 +11,7 @@ import {
   validateAwsCallerIdentity,
   type AwsTarget,
   type ValidatedAwsAccess,
-} from '../../aws-account-preflight/src';
+} from '@movie-platform/aws-account-preflight';
 import { createPinnedAwsCredentials } from './aws-client-config';
 import { failCleanup } from './cleanup-error';
 import type {

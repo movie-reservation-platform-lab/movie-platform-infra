@@ -16,5 +16,14 @@
     "save": "all",
     "reveal": "always",
     "hide": "never"
+  },
+  {
+    "label": "npm: test audit-account config",
+    "command": "npm",
+    "args": ["test", "--workspace", "@movie-platform/audit-account-config"],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "save": "all",
+    "reveal": "always",
+    "hide": "never"
   }
 ]

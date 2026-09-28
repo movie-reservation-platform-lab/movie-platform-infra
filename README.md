@@ -87,23 +87,29 @@ npm run validate:grafana-dashboard
 npm run synth:ecr-contract
 npm run synth:artifact-foundation
 npm run synth:audit
+npm run synth:audit-account
 npm run synth:observability
 npm run ci
 ```
 
 `npm test` remains the convenience command for the root CDK/repository-tooling
-Jest tests and now also invokes test scripts in npm workspaces. The
-account-preflight, artifact-foundation cleanup, and artifact-copy automation
-packages have their own TypeScript and Jest configurations, so CI validates
-them separately and before CDK or tooling tests.
+Jest tests and now also invokes test scripts in npm workspaces. CI shows
+reusable packages, operator automation, deployable apps/root infrastructure,
+tooling, and offline synthesis as separate checks so a failure identifies the
+owning boundary.
 
 The repository is also the root of an npm workspace. Deployable composition
-roots belong under `apps/*`; reusable CDK capabilities belong under `packages/*`.
-The existing custom audit lake is the first real workspace at
-[`apps/legacy-audit-demo`](apps/legacy-audit-demo/README.md). Its package-local
-commands are available alongside the existing root compatibility commands. Run
+roots belong under `apps/*`, reusable capabilities under `packages/*`, and
+operator or CI commands under `automation/*`.
+The existing custom audit lake remains at
+[`apps/legacy-audit-demo`](apps/legacy-audit-demo/README.md). The new
+[`apps/audit-account`](apps/audit-account/README.md) composition root and
+[`automation/audit-account-operator`](automation/audit-account-operator/README.md)
+share reusable configuration and account-preflight packages. Package-local
+commands are available alongside root compatibility commands. Run
 `npm run validate:workspace-boundaries` to enforce the dependency direction:
-apps may consume packages, while packages may not depend on apps.
+apps and automation may consume packages, while those top-level layers remain
+independent and packages never depend on either one.
 
 `npm run validate:artifact-copy` is credential-free and performs no registry
 mutation. It validates strict single-manifest copy and existing-content

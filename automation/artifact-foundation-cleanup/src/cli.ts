@@ -4,7 +4,7 @@ import {
   PreflightFailure,
   validateAwsAccess,
   type ValidatedAwsAccess,
-} from '../../aws-account-preflight/src';
+} from '@movie-platform/aws-account-preflight';
 import { ARTIFACT_FOUNDATION_REPOSITORIES } from '../../../lib/artifact-foundation-repositories';
 import { createAwsSdkCleaner } from './aws-cleanup-client';
 import { createAwsSdkReader } from './aws-read-client';

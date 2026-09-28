@@ -1,5 +1,5 @@
 module.exports = {
-  displayName: 'automation/aws-account-preflight',
+  displayName: 'packages/audit-account-config',
   rootDir: '.',
   testEnvironment: 'node',
   testMatch: ['<rootDir>/test/**/*.test.ts'],

@@ -1,0 +1,3 @@
+{
+  "app": "npx ts-node --project tsconfig.json --prefer-ts-exts bin/audit-account.ts"
+}

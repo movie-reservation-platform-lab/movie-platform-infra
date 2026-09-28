@@ -1,4 +1,7 @@
-import type { AwsTarget, ValidatedAwsAccess } from '../../aws-account-preflight/src';
+import type {
+  AwsTarget,
+  ValidatedAwsAccess,
+} from '@movie-platform/aws-account-preflight';
 import { ARTIFACT_FOUNDATION_REPOSITORIES } from '../../../lib/artifact-foundation-repositories';
 import {
   ARTIFACT_FOUNDATION_STACK_NAME,

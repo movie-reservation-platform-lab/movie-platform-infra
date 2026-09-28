@@ -32,6 +32,13 @@ const observabilityPackage: WorkspaceNode = {
   dependencyNames: [],
 };
 
+const auditOperator: WorkspaceNode = {
+  kind: 'automation',
+  name: '@movie-platform/audit-account-operator',
+  relativePath: 'automation/audit-account-operator',
+  dependencyNames: [auditPackage.name],
+};
+
 const packageDependingOnApp: WorkspaceNode = {
   ...auditPackage,
   dependencyNames: [auditApp.name],
@@ -50,6 +57,28 @@ describe('workspace dependency direction', () => {
     ]);
 
     expect(violations).toEqual([]);
+  });
+
+  test('allows automation to depend on a reusable package', () => {
+    expect(findForbiddenWorkspaceDependencies([auditOperator, auditPackage])).toEqual([]);
+  });
+
+  test('keeps deployable apps and automation independent', () => {
+    const appDependingOnAutomation: WorkspaceNode = {
+      ...auditApp,
+      dependencyNames: [auditOperator.name],
+    };
+    const automationDependingOnApp: WorkspaceNode = {
+      ...auditOperator,
+      dependencyNames: [auditApp.name],
+    };
+
+    expect(
+      findForbiddenWorkspaceDependencies([
+        appDependingOnAutomation,
+        automationDependingOnApp,
+      ]),
+    ).toHaveLength(2);
   });
 
   test('rejects a reusable package that depends on a deployable app', () => {

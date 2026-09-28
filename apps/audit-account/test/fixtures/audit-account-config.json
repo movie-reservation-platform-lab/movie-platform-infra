@@ -1,0 +1,8 @@
+{
+  "managementAccountId": "111111111111",
+  "auditAccountId": "222222222222",
+  "workloadAccountIds": [
+    "333333333333"
+  ],
+  "region": "eu-central-1"
+}

@@ -1,4 +1,4 @@
-import { PreflightFailure } from '../../aws-account-preflight/src';
+import { PreflightFailure } from '@movie-platform/aws-account-preflight';
 import { buildCleanupConfirmation } from '../src/cleanup';
 import { runCli, type CliDependencies } from '../src';
 import {

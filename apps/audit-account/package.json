@@ -1,0 +1,19 @@
+{
+  "name": "@movie-platform/audit-account",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dedicated audit-account CDK application and operator boundary",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "test": "jest --config jest.config.js --runInBand",
+    "cdk": "cdk",
+    "synth": "MOVIE_PLATFORM_AUDIT_ACCOUNT_CONFIG_FILE=$PWD/test/fixtures/audit-account-config.json AWS_REGION=eu-central-1 npm run cdk -- synth AuditAccountStack --no-lookups --output ../../cdk.out/audit-account"
+  },
+  "dependencies": {
+    "@movie-platform/audit-account-config": "0.1.0",
+    "aws-cdk-lib": "^2.244.0",
+    "constructs": "^10.5.1"
+  }
+}

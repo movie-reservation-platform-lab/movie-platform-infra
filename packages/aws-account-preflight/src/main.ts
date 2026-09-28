@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 /** Executable entrypoint kept separate from the importable CLI test seam. */
 
 import { runCli } from './index';

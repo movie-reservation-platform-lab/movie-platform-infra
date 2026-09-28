@@ -29,6 +29,31 @@
     ]
   },
   {
+    "label": "Debug audit-account config tests",
+    "adapter": "JavaScript",
+    "type": "node",
+    "request": "launch",
+    "cwd": "$ZED_WORKTREE_ROOT/packages/audit-account-config",
+    "program": "$ZED_WORKTREE_ROOT/node_modules/jest/bin/jest.js",
+    "args": [
+      "--config",
+      "$ZED_WORKTREE_ROOT/packages/audit-account-config/jest.config.cjs",
+      "--runInBand",
+      "--runTestsByPath",
+      "$ZED_WORKTREE_ROOT/packages/audit-account-config/test/audit-account-config.test.ts"
+    ],
+    "sourceMaps": true,
+    "smartStep": true,
+    "skipFiles": [
+      "<node_internals>/**",
+      "$ZED_WORKTREE_ROOT/node_modules/**"
+    ],
+    "resolveSourceMapLocations": [
+      "$ZED_WORKTREE_ROOT/**",
+      "!**/node_modules/**"
+    ]
+  },
+  {
     "label": "Attach to Jest",
     "adapter": "JavaScript",
     "type": "node",
