@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-export type WorkspaceKind = 'app' | 'package';
+export type WorkspaceKind = 'app' | 'automation' | 'package';
 
 export interface WorkspaceNode {
   readonly kind: WorkspaceKind;
@@ -50,7 +50,7 @@ function collectDependencyNames(manifest: JsonObject, packageJsonPath: string): 
 /** Discover immediate child workspaces of one kind, skipping directories without a package.json. */
 function discoverWorkspacesByKind(
   repositoryRoot: string,
-  directory: 'apps' | 'packages',
+  directory: 'apps' | 'automation' | 'packages',
 ): readonly WorkspaceNode[] {
   const workspaceRoot = join(repositoryRoot, directory);
   if (!existsSync(workspaceRoot)) return [];
@@ -62,7 +62,11 @@ function discoverWorkspacesByKind(
       if (!existsSync(packageJsonPath)) return [];
       const manifest = requireJsonObject(JSON.parse(readFileSync(packageJsonPath, 'utf8')) as unknown, packageJsonPath);
       return [{
-        kind: directory === 'apps' ? 'app' : 'package',
+        kind: directory === 'apps'
+          ? 'app'
+          : directory === 'automation'
+            ? 'automation'
+            : 'package',
         name: requirePackageName(manifest.name, packageJsonPath),
         relativePath: relative(repositoryRoot, workspacePath),
         dependencyNames: collectDependencyNames(manifest, packageJsonPath),
@@ -71,15 +75,16 @@ function discoverWorkspacesByKind(
 }
 
 /**
- * Discover the repository-owned app and package workspaces.
+ * Discover the repository-owned app, automation, and package workspaces.
  *
- * Only immediate children of apps/ and packages/ participate. Duplicate npm
- * package names are rejected because dependency edges could not be resolved
- * to one unambiguous workspace.
+ * Only immediate children of apps/, automation/, and packages/ participate.
+ * Duplicate npm package names are rejected because dependency edges could not
+ * be resolved to one unambiguous workspace.
  */
 export function discoverWorkspaceGraph(repositoryRoot: string): readonly WorkspaceNode[] {
   const graph = [
     ...discoverWorkspacesByKind(repositoryRoot, 'apps'),
+    ...discoverWorkspacesByKind(repositoryRoot, 'automation'),
     ...discoverWorkspacesByKind(repositoryRoot, 'packages'),
   ];
   const names = new Set<string>();
@@ -94,11 +99,11 @@ export function discoverWorkspaceGraph(repositoryRoot: string): readonly Workspa
 }
 
 /**
- * Return every forbidden dependency from a reusable package to a deployable app.
+ * Return workspace dependencies that bypass the reusable package layer.
  *
- * This function is the engineer-owned hybrid-teaching slice. The filesystem and
- * package.json parsing around it are complete so the exercise stays focused on
- * expressing one architectural rule over a small typed graph.
+ * Apps and automation are separate top-level consumers. They may depend on
+ * packages, but never on each other or on peers of their own kind. Packages may
+ * depend on other packages. Dependencies outside this repository are ignored.
  */
 export function findForbiddenWorkspaceDependencies(
   workspaces: readonly WorkspaceNode[],
@@ -107,18 +112,14 @@ export function findForbiddenWorkspaceDependencies(
   const violations: WorkspaceDependencyViolation[] = [];
 
   for (const workspaceSource of workspaces) {
-    if (workspaceSource.kind !== 'package') {
-      continue;
-    }
-
     for (const dependencyName of workspaceSource.dependencyNames) {
       const target = workspaces.find(workspace => workspace.name === dependencyName);
 
-      if (target?.kind === 'app') {
+      if (target !== undefined && target.kind !== 'package') {
         const violation = {
           source: workspaceSource,
           target,
-          message: `${workspaceSource.name} must not depend on deployable app: ${target.name}`,
+          message: `${workspaceSource.kind} workspace ${workspaceSource.name} must not depend on ${target.kind} workspace ${target.name}`,
         } satisfies WorkspaceDependencyViolation;
         violations.push(violation);
       }

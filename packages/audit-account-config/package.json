@@ -1,0 +1,28 @@
+{
+  "name": "@movie-platform/audit-account-config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Validated account-topology contract shared by the audit app and operator tooling",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "test": "jest --config jest.config.cjs --runInBand",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "@types/jest": "^30",
+    "@types/node": "^24.12.0",
+    "jest": "^30",
+    "ts-jest": "^29",
+    "typescript": "~5.9.3"
+  }
+}
