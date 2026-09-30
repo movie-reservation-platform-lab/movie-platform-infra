@@ -1,0 +1,4 @@
+{
+  "bucketArn": "arn:aws:s3:::aws-security-data-lake-eu-central-1-example",
+  "region": "eu-central-1"
+}

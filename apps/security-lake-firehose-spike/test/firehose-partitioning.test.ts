@@ -85,4 +85,21 @@ describe('Firehose partitioning', () => {
       },
     );
   });
+
+  it('uses the Security Lake provider role for delivery and schema conversion', () => {
+    const providerRoleArn =
+      'arn:aws:iam::222222222222:role/AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1';
+
+    template.hasResourceProperties(
+      'AWS::KinesisFirehose::DeliveryStream',
+      {
+        ExtendedS3DestinationConfiguration: Match.objectLike({
+          RoleARN: providerRoleArn,
+          DataFormatConversionConfiguration: Match.objectLike({
+            SchemaConfiguration: Match.objectLike({ RoleARN: providerRoleArn }),
+          }),
+        }),
+      },
+    );
+  });
 });
