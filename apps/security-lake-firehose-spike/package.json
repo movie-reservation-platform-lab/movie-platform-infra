@@ -1,0 +1,19 @@
+{
+  "name": "@movie-platform/security-lake-firehose-spike",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Disposable Firehose-to-Security-Lake feasibility checkpoint",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "test": "jest --config jest.config.cjs --runInBand",
+    "cdk": "cdk --app \"npx ts-node --project tsconfig.json --prefer-ts-exts bin/security-lake-firehose-spike.ts\"",
+    "synth": "MOVIE_PLATFORM_AUDIT_ACCOUNT_CONFIG_FILE=$PWD/../audit-account/test/fixtures/audit-account-config.json MOVIE_PLATFORM_SECURITY_LAKE_FIREHOSE_SPIKE_CONFIG_FILE=$PWD/test/fixtures/security-lake-source.json AWS_REGION=eu-central-1 npm run cdk -- synth SecurityLakeAuditIngestionStack --no-lookups --output ../../cdk.out/security-lake-firehose-spike"
+  },
+  "dependencies": {
+    "@movie-platform/audit-account-config": "0.1.0",
+    "aws-cdk-lib": "^2.244.0",
+    "constructs": "^10.5.1"
+  }
+}
