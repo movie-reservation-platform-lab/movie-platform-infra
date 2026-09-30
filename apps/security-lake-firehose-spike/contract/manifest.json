@@ -1,0 +1,9 @@
+{
+  "contract": "platform-audit/1",
+  "ocsf_version": "1.3.0",
+  "event_class": "Authentication",
+  "class_uid": 3002,
+  "schema": "platform-audit-event-v1.schema.json",
+  "examples": ["examples/authentication-accepted-v1.json", "examples/authentication-rejected-v1.json"],
+  "compatibility": "The v1 schema is closed. Any emitted wire-field change requires a new contract version and side-by-side migration."
+}

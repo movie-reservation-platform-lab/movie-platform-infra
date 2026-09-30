@@ -1,0 +1,5 @@
+{
+  "providerRoleArn": "arn:aws:iam::222222222222:role/AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1",
+  "sourceAccountId": "333333333333",
+  "sourceLocation": "s3://aws-security-data-lake-eu-central-1-example/ext/MOVIE_AUTH/"
+}
