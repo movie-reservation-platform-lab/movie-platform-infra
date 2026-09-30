@@ -84,35 +84,17 @@ Unit tests, CDK assertions, synth contracts, script checks, and smoke tests.
 - [EventBridge to Security Lake audit demo](./eventbridge-security-lake-audit-demo.md):
   cross-repository SDK, dedicated audit account, managed ingestion, migration,
   teardown, and thirteen-PR delivery plan.
-- [Six-container admission and runtime compatibility](./six-container-admission.md):
-  PR #52's admission boundary and compatibility with current producer images.
-- [PR #52 review and onboarding](./pr-52-review-and-onboarding.md): four-agent
-  findings, fixes and verification.
+- [Security Lake Firehose feasibility checkpoint](./security-lake-firehose-feasibility.md):
+  offline implementation and separately approved live evidence for the preferred
+  EventBridge-to-Firehose Security Lake path.
+- [Five-backend telemetry wiring](./five-backend-telemetry-wiring.md):
+  advisory signal contract and repository-side telemetry wiring coordination.
+- [Private Tempo](./private-tempo.md): optional private trace backend rehearsal
+  that remains separate from the current required observability path.
+- [Service alerts](./service-alerts.md): symptom-level alert and dashboard work.
 
-## Historical Implementation Plans
+## Delivered Plans
 
-The capabilities below are implemented. These plans explain their original
-delivery slices, not pending prerequisites. Consult the
-[current architecture](../architecture/README.md) and [operations](../operations/README.md)
-for today's stack ownership and commands.
-
-- [Reservation Artifact Copy Mechanics](./reservation-artifact-copy-mechanics.md):
-  copy one approved single-image manifest from GHCR to ECR without rebuilding,
-  then verify exact manifest, config, and layer digest identity.
-- [Persistent ECR Artifact Foundation](./persistent-ecr-artifact-foundation.md):
-  establish the approved persistent repository, guarded cleanup, cross-repo
-  admission boundary, testing strategy, and five-PR delivery plan for issue #12.
-- [Standalone-Account Identity Center And Grafana Access Bootstrap](./standalone-account-identity-center-bootstrap.md):
-  original identity, preflight, lifecycle, testing, and staged release contract
-  for issue #14.
-- [Prefix List Ingress Allowlist](./prefix-list-ingress-allowlist.md): replace
-  changing CIDR context with one externally owned list shared by the ALB and
-  Managed Grafana.
-- [Temporary Integrated AWS Demo](./temporary-integrated-aws-demo.md): the
-  expansion to web, agent, recommendation and MCP containers. Environment release
-  selection belongs to `movie-platform-environments`; this repository consumes
-  its reviewed digest/version inputs.
-- Add RDS Postgres and migration-task infrastructure as a separate slice.
-- Add SQS worker-signaling infrastructure as a separate slice.
-- Keep ingress allowlisting, teardown, observability, and cost controls explicit
-  in every design.
+Delivered plans live in [`delivered/`](./delivered/) as implementation history.
+Prefer current [architecture](../architecture/README.md) and
+[operations](../operations/README.md) documentation when behavior differs.

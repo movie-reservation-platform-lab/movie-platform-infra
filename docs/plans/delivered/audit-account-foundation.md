@@ -1,5 +1,9 @@
 # Implementation Plan: Audit Account Foundation
 
+> Status: delivered by issue #68 / PR #70. This is historical implementation
+> context; use current app, architecture and operation docs for today's
+> commands.
+
 ## 1. Summary
 
 Create an independently buildable `@movie-platform/audit-account` CDK app and

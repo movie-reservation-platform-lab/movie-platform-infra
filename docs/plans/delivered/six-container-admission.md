@@ -1,5 +1,8 @@
 # Implementation Plan: six-container admission and runtime compatibility
 
+> Status: delivered historical plan. Current admission and runtime compatibility
+> behavior is represented by the stack, tests and operation docs.
+
 ## 1. Summary
 
 Issue #51: expand exact ECR destinations for the existing admission role, without changing trust or deployment authority.

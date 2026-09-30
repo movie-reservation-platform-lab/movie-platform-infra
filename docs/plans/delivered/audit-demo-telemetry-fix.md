@@ -1,5 +1,8 @@
 # Audit demo telemetry fix
 
+> Status: delivered historical fix record. Prefer current observability and
+> audit-demo runbooks for operator commands.
+
 Tracking: [#43](https://github.com/movie-reservation-platform-lab/movie-platform-infra/issues/43).
 Base: `14a354d`, the infrastructure revision used by the demo.
 

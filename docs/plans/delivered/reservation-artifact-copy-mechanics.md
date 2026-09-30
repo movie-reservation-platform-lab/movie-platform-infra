@@ -1,6 +1,6 @@
 # Implementation Plan: Reservation Artifact Copy Mechanics
 
-> Status: approved implementation unit; changes remain uncommitted until review
+> Status: delivered historical implementation unit
 >
 > Decision review completed in the private environments repository: 2026-08-24
 >

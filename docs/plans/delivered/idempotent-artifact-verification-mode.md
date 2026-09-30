@@ -1,5 +1,8 @@
 # Implementation Plan: Idempotent Artifact Verification Mode
 
+> Status: delivered. This record explains the artifact verification contract's
+> design history, not a pending implementation slice.
+
 ## 1. Summary
 
 Add a backward-compatible v2 request/result contract to the public artifact

@@ -9,15 +9,19 @@ to trace configuration through a stack into its synthesized assertions.
 
 ## Sections
 
-- `plans/`: issue-level implementation plans and review notes before
-  non-trivial infrastructure changes.
 - `architecture/`: durable infrastructure design notes, stack boundaries,
   resource topology, and contract decisions.
+- `contracts/`: versioned schema and integration contracts consumed by this
+  repository or by adjacent application repositories.
+- `observability/`: durable telemetry and signal contracts.
 - [`operations/`](./operations/): deployment runbooks, teardown, smoke checks,
   troubleshooting, and manual AWS prerequisites, including the
   [standalone-account access bootstrap](./operations/standalone-account-access-bootstrap.md),
   [artifact-foundation runbook](./operations/aws-artifact-foundation.md),
   and [two-gate AWS demo release checklist](./operations/aws-demo-release-checklist.md).
+- `plans/`: active or pending implementation plans before non-trivial
+  infrastructure changes. Delivered plans live under `plans/delivered/` as
+  history, not current instructions.
 
 ## Documentation Ownership
 

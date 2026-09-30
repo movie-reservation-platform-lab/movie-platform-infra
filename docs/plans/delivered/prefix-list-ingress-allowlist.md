@@ -1,5 +1,8 @@
 # Implementation Plan: Prefix List Ingress Allowlist
 
+> Status: delivered historical plan. Current ingress and operator behavior lives
+> in architecture and operations documentation.
+>
 > Status: active design and implementation review for issue
 > [#3](https://github.com/movie-reservation-platform-lab/movie-platform-infra/issues/3).
 > The branch implementation is staged but has not been deployed or delivered.
