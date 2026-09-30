@@ -11,17 +11,17 @@ credentials, or private query locations in this file.
 - Operator role classification:
 - Region: `eu-central-1`
 - Source revision: `6a1fdd3`
-- Stack revision:
+- Stack revision: `9e5ae78`
 - Teardown owner:
 
 ## Offline checks
 
 | Check | Result | Redacted note |
 | --- | --- | --- |
-| Workspace build | Pending | |
-| Focused Jest tests | Pending | |
-| Workspace boundary validation | Pending | |
-| Offline synth and template review | Pending | |
+| Workspace build | Pass | Checkpoint workspace compiled with TypeScript. |
+| Focused Jest tests | Pass | 4 suites and 12 tests passed. |
+| Workspace boundary validation | Pass | Dependency direction is valid. |
+| Offline synth and template review | Pass | Fake-account synth confirmed the runbook contract. |
 
 ## Live results
 
