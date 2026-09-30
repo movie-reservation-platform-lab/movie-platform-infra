@@ -1,5 +1,8 @@
 # PR #52 review and onboarding improvements
 
+> Status: delivered review record. Keep for historical findings; prefer current
+> architecture, operations and tests for today's behavior.
+
 ## 1. Summary
 
 Review revision `9e21f8f` using the four repository review-agent instructions,

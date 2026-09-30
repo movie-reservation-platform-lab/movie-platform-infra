@@ -1,5 +1,8 @@
 # Audit demo implementation plan — September 8, 2026
 
+> Status: delivered historical plan. Current audit-demo operation belongs in
+> [`docs/operations/audit-demo.md`](../../operations/audit-demo.md).
+
 Tracking: [infra #43](https://github.com/movie-reservation-platform-lab/movie-platform-infra/issues/43).
 
 ## Goal and scope

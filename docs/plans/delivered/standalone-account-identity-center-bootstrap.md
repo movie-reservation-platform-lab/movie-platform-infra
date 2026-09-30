@@ -1,6 +1,6 @@
 # Implementation Plan: Standalone-Account Identity Center And Grafana Access Bootstrap
 
-> Status: approved on 2026-08-18 for the plan-only PR 1 of issue
+> Status: delivered historical plan approved on 2026-08-18 for issue
 > [#14](https://github.com/movie-reservation-platform-lab/movie-platform-infra/issues/14).
 > Approval covers this design record and release decomposition only. It does
 > not approve the existing draft implementation, PRs 2–4, or any AWS mutation.

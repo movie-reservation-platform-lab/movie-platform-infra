@@ -1,5 +1,8 @@
 # Implementation Plan: Parameterized GitHub OIDC Trust Roles
 
+> Status: delivered. Current synthesis and operator flow are documented from
+> the root README and the `GitHubOidcTrustStack` implementation.
+
 ## 1. Summary
 
 Issue #28 adds a separately synthesized public CDK stack that defines two

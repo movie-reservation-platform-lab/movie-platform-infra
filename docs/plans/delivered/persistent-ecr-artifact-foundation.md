@@ -2,7 +2,8 @@
 
 > Issue: [#12](https://github.com/movie-reservation-platform-lab/movie-platform-infra/issues/12)
 >
-> Status: approved for implementation in five pull requests
+> Status: delivered historical plan for the artifact foundation implementation
+> sequence
 >
 > Decision review completed: 2026-08-21
 >
@@ -70,17 +71,17 @@ each mutation group receives explicit approval.
 
 ## 4. Current State
 
-- [`bin/infra.ts`](../../bin/infra.ts) is the only CDK entrypoint. It requires
+- [`bin/infra.ts`](../../../bin/infra.ts) is the only CDK entrypoint. It requires
   workload-specific context before the app can synthesize.
-- [`lib/infra-stack.ts`](../../lib/infra-stack.ts) defines the large,
+- [`lib/infra-stack.ts`](../../../lib/infra-stack.ts) defines the large,
   intentionally disposable `MovieReservationWorkloadStack`.
-- [`lib/application-image.ts`](../../lib/application-image.ts) imports an ECR
+- [`lib/application-image.ts`](../../../lib/application-image.ts) imports an ECR
   repository by name and creates an ECS image reference from an immutable
   digest. It does not create the repository.
-- [`lib/config/platform-config.ts`](../../lib/config/platform-config.ts)
+- [`lib/config/platform-config.ts`](../../../lib/config/platform-config.ts)
   validates the complete private ECR URI and requires its account and Region to
   match the deployment target.
-- [`test/infra.test.ts`](../../test/infra.test.ts) deliberately asserts that the
+- [`test/infra.test.ts`](../../../test/infra.test.ts) deliberately asserts that the
   workload stack contains no `AWS::ECR::Repository` resource.
 - Existing operations documentation starts with a pre-existing image reference
   and does not provide an infrastructure-owned repository bootstrap path.
@@ -752,10 +753,10 @@ the later private environments-owned admission workflow.
 
 Repository and local knowledge sources used during review:
 
-- [`lib/application-image.ts`](../../lib/application-image.ts) and
-  [`lib/config/platform-config.ts`](../../lib/config/platform-config.ts): current
+- [`lib/application-image.ts`](../../../lib/application-image.ts) and
+  [`lib/config/platform-config.ts`](../../../lib/config/platform-config.ts): current
   digest-pinned ECR consumption contract.
-- [`test/infra.test.ts`](../../test/infra.test.ts): current workload ownership
+- [`test/infra.test.ts`](../../../test/infra.test.ts): current workload ownership
   and CDK assertion contract.
 - Local programming KB: `concepts/CDK Docker Image Assets.md`,
   `patterns/Multi-Service Release Composition.md`, and

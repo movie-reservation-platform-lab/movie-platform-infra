@@ -1,5 +1,8 @@
 # Implementation Plan: Temporary Integrated AWS Demo
 
+> Status: delivered historical plan. Current deployment guidance belongs in the
+> audit-demo and Security Lake runbooks.
+
 ## 1. Summary
 
 Deploy the six independently published application images and the repository-owned

@@ -17,10 +17,10 @@ Do not treat completion of Gate 1 as permission to start Gate 2.
 ## Gate 1: Repository Delivery
 
 - [ ] PRs 1–4 from the
-      [approved plan](../plans/standalone-account-identity-center-bootstrap.md)
+      [approved plan](../plans/delivered/standalone-account-identity-center-bootstrap.md)
       were reviewed and merged in order.
 - [ ] PRs 1–5 from the
-      [artifact-foundation plan](../plans/persistent-ecr-artifact-foundation.md)
+      [artifact-foundation plan](../plans/delivered/persistent-ecr-artifact-foundation.md)
       were reviewed and merged in order.
 - [ ] The release checkout is based on the resulting `main`, with no unrelated
       local changes.
