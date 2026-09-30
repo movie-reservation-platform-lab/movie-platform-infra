@@ -25,5 +25,19 @@
     "save": "all",
     "reveal": "always",
     "hide": "never"
+  },
+  {
+    "label": "npm: test Security Lake Firehose partitioning",
+    "command": "npm",
+    "args": [
+      "test",
+      "--",
+      "--runTestsByPath",
+      "test/firehose-partitioning.test.ts"
+    ],
+    "cwd": "$ZED_WORKTREE_ROOT/apps/security-lake-firehose-spike",
+    "save": "all",
+    "reveal": "always",
+    "hide": "never"
   }
 ]

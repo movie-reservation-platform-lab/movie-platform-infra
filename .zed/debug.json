@@ -54,6 +54,31 @@
     ]
   },
   {
+    "label": "Debug Security Lake Firehose partitioning tests",
+    "adapter": "JavaScript",
+    "type": "node",
+    "request": "launch",
+    "cwd": "$ZED_WORKTREE_ROOT/apps/security-lake-firehose-spike",
+    "program": "$ZED_WORKTREE_ROOT/node_modules/jest/bin/jest.js",
+    "args": [
+      "--config",
+      "$ZED_WORKTREE_ROOT/apps/security-lake-firehose-spike/jest.config.cjs",
+      "--runInBand",
+      "--runTestsByPath",
+      "$ZED_WORKTREE_ROOT/apps/security-lake-firehose-spike/test/firehose-partitioning.test.ts"
+    ],
+    "sourceMaps": true,
+    "smartStep": true,
+    "skipFiles": [
+      "<node_internals>/**",
+      "$ZED_WORKTREE_ROOT/node_modules/**"
+    ],
+    "resolveSourceMapLocations": [
+      "$ZED_WORKTREE_ROOT/apps/security-lake-firehose-spike/**",
+      "!**/node_modules/**"
+    ]
+  },
+  {
     "label": "Attach to Jest",
     "adapter": "JavaScript",
     "type": "node",

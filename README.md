@@ -23,6 +23,9 @@ The current CDK apps have separate lifecycle boundaries:
 - `ObservabilityStack` owns AMP, optional Grafana and operational log groups.
 - The legacy audit-demo workspace's `AuditStack` owns Firehose, the S3 audit/ALB
   archives, CloudTrail and Athena.
+- `SecurityLakeAuditIngestionStack` is a disposable, offline-tested checkpoint
+  for JSON-to-Parquet conversion and Security Lake custom-source partitioning.
+  It is not part of the stable audit-account stack.
 - `GitHubOidcTrustStack` owns the GitHub provider and separate artifact-admission
   and workload-deployment entry roles.
 
@@ -88,6 +91,7 @@ npm run synth:ecr-contract
 npm run synth:artifact-foundation
 npm run synth:audit
 npm run synth:audit-account
+npm run synth:security-lake-audit-ingestion
 npm run synth:observability
 npm run ci
 ```
@@ -110,6 +114,13 @@ commands are available alongside root compatibility commands. Run
 `npm run validate:workspace-boundaries` to enforce the dependency direction:
 apps and automation may consume packages, while those top-level layers remain
 independent and packages never depend on either one.
+
+The disposable
+[`apps/security-lake-firehose-spike`](apps/security-lake-firehose-spike/README.md)
+workspace validates the proposed managed ingestion path before it is promoted
+into reusable infrastructure. Its offline synth uses fake source output; follow
+the [feasibility runbook](docs/operations/security-lake-firehose-feasibility.md)
+before any live action.
 
 `npm run validate:artifact-copy` is credential-free and performs no registry
 mutation. It validates strict single-manifest copy and existing-content

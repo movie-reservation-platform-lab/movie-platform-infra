@@ -118,6 +118,9 @@ jobs:
       - name: Run audit-account foundation tests
         run: npm run test:cdk:audit-account
 
+      - name: Run Security Lake audit-ingestion tests
+        run: npm run test:cdk:security-lake-audit-ingestion
+
   # Validates repository tooling that supports deployability and operations,
   # including image, smoke-test, metrics, and dashboard checks.
   tooling:
@@ -203,6 +206,9 @@ jobs:
 
       - name: Synthesize audit-account foundation
         run: npm run synth:audit-account
+
+      - name: Synthesize Security Lake audit ingestion
+        run: npm run synth:security-lake-audit-ingestion
 
       - name: Synthesize independent observability foundation
         run: npm run synth:observability
