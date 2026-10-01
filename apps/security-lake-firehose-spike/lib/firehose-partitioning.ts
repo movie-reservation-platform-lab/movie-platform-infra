@@ -4,6 +4,7 @@ import type { CfnDeliveryStream } from 'aws-cdk-lib/aws-kinesisfirehose';
 export interface FirehosePartitioning {
   readonly dynamicPartitioningConfiguration:
     CfnDeliveryStream.DynamicPartitioningConfigurationProperty;
+  readonly errorObjectPrefix: string;
   readonly errorOutputPrefix: string;
   readonly prefix: string;
   readonly processingConfiguration: CfnDeliveryStream.ProcessingConfigurationProperty;
@@ -25,8 +26,9 @@ export function buildFirehosePartitioning(
   const dynamicPartitioningConfiguration: CfnDeliveryStream.DynamicPartitioningConfigurationProperty = {
     enabled: true,
   };
+  const errorObjectPrefix = `${sourcePrefix.slice(0, -1)}-errors/`;
   const errorOutputPrefix =
-    `${sourcePrefix.slice(0, -1)}-errors/` +
+    errorObjectPrefix +
     '!{firehose:error-output-type}/' +
     '!{timestamp:yyyy/MM/dd/HH}/';
   const prefix =
@@ -56,6 +58,7 @@ export function buildFirehosePartitioning(
 
   return {
     dynamicPartitioningConfiguration,
+    errorObjectPrefix,
     errorOutputPrefix,
     prefix,
     processingConfiguration,

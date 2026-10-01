@@ -15,10 +15,12 @@ Never deploy this application without explicit live authorization, a reviewed
 change set, a confirmed target account and Region, and an agreed teardown owner.
 
 Security Lake custom sources are API-managed rather than CloudFormation-managed.
-The source must be created through a separately reviewed, guarded operator step.
-Its returned S3 location and provider-role ARN become a private local config
-file for this app. That live lifecycle is not automated by this workspace. Do
-not commit real account IDs, role ARNs, source locations, or failed records.
+The prerequisite stack creates only the Glue crawler role required by that API.
+The source must then be created through the separately reviewed operator step,
+with Firehose as its provider identity. Its returned S3 location and provider
+role ARN become a private local config file for the ingestion stack. The API
+lifecycle is not automated by this workspace. Do not commit real account IDs,
+role ARNs, source locations, or failed records.
 
 ## Offline commands
 
@@ -27,6 +29,13 @@ npm run build --workspace @movie-platform/security-lake-firehose-spike
 npm test --workspace @movie-platform/security-lake-firehose-spike
 npm run synth --workspace @movie-platform/security-lake-firehose-spike
 ```
+
+The combined synth emits two independent templates:
+
+1. `SecurityLakeCustomSourcePrerequisitesStack` creates the disposable Glue
+   crawler role before the custom source exists.
+2. `SecurityLakeAuditIngestionStack` creates Firehose only after the custom
+   source has returned its assigned location and provider role.
 
 See `docs/operations/security-lake-firehose-feasibility.md` for the operator
 workflow and `docs/plans/security-lake-firehose-feasibility.md` for design and

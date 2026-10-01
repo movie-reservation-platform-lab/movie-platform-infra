@@ -76,12 +76,22 @@ the delivery stream, and focused template assertions.
 
 The live workflow has two phases:
 
-1. The operator passes the existing account preflight, then follows a separately
-   reviewed API or CLI procedure to create or inspect the custom source. Its
-   response supplies the Security Lake source location and provider role.
-2. CDK deploys the Firehose delivery stack using those explicit values. The
-   operator sends canonical and malformed records, queries the custom source,
-   records redacted results, then destroys the stack and custom source.
+1. CDK creates a disposable Glue crawler role scoped to the expected custom
+   source prefix. The operator passes the existing account preflight, then
+   follows a separately reviewed API or CLI procedure to create the custom
+   source with Firehose as the provider identity. Its response supplies the
+   Security Lake source location and provider role.
+2. A read-only gate proves that the generated provider role trusts Firehose
+   with the audit account as its external ID. Its Security Lake permissions
+   boundary limits it to destination access, so CDK creates a separate
+   Firehose-assumable role for Glue conversion-schema reads, grants it Lake
+   Formation `DESCRIBE` on the conversion database/table, and leaves delivery
+   logging disabled. Because Security Lake grants the provider role only the
+   valid source prefix, CDK adds a separate `s3:PutObject` grant scoped to the
+   sibling conversion-error prefix. CDK then deploys the Firehose delivery stack
+   using the returned values. The operator sends canonical and malformed
+   records, queries the custom source, records redacted results, then destroys
+   the stack and custom source.
 
 The conversion Glue table belongs to Firehose. The Security Lake-created Glue
 table and crawler remain separate because they describe the delivered dataset
@@ -115,16 +125,21 @@ The spike reads an explicit JSON configuration containing the audit account ID,
 Region, custom-source S3 location, and provider-role ARN. Parsing happens once
 at the composition root. The stack receives a typed configuration object.
 
-The existing account preflight remains mandatory before live work. A future
-repository-owned custom-source mutation command must add an explicit execution
-gate and sanitized dry-run output; this checkpoint does not claim that command
-already exists.
+The existing account preflight remains mandatory before live work. The
+prerequisite and ingestion stacks consume separate private configuration files
+because the latter cannot exist until the API assigns a source location. A
+future repository-owned custom-source mutation command must add an explicit
+execution gate and sanitized dry-run output; this checkpoint documents the
+reviewed request but does not automate it.
 
 ## 9. Security and Privacy
 
 - Use only synthetic events.
-- Encrypt Firehose and CloudWatch log data and bound retention.
-- Grant writes only to the assigned source prefix and the separate error path.
+- Encrypt Firehose data. Delivery logging is disabled because the generated
+  Security Lake destination role cannot receive CloudWatch permissions through
+  its permissions boundary.
+- Add only `s3:PutObject` for the exact sibling error-object prefix; keep Glue
+  schema access on the separate Firehose role.
 - Never publish raw failed records in committed evidence.
 - Refuse account, Region, role, or source-location mismatches before mutation.
 
@@ -132,9 +147,13 @@ already exists.
 
 - A failed conversion must not place an object under the valid source prefix.
 - Stable event IDs allow submitted and queryable counts to be reconciled.
-- Teardown order is Firehose stack, custom source, crawler leftovers, and any
-  disposable data lake created solely by the experiment.
+- Teardown order is Firehose stack, custom source, Security Lake-created
+  crawler leftovers, prerequisite stack, and any disposable data lake created
+  solely by the experiment.
 - Any unexplained retained resource fails the checkpoint.
+- A protected AWS service-linked role may remain when its registrations and
+  backing resources are gone. Record it as an explained AWS-owned artifact and
+  do not attempt to modify it directly.
 
 ## 11. Implementation Steps
 
@@ -168,6 +187,9 @@ already exists.
 - Operator tests with injected fake AWS CLI results.
 - Offline synth with synthetic account data and `--no-lookups`.
 - Live validation only after reviewed authorization.
+- After the reusable path and test tenant exist, add a post-deploy synthetic
+  canary and a real tenant smoke action. Reconcile unique event IDs in Athena;
+  do not make pull-request checks depend on a shared live environment.
 
 ## 13. Done Criteria
 
@@ -177,3 +199,5 @@ already exists.
   disproves the Firehose option.
 - Cleanup inventory is empty except explicitly declared retained items.
 - The live result chooses Option A or triggers the documented Option B update.
+- The malformed-record path is accepted only after a focused live retest proves
+  the scoped error-prefix grant.

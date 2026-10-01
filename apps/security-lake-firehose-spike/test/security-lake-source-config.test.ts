@@ -16,15 +16,15 @@ test('parses an assigned source in the configured audit and workload accounts', 
     providerRoleArn:
       'arn:aws:iam::222222222222:role/AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1',
     sourceAccountId: '333333333333',
-    sourceLocation: 's3://aws-security-data-lake-eu-central-1-example/ext/MOVIE_AUTH/',
+    sourceLocation: 's3://aws-security-data-lake-eu-central-1-example/ext/MOVIE_AUTH/1.0/',
   }), auditConfig)).toEqual({
     bucketName: 'aws-security-data-lake-eu-central-1-example',
     providerRoleArn:
       'arn:aws:iam::222222222222:role/AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1',
     providerRoleName: 'AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1',
     sourceAccountId: '333333333333',
-    sourceLocation: 's3://aws-security-data-lake-eu-central-1-example/ext/MOVIE_AUTH/',
-    sourcePrefix: 'ext/MOVIE_AUTH/',
+    sourceLocation: 's3://aws-security-data-lake-eu-central-1-example/ext/MOVIE_AUTH/1.0/',
+    sourcePrefix: 'ext/MOVIE_AUTH/1.0/',
   });
 });
 
@@ -33,7 +33,7 @@ test.each([
     providerRoleArn:
       'arn:aws:iam::999999999999:role/AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1',
     sourceAccountId: '333333333333',
-    sourceLocation: 's3://aws-security-data-lake-eu-central-1-example/ext/MOVIE_AUTH/',
+    sourceLocation: 's3://aws-security-data-lake-eu-central-1-example/ext/MOVIE_AUTH/1.0/',
   }],
   ['a source outside the Security Lake ext prefix', {
     providerRoleArn:
@@ -45,7 +45,7 @@ test.each([
     providerRoleArn:
       'arn:aws:iam::222222222222:role/AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1',
     sourceAccountId: '444444444444',
-    sourceLocation: 's3://aws-security-data-lake-eu-central-1-example/ext/MOVIE_AUTH/',
+    sourceLocation: 's3://aws-security-data-lake-eu-central-1-example/ext/MOVIE_AUTH/1.0/',
   }],
 ])('rejects %s', (_description, value) => {
   expect(() => parseSecurityLakeSourceConfigJson(JSON.stringify(value), auditConfig))

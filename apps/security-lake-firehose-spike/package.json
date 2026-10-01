@@ -9,7 +9,10 @@
     "build": "tsc --project tsconfig.json",
     "test": "jest --config jest.config.cjs --runInBand",
     "cdk": "cdk --app \"npx ts-node --project tsconfig.json --prefer-ts-exts bin/security-lake-firehose-spike.ts\"",
-    "synth": "MOVIE_PLATFORM_AUDIT_ACCOUNT_CONFIG_FILE=$PWD/../audit-account/test/fixtures/audit-account-config.json MOVIE_PLATFORM_SECURITY_LAKE_FIREHOSE_SPIKE_CONFIG_FILE=$PWD/test/fixtures/security-lake-source.json AWS_REGION=eu-central-1 npm run cdk -- synth SecurityLakeAuditIngestionStack --no-lookups --output ../../cdk.out/security-lake-firehose-spike"
+    "cdk:prerequisites": "cdk --app \"npx ts-node --project tsconfig.json --prefer-ts-exts bin/security-lake-custom-source-prerequisites.ts\"",
+    "synth": "npm run synth:prerequisites && npm run synth:ingestion",
+    "synth:prerequisites": "MOVIE_PLATFORM_AUDIT_ACCOUNT_CONFIG_FILE=$PWD/../audit-account/test/fixtures/audit-account-config.json MOVIE_PLATFORM_SECURITY_LAKE_PREREQUISITES_CONFIG_FILE=$PWD/test/fixtures/security-lake-prerequisites.json AWS_REGION=eu-central-1 npm run cdk:prerequisites -- synth SecurityLakeCustomSourcePrerequisitesStack --no-lookups --output ../../cdk.out/security-lake-custom-source-prerequisites",
+    "synth:ingestion": "MOVIE_PLATFORM_AUDIT_ACCOUNT_CONFIG_FILE=$PWD/../audit-account/test/fixtures/audit-account-config.json MOVIE_PLATFORM_SECURITY_LAKE_FIREHOSE_SPIKE_CONFIG_FILE=$PWD/test/fixtures/security-lake-source.json AWS_REGION=eu-central-1 npm run cdk -- synth SecurityLakeAuditIngestionStack --no-lookups --output ../../cdk.out/security-lake-firehose-spike"
   },
   "dependencies": {
     "@movie-platform/audit-account-config": "0.1.0",

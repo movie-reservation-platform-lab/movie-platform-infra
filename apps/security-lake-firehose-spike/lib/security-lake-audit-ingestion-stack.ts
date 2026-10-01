@@ -1,14 +1,13 @@
 import {
   Arn,
   Aws,
-  RemovalPolicy,
   Stack,
   type StackProps,
 } from 'aws-cdk-lib';
 import * as glue from 'aws-cdk-lib/aws-glue';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as firehose from 'aws-cdk-lib/aws-kinesisfirehose';
-import * as logs from 'aws-cdk-lib/aws-logs';
+import * as lakeformation from 'aws-cdk-lib/aws-lakeformation';
 import type { Construct } from 'constructs';
 import { AUDIT_CONVERSION_COLUMNS } from './audit-conversion-schema';
 import { buildFirehosePartitioning } from './firehose-partitioning';
@@ -42,52 +41,73 @@ export class SecurityLakeAuditIngestionStack extends Stack {
         storageDescriptor: {
           columns: [...AUDIT_CONVERSION_COLUMNS],
           inputFormat: 'org.apache.hadoop.mapred.TextInputFormat',
-          location: props.sourceConfig.sourceLocation,
           outputFormat: 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat',
           serdeInfo: { serializationLibrary: 'org.openx.data.jsonserde.JsonSerDe' },
         },
       },
     });
 
-    const deliveryLogs = new logs.LogGroup(this, 'DeliveryLogs', {
-      retention: logs.RetentionDays.ONE_DAY,
-      removalPolicy: RemovalPolicy.DESTROY,
+    const conversionSchemaRole = new iam.Role(this, 'ConversionSchemaRole', {
+      assumedBy: new iam.ServicePrincipal('firehose.amazonaws.com'),
+      description: 'Allows Firehose to read the disposable conversion schema',
+      inlinePolicies: {
+        SchemaRead: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: ['glue:GetTable', 'glue:GetTableVersion', 'glue:GetTableVersions'],
+              resources: [
+                Arn.format({ service: 'glue', resource: 'catalog' }, this),
+                Arn.format({
+                  service: 'glue',
+                  resource: 'database',
+                  resourceName: conversionDatabase.ref,
+                }, this),
+                Arn.format({
+                  service: 'glue',
+                  resource: 'table',
+                  resourceName: `${conversionDatabase.ref}/${conversionTable.ref}`,
+                }, this),
+              ],
+            }),
+          ],
+        }),
+      },
     });
-    const deliveryLogStream = new logs.LogStream(this, 'DeliveryLogStream', {
-      logGroup: deliveryLogs,
-      removalPolicy: RemovalPolicy.DESTROY,
-    });
-
-    const providerRolePolicy = new iam.CfnPolicy(this, 'ProviderRolePolicy', {
-      policyName: 'security-lake-firehose-spike',
-      roles: [props.sourceConfig.providerRoleName],
-      policyDocument: new iam.PolicyDocument({
-        statements: [
-          new iam.PolicyStatement({
-            actions: ['glue:GetTable', 'glue:GetTableVersion', 'glue:GetTableVersions'],
-            resources: [
-              Arn.format({ service: 'glue', resource: 'catalog' }, this),
-              Arn.format({
-                service: 'glue',
-                resource: 'database',
-                resourceName: conversionDatabase.ref,
-              }, this),
-              Arn.format({
-                service: 'glue',
-                resource: 'table',
-                resourceName: `${conversionDatabase.ref}/${conversionTable.ref}`,
-              }, this),
-            ],
-          }),
-          new iam.PolicyStatement({
-            actions: ['logs:PutLogEvents'],
-            resources: [
-              `${deliveryLogs.logGroupArn}:log-stream:${deliveryLogStream.logStreamName}`,
-            ],
-          }),
-        ],
-      }),
-    });
+    const conversionDatabaseAccess = new lakeformation.CfnPrincipalPermissions(
+      this,
+      'ConversionDatabaseAccess',
+      {
+        permissions: ['DESCRIBE'],
+        permissionsWithGrantOption: [],
+        principal: {
+          dataLakePrincipalIdentifier: conversionSchemaRole.roleArn,
+        },
+        resource: {
+          database: {
+            catalogId: this.account,
+            name: conversionDatabase.ref,
+          },
+        },
+      },
+    );
+    const conversionTableAccess = new lakeformation.CfnPrincipalPermissions(
+      this,
+      'ConversionTableAccess',
+      {
+        permissions: ['DESCRIBE'],
+        permissionsWithGrantOption: [],
+        principal: {
+          dataLakePrincipalIdentifier: conversionSchemaRole.roleArn,
+        },
+        resource: {
+          table: {
+            catalogId: this.account,
+            databaseName: conversionDatabase.ref,
+            name: conversionTable.ref,
+          },
+        },
+      },
+    );
 
     // TODO(PR 5): Select an explicit multi-account routing strategy. The
     //  platform-audit/1 payload has no source account or Region, so this
@@ -96,6 +116,34 @@ export class SecurityLakeAuditIngestionStack extends Stack {
       props.sourceConfig.sourcePrefix,
       this.region,
       props.sourceConfig.sourceAccountId,
+    );
+    const providerErrorOutputPolicy = new iam.CfnPolicy(
+      this,
+      'ProviderErrorOutputPolicy',
+      {
+        policyName: 'security-lake-firehose-error-output',
+        roles: [props.sourceConfig.providerRoleName],
+        policyDocument: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: ['s3:PutObject'],
+              resources: [
+                Arn.format(
+                  {
+                    partition: Aws.PARTITION,
+                    service: 's3',
+                    region: '',
+                    account: '',
+                    resource: props.sourceConfig.bucketName,
+                    resourceName: `${partitioning.errorObjectPrefix}*`,
+                  },
+                  this,
+                ),
+              ],
+            }),
+          ],
+        }),
+      },
     );
     const stream = new firehose.CfnDeliveryStream(this, 'DeliveryStream', {
       deliveryStreamType: 'DirectPut',
@@ -110,11 +158,6 @@ export class SecurityLakeAuditIngestionStack extends Stack {
         }),
         roleArn: props.sourceConfig.providerRoleArn,
         bufferingHints: { intervalInSeconds: 300, sizeInMBs: 64 },
-        cloudWatchLoggingOptions: {
-          enabled: true,
-          logGroupName: deliveryLogs.logGroupName,
-          logStreamName: deliveryLogStream.logStreamName,
-        },
         compressionFormat: 'UNCOMPRESSED',
         dataFormatConversionConfiguration: {
           enabled: true,
@@ -135,7 +178,7 @@ export class SecurityLakeAuditIngestionStack extends Stack {
             catalogId: this.account,
             databaseName: conversionDatabase.ref,
             region: this.region,
-            roleArn: props.sourceConfig.providerRoleArn,
+            roleArn: conversionSchemaRole.roleArn,
             tableName: conversionTable.ref,
             versionId: 'LATEST',
           },
@@ -146,6 +189,8 @@ export class SecurityLakeAuditIngestionStack extends Stack {
         processingConfiguration: partitioning.processingConfiguration,
       },
     });
-    stream.addResourceDependency(providerRolePolicy);
+    stream.addResourceDependency(conversionDatabaseAccess);
+    stream.addResourceDependency(conversionTableAccess);
+    stream.addResourceDependency(providerErrorOutputPolicy);
   }
 }
