@@ -82,10 +82,16 @@ The live workflow has two phases:
    source with Firehose as the provider identity. Its response supplies the
    Security Lake source location and provider role.
 2. A read-only gate proves that the generated provider role trusts Firehose
-   with the audit account as its external ID. CDK then deploys the Firehose
-   delivery stack using the returned values. The
-   operator sends canonical and malformed records, queries the custom source,
-   records redacted results, then destroys the stack and custom source.
+   with the audit account as its external ID. Its Security Lake permissions
+   boundary limits it to destination access, so CDK creates a separate
+   Firehose-assumable role for Glue conversion-schema reads, grants it Lake
+   Formation `DESCRIBE` on the conversion database/table, and leaves delivery
+   logging disabled. Because Security Lake grants the provider role only the
+   valid source prefix, CDK adds a separate `s3:PutObject` grant scoped to the
+   sibling conversion-error prefix. CDK then deploys the Firehose delivery stack
+   using the returned values. The operator sends canonical and malformed
+   records, queries the custom source, records redacted results, then destroys
+   the stack and custom source.
 
 The conversion Glue table belongs to Firehose. The Security Lake-created Glue
 table and crawler remain separate because they describe the delivered dataset
@@ -129,8 +135,11 @@ reviewed request but does not automate it.
 ## 9. Security and Privacy
 
 - Use only synthetic events.
-- Encrypt Firehose and CloudWatch log data and bound retention.
-- Grant writes only to the assigned source prefix and the separate error path.
+- Encrypt Firehose data. Delivery logging is disabled because the generated
+  Security Lake destination role cannot receive CloudWatch permissions through
+  its permissions boundary.
+- Add only `s3:PutObject` for the exact sibling error-object prefix; keep Glue
+  schema access on the separate Firehose role.
 - Never publish raw failed records in committed evidence.
 - Refuse account, Region, role, or source-location mismatches before mutation.
 
@@ -142,6 +151,9 @@ reviewed request but does not automate it.
   crawler leftovers, prerequisite stack, and any disposable data lake created
   solely by the experiment.
 - Any unexplained retained resource fails the checkpoint.
+- A protected AWS service-linked role may remain when its registrations and
+  backing resources are gone. Record it as an explained AWS-owned artifact and
+  do not attempt to modify it directly.
 
 ## 11. Implementation Steps
 
@@ -175,6 +187,9 @@ reviewed request but does not automate it.
 - Operator tests with injected fake AWS CLI results.
 - Offline synth with synthetic account data and `--no-lookups`.
 - Live validation only after reviewed authorization.
+- After the reusable path and test tenant exist, add a post-deploy synthetic
+  canary and a real tenant smoke action. Reconcile unique event IDs in Athena;
+  do not make pull-request checks depend on a shared live environment.
 
 ## 13. Done Criteria
 
@@ -184,3 +199,5 @@ reviewed request but does not automate it.
   disproves the Firehose option.
 - Cleanup inventory is empty except explicitly declared retained items.
 - The live result chooses Option A or triggers the documented Option B update.
+- The malformed-record path is accepted only after a focused live retest proves
+  the scoped error-prefix grant.

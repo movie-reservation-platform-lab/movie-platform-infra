@@ -29,7 +29,13 @@ S3 access scoped to `ext/MOVIE_AUTH/`. Confirm that
 `SecurityLakeAuditIngestionStack.template.json` contains:
 
 - an encrypted Direct Put Firehose stream;
-- Glue metadata for JSON-to-Parquet conversion;
+- a metadata-only Glue table and a separate Firehose-assumable schema role for
+  JSON-to-Parquet conversion;
+- Lake Formation `DESCRIBE` grants on that conversion database and table,
+  created before Firehose validates the schema;
+- the Security Lake provider role used only for S3 delivery, with one additional
+  `s3:PutObject` grant scoped to the sibling conversion-error prefix and no Glue
+  or CloudWatch permissions;
 - SNAPPY-compressed Parquet output;
 - dynamic partition extraction of UTC `eventDay` from epoch-millisecond
   `time`;
@@ -83,7 +89,7 @@ location in a private file outside Git:
 {
   "providerRoleArn": "<returned Security Lake provider role ARN>",
   "sourceAccountId": "<approved workload account ID>",
-  "sourceLocation": "s3://<returned bucket>/ext/<returned source>/"
+  "sourceLocation": "s3://<returned bucket>/ext/<returned source>/<returned version>/"
 }
 ```
 
@@ -142,6 +148,14 @@ Stop unless the trusted service is `firehose.amazonaws.com` and the
 attached and inline policies and confirm that Security Lake granted writes only
 to its assigned source location. These read-only checks prove that the role at
 the other side of the private ARN has the behavior assumed by the template.
+The generated role's `AmazonSecurityLakePermissionsBoundary` permits only the
+Security Lake S3/KMS/SQS action set, so the ingestion stack must not attach
+Glue or CloudWatch permissions to it. A separate Firehose-assumable role reads
+the stack-owned conversion schema. Delivery logging remains disabled for this
+checkpoint because the S3 destination configuration has no separate logging
+role. Security Lake's generated inline policy grants only its assigned valid
+source prefix. The ingestion stack therefore attaches one additional policy
+that grants `s3:PutObject` only to the configured sibling error prefix.
 
 There is not yet a repository command that creates or deletes this source. The
 request remains a reviewed, human-executed checkpoint for issue #71.
@@ -159,10 +173,10 @@ After explicit authorization and the normal audit-account preflight:
    `region/accountId/eventDay` hierarchy.
 6. Confirm Athena can query the expected fields and reconcile submitted event
    IDs with queryable event IDs.
-7. Confirm the malformed record never appears in the valid dataset. Record
-   whether the Security Lake provider role permits the sibling error prefix;
-   failure here is evidence that the proposed simple Firehose path is
-   insufficient or needs a separately authorized quarantine destination.
+7. Confirm the malformed record never appears in the valid dataset and that it
+   reaches the sibling error prefix. Failure of error delivery means the scoped
+   provider-role grant needs correction or the design needs a separately
+   authorized quarantine destination.
 8. Record event-to-query delay and the submitted, accepted, failed, and
    queryable counts in the evidence template.
 
@@ -186,14 +200,33 @@ Security Lake does not delete its custom-source crawler. Delete the exact
 crawler returned by the create response only after the source is gone. Finally,
 destroy `SecurityLakeCustomSourcePrerequisitesStack`.
 
-Verify that the stream, conversion Glue database/table, delivery logs,
-attached provider-role policy, custom source, Security Lake-created crawler,
-prerequisite role, and experiment-only objects are gone. Record only redacted
-resource types and counts.
+Deleting a data lake can retain its S3 bucket, Lake Formation registration,
+service-linked roles, event-processing Lambda, EventBridge resources, and SQS
+queues. When the data lake was created solely for this checkpoint, inventory
+and remove each retained experiment resource explicitly. Do not edit protected
+AWS service-linked roles directly. AWS may retain one with stale policy text
+after its data location and bucket are gone; record that explained, non-billable
+AWS-owned artifact instead of trying to bypass the service protection.
+
+Verify that the stream, conversion Glue database/table, conversion-schema role,
+custom source, Security Lake-created crawler, prerequisite role, and
+experiment-only objects are gone. Record only redacted resource types and
+counts.
 
 An unexplained retained resource, a malformed record in the valid hierarchy,
 or a count mismatch fails the checkpoint. Update the ingestion architecture
 decision before starting the reusable implementation.
+
+## Follow-up automated validation
+
+Keep pull-request checks credential-free. Once the reusable ingestion path and
+dedicated test tenant exist, add an opt-in post-deploy canary that publishes a
+uniquely identified synthetic event, polls Athena with a bounded timeout, and
+validates its exact fields and partition. A tenant smoke test should also
+perform a real audited action and reconcile its correlation or event ID in
+Security Lake. The synthetic canary diagnoses the ingestion path independently;
+the tenant test proves the application integration. Run the canary periodically
+as well as after deployment so a quiet tenant cannot hide a delivery failure.
 
 Use
 [`docs/plans/evidence/security-lake-firehose-feasibility.md`](../plans/evidence/security-lake-firehose-feasibility.md)
