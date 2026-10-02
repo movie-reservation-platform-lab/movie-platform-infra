@@ -81,6 +81,8 @@ Unit tests, CDK assertions, synth contracts, script checks, and smoke tests.
 
 ## Current Review Work
 
+- [Reusable audit ingestion package (PR 5)](./audit-ingestion-package.md):
+  proposed package boundary, hybrid ownership, and quarantine retest gate.
 - [EventBridge to Security Lake audit demo](./eventbridge-security-lake-audit-demo.md):
   cross-repository SDK, dedicated audit account, managed ingestion, migration,
   teardown, and thirteen-PR delivery plan.
