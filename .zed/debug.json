@@ -54,7 +54,7 @@
     ]
   },
   {
-    "label": "Debug Security Lake Firehose partitioning tests",
+    "label": "Debug Security Lake Firehose tests",
     "adapter": "JavaScript",
     "type": "node",
     "request": "launch",
@@ -63,9 +63,7 @@
     "args": [
       "--config",
       "$ZED_WORKTREE_ROOT/apps/security-lake-firehose-spike/jest.config.cjs",
-      "--runInBand",
-      "--runTestsByPath",
-      "$ZED_WORKTREE_ROOT/apps/security-lake-firehose-spike/test/firehose-partitioning.test.ts"
+      "--runInBand"
     ],
     "sourceMaps": true,
     "smartStep": true,
@@ -75,6 +73,29 @@
     ],
     "resolveSourceMapLocations": [
       "$ZED_WORKTREE_ROOT/apps/security-lake-firehose-spike/**",
+      "!**/node_modules/**"
+    ]
+  },
+  {
+    "label": "Debug audit ingestion tests",
+    "adapter": "JavaScript",
+    "type": "node",
+    "request": "launch",
+    "cwd": "$ZED_WORKTREE_ROOT/packages/audit-ingestion",
+    "program": "$ZED_WORKTREE_ROOT/node_modules/jest/bin/jest.js",
+    "args": [
+      "--config",
+      "$ZED_WORKTREE_ROOT/packages/audit-ingestion/jest.config.cjs",
+      "--runInBand"
+    ],
+    "sourceMaps": true,
+    "smartStep": true,
+    "skipFiles": [
+      "<node_internals>/**",
+      "$ZED_WORKTREE_ROOT/node_modules/**"
+    ],
+    "resolveSourceMapLocations": [
+      "$ZED_WORKTREE_ROOT/packages/audit-ingestion/**",
       "!**/node_modules/**"
     ]
   },

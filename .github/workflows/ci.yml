@@ -47,6 +47,9 @@ jobs:
       - name: Validate audit-account configuration package
         run: npm run validate:audit-account-config
 
+      - name: Validate reusable audit-ingestion package
+        run: npm run validate:audit-ingestion
+
   # Validates repository-owned operational commands after their reusable
   # package dependencies have passed.
   automation:

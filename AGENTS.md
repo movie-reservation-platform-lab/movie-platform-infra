@@ -17,6 +17,8 @@ of hiding them behind broad abstractions.
 - `packages/`: reusable workspace packages that deployable apps may consume.
 - `automation/`: independently tested operator and CI commands; workspace tools
   consume packages without importing deployable apps.
+- `local-tools/`: committed developer-operated maintenance tools; CI tests their
+  behavior but normal build, synth, and deploy flows do not perform their mutations.
 - `lib/`: stack, configuration boundary, and infrastructure helpers.
 - `adot-collector/`: repository-owned ADOT collector Docker image asset.
 - `grafana/dashboards/`: dashboard artifacts for managed observability.
