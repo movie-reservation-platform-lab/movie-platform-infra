@@ -1,0 +1,38 @@
+{
+  "activity_id": 99,
+  "activity_name": "Credential validation",
+  "category_uid": 3,
+  "class_uid": 3002,
+  "type_uid": 300299,
+  "severity_id": 1,
+  "status_id": 1,
+  "status_detail": "AUTHENTICATED",
+  "time": 1788814801000,
+  "metadata": {
+    "version": "1.3.0",
+    "uid": "22222222-2222-4222-8222-222222222222",
+    "correlation_uid": "demo-action-002",
+    "product": {
+      "name": "movie-reservation-service",
+      "vendor_name": "Movie Reservation Platform Lab",
+      "version": "demo-build-001"
+    }
+  },
+  "service": {
+    "name": "movie-reservation-service",
+    "version": "demo-build-001"
+  },
+  "user": {
+    "name": "demo-user",
+    "type_id": 1
+  },
+  "unmapped": {
+    "platform": {
+      "schema_version": "1",
+      "environment": "demo",
+      "request_id": "demo-request-002",
+      "route": "/demo/auth/login",
+      "auth_boundary": "demo_login"
+    }
+  }
+}
