@@ -9,10 +9,13 @@
     "build": "tsc --project tsconfig.json",
     "test": "jest --config jest.config.js --runInBand",
     "cdk": "cdk",
-    "synth": "MOVIE_PLATFORM_AUDIT_ACCOUNT_CONFIG_FILE=$PWD/test/fixtures/audit-account-config.json AWS_REGION=eu-central-1 npm run cdk -- synth AuditAccountStack --no-lookups --output ../../cdk.out/audit-account"
+    "synth": "npm run synth:foundation && npm run synth:ingestion",
+    "synth:foundation": "MOVIE_PLATFORM_AUDIT_ACCOUNT_CONFIG_FILE=$PWD/test/fixtures/audit-account-config.json AWS_REGION=eu-central-1 npm run cdk -- synth AuditAccountStack --no-lookups --output ../../cdk.out/audit-account-foundation",
+    "synth:ingestion": "MOVIE_PLATFORM_AUDIT_ACCOUNT_CONFIG_FILE=$PWD/test/fixtures/audit-account-config.json MOVIE_PLATFORM_SECURITY_LAKE_CUSTOM_SOURCE_RESPONSE_FILE=$PWD/test/fixtures/security-lake-custom-source-response.json AWS_REGION=eu-central-1 npm run cdk -- --app \"npx ts-node --project tsconfig.json --prefer-ts-exts bin/audit-account-ingestion.ts\" synth AuditAccountIngestionStack --no-lookups --output ../../cdk.out/audit-account-ingestion"
   },
   "dependencies": {
     "@movie-platform/audit-account-config": "0.1.0",
+    "@movie-platform/audit-ingestion": "0.1.0",
     "aws-cdk-lib": "^2.244.0",
     "constructs": "^10.5.1"
   }

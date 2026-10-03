@@ -1,0 +1,6 @@
+export const CUSTOM_SOURCE_NAME = 'MOVIE_AUTH' as const;
+export const CUSTOM_SOURCE_VERSION = '1.0' as const;
+export const CUSTOM_SOURCE_EVENT_CLASS = 'AUTHENTICATION' as const;
+export const CUSTOM_SOURCE_BASE_PREFIX = `ext/${CUSTOM_SOURCE_NAME}/` as const;
+export const CUSTOM_SOURCE_VERSIONED_PREFIX =
+  `${CUSTOM_SOURCE_BASE_PREFIX}${CUSTOM_SOURCE_VERSION}/` as const;
