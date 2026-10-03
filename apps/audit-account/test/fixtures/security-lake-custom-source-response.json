@@ -1,0 +1,15 @@
+{
+  "source": {
+    "attributes": {
+      "crawlerArn": "arn:aws:glue:eu-central-1:222222222222:crawler/example",
+      "databaseArn": "arn:aws:glue:eu-central-1:222222222222:database/example",
+      "tableArn": "arn:aws:glue:eu-central-1:222222222222:table/example/example"
+    },
+    "provider": {
+      "location": "s3://aws-security-data-lake-eu-central-1-example/ext/MOVIE_AUTH/1.0/",
+      "roleArn": "arn:aws:iam::222222222222:role/AmazonSecurityLake-Provider-MOVIEAUTH-eu-central-1"
+    },
+    "sourceName": "MOVIE_AUTH",
+    "sourceVersion": "1.0"
+  }
+}

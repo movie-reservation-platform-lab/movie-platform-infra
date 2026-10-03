@@ -15,7 +15,8 @@
   "scripts": {
     "build": "tsc && npm run build --workspaces --if-present",
     "build:root": "tsc",
-    "build:apps": "npm run build --workspace @movie-platform/legacy-audit-demo --workspace @movie-platform/audit-account --workspace @movie-platform/security-lake-firehose-spike",
+    "build:apps": "npm run build:audit-account-dependencies && npm run build --workspace @movie-platform/legacy-audit-demo --workspace @movie-platform/audit-account --workspace @movie-platform/security-lake-firehose-spike",
+    "build:audit-account-dependencies": "npm run build --workspace @movie-platform/audit-ingestion",
     "watch": "tsc -w",
     "test": "jest && npm test --workspaces --if-present",
     "test:workspace-boundaries": "jest --runInBand --runTestsByPath test/workspace-boundaries.test.ts",
@@ -73,7 +74,7 @@
     "test:cdk:security-lake-audit-ingestion": "npm test --workspace @movie-platform/security-lake-firehose-spike",
     "validate:audit-router": "node scripts/validate-audit-router.mjs",
     "synth:audit": "npm run synth --workspace @movie-platform/legacy-audit-demo",
-    "synth:audit-account": "npm run synth --workspace @movie-platform/audit-account",
+    "synth:audit-account": "npm run build:audit-account-dependencies && npm run synth --workspace @movie-platform/audit-account",
     "synth:security-lake-audit-ingestion": "npm run synth --workspace @movie-platform/security-lake-firehose-spike",
     "preflight:audit-account": "npm run preflight --workspace @movie-platform/audit-account-operator --",
     "status:audit-account": "npm run status --workspace @movie-platform/audit-account-operator --",

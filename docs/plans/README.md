@@ -81,6 +81,9 @@ Unit tests, CDK assertions, synth contracts, script checks, and smoke tests.
 
 ## Current Review Work
 
+- [Audit-account application composition (PR 6)](./audit-account-composition.md):
+  staged Security Lake foundation, explicit custom-source API handoff, and
+  reusable ingestion composition for the dedicated audit account.
 - [Reusable audit ingestion package (PR 5)](./audit-ingestion-package.md):
   proposed package boundary, hybrid ownership, and quarantine retest gate.
 - [EventBridge to Security Lake audit demo](./eventbridge-security-lake-audit-demo.md):

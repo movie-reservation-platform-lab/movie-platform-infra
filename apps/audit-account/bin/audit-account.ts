@@ -6,6 +6,7 @@ const config = loadAuditAccountConfig(process.env);
 const app = new App();
 
 new AuditAccountStack(app, 'AuditAccountStack', {
+  config,
   env: {
     account: config.auditAccountId,
     region: config.region,
