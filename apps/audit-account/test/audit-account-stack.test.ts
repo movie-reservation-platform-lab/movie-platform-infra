@@ -36,20 +36,20 @@ describe('AuditAccountStack', () => {
     });
   });
 
-  it(
-    'enables CloudTrail management events only for the configured audit and workload accounts', () => {
-      const foundationTemplate = createFoundationTemplate();
+  it('enables CloudTrail management events only for the configured audit and workload accounts', () => {
+    const foundationTemplate = createFoundationTemplate();
 
-      foundationTemplate.hasResourceProperties('AWS::SecurityLake::AwsLogSource', {
+    foundationTemplate.hasResourceProperties(
+      'AWS::SecurityLake::AwsLogSource',
+      {
         Accounts: [
           TEST_CONFIG.auditAccountId,
           ...TEST_CONFIG.workloadAccountIds,
         ],
-        SourceName: "CLOUD_TRAIL_MGMT",
-        SourceVersion: "2.0",
         DataLakeArn: Match.anyValue(),
-      })
-
-    }
-  );
+        SourceName: 'CLOUD_TRAIL_MGMT',
+        SourceVersion: '2.0',
+      },
+    );
+  });
 });

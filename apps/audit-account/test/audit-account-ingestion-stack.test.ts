@@ -68,7 +68,7 @@ describe('AuditAccountIngestionStack', () => {
   it('exports the central event bus contract consumed by workload composition', () => {
     const ingestionTemplate = createIngestionTemplate();
 
-    ingestionTemplate.hasOutput("AuditEventBusArn", {
+    ingestionTemplate.hasOutput('AuditEventBusArn', {
       Description: Match.stringLikeRegexp('.+'),
       Export: {
         Name: 'MoviePlatformAuditEventBusArn',
