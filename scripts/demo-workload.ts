@@ -12,6 +12,7 @@ interface SynthOptions {
   readonly selection: 'previous' | 'proposed';
   readonly output: string;
   readonly prefixListId: string;
+  readonly auditEventBusArn: string;
   readonly demoAuthSecretArn?: string;
   readonly enableTempo?: boolean;
 }
@@ -65,6 +66,7 @@ export function prepareWorkloadSynth(
   const platformContext: PlatformConfigContext = {
     ...context,
     allowedIngressPrefixListId: options.prefixListId,
+    auditEventBusArn: options.auditEventBusArn,
     demoAuthEnabled: options.demoAuthSecretArn !== undefined,
     demoAuthSecretArn: options.demoAuthSecretArn,
     enableTempo: options.enableTempo,
@@ -94,6 +96,7 @@ export function prepareWorkloadSynth(
   const args = ['synth', 'MovieReservationWorkloadStack', '--no-lookups', '--quiet', '--output', output];
   for (const key of CONTEXT_KEYS) args.push('-c', `${key}=${context[key]}`);
   args.push('-c', `allowedIngressPrefixListId=${options.prefixListId}`);
+  args.push('-c', `auditEventBusArn=${config.auditPublisher.eventBusArn}`);
   if (config.enableTempo) args.push('-c', 'enableTempo=true');
   if (options.demoAuthSecretArn) {
     args.push('-c', 'demoAuthEnabled=true', '-c', `demoAuthSecretArn=${options.demoAuthSecretArn}`);
@@ -109,13 +112,14 @@ function main(): number {
     options: {
       release: { type: 'string' }, selection: { type: 'string', default: 'proposed' },
       output: { type: 'string' }, 'prefix-list-id': { type: 'string' },
+      'audit-event-bus-arn': { type: 'string' },
       'demo-auth-secret-arn': { type: 'string' }, help: { type: 'boolean' },
       'enable-tempo': { type: 'boolean', default: false },
     },
     allowPositionals: false,
   });
   if (values.help) {
-    console.log('Usage: npm run demo:workload -- --release FILE --selection proposed|previous --output DIRECTORY --prefix-list-id pl-ID [--demo-auth-secret-arn ARN] [--enable-tempo]');
+    console.log('Usage: npm run demo:workload -- --release FILE --selection proposed|previous --output DIRECTORY --prefix-list-id pl-ID --audit-event-bus-arn ARN [--demo-auth-secret-arn ARN] [--enable-tempo]');
     console.log('Validates the local release and synthesizes into a new directory. Never deploys or contacts registries.');
     return 0;
   }
@@ -126,6 +130,7 @@ function main(): number {
     selection: values.selection,
     output: string(values.output, '--output'),
     prefixListId: string(values['prefix-list-id'], '--prefix-list-id'),
+    auditEventBusArn: string(values['audit-event-bus-arn'], '--audit-event-bus-arn'),
     demoAuthSecretArn: values['demo-auth-secret-arn'],
     enableTempo: values['enable-tempo'],
   });

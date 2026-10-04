@@ -25,6 +25,8 @@ const platformConfig = resolvePlatformConfig(
     recommendationMcpServiceVersion: app.node.tryGetContext('recommendationMcpServiceVersion'),
     recommendationServiceImageReference: app.node.tryGetContext('recommendationServiceImageReference'),
     recommendationServiceVersion: app.node.tryGetContext('recommendationServiceVersion'),
+    auditEventBusArn: app.node.tryGetContext('auditEventBusArn'),
+    auditPublishTimeoutMs: app.node.tryGetContext('auditPublishTimeoutMs'),
     enableEcsExec: app.node.tryGetContext('enableEcsExec'),
     enableTempo: app.node.tryGetContext('enableTempo'),
     metricsExportIntervalSeconds: app.node.tryGetContext('metricsExportIntervalSeconds'),

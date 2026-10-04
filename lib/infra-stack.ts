@@ -207,6 +207,15 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       actions: ['firehose:PutRecordBatch'],
       resources: [auditStreamArn],
     }));
+    const eventBridgeEndpoint = vpc.addInterfaceEndpoint('EventBridgeEndpoint', {
+      ...interfaceEndpointProps,
+      service: ec2.InterfaceVpcEndpointAwsService.EVENTBRIDGE,
+    });
+    eventBridgeEndpoint.addToPolicy(new iam.PolicyStatement({
+      principals: [new iam.AnyPrincipal()],
+      actions: ['events:PutEvents'],
+      resources: [platformConfig.auditPublisher.eventBusArn],
+    }));
     if (platformConfig.demoAuthEnabled) {
       const secretsEndpoint = vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
         ...interfaceEndpointProps,
@@ -335,6 +344,10 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       actions: ['firehose:PutRecordBatch'],
       resources: [auditStreamArn],
     }));
+    taskDefinition.addToTaskRolePolicy(new iam.PolicyStatement({
+      actions: ['events:PutEvents'],
+      resources: [platformConfig.auditPublisher.eventBusArn],
+    }));
     for (const group of [...Object.values(componentLogGroups), routerLogGroup]) {
       group.grantWrite(taskDefinition.taskRole);
     }
@@ -461,6 +474,10 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         RESERVATION_WORKER_MODE: 'fake-in-process',
         RESERVATION_FAILURE_INJECTION_MODE: 'disabled',
         RESERVATION_FAILURE_INJECTION_RATE: '0',
+        AUDIT_PUBLISHER: 'eventbridge',
+        AUDIT_EVENT_BUS_ARN: platformConfig.auditPublisher.eventBusArn,
+        AUDIT_PUBLISH_TIMEOUT_MS: platformConfig.auditPublisher.timeoutMs.toString(),
+        AUDIT_STDOUT_COMPARISON_MIRROR: 'true',
         OBSERVABILITY_ENABLED: 'true',
         ENABLE_GRAPHIQL: 'false',
         ...otelEnvironment('movie-reservation-service', 4318),

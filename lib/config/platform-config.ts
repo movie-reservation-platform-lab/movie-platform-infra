@@ -23,6 +23,12 @@ export type ApplicationImagesConfig = Readonly<
   Record<ApplicationComponentId, ApplicationImageConfig>
 >;
 
+/** Validated settings for publishing security audit events to the audit account. */
+export interface AuditPublisherConfig {
+  readonly eventBusArn: string;
+  readonly timeoutMs: number;
+}
+
 /** Concrete AWS account and Region selected for the CDK stack. */
 export interface DeploymentTarget {
   readonly account?: string;
@@ -36,6 +42,7 @@ export interface PlatformConfig {
   readonly environmentName: 'aws-demo';
   readonly allowedIngressPrefixListId: string;
   readonly applicationImages: ApplicationImagesConfig;
+  readonly auditPublisher: AuditPublisherConfig;
   readonly vpcMaxAzs: 2;
   readonly workloadAzCount: 1;
   readonly enableEcsExec: boolean;
@@ -61,6 +68,8 @@ export interface PlatformConfigContext {
   readonly recommendationMcpServiceVersion?: unknown;
   readonly recommendationServiceImageReference?: unknown;
   readonly recommendationServiceVersion?: unknown;
+  readonly auditEventBusArn?: unknown;
+  readonly auditPublishTimeoutMs?: unknown;
   readonly enableEcsExec?: unknown;
   readonly enableTempo?: unknown;
   readonly metricsExportIntervalSeconds?: unknown;
@@ -119,6 +128,8 @@ const PRIVATE_ECR_IMAGE_REFERENCE_PATTERN =
 const AWS_ACCOUNT_PATTERN = /^\d{12}$/;
 const AWS_REGION_PATTERN = /^[a-z]{2}(?:-[a-z0-9]+)+-\d$/;
 const EC2_PREFIX_LIST_ID_PATTERN = /^pl-(?:[0-9a-f]{8}|[0-9a-f]{17})$/;
+const EVENT_BUS_ARN_PATTERN =
+  /^arn:(?:aws|aws-cn|aws-us-gov):events:([a-z0-9-]+):(\d{12}):event-bus\/([A-Za-z0-9._-]{1,256})$/;
 
 function parseRequiredString(value: unknown, key: string, exampleValue?: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -147,10 +158,10 @@ function assertConcreteDeploymentTarget(deploymentTarget: DeploymentTarget): ass
   readonly region: string;
 } {
   if (deploymentTarget.account === undefined || !AWS_ACCOUNT_PATTERN.test(deploymentTarget.account)) {
-    throw new Error('ECR application image mode requires CDK_DEFAULT_ACCOUNT to be a concrete 12-digit AWS account.');
+    throw new Error('Workload deployment requires CDK_DEFAULT_ACCOUNT to be a concrete 12-digit AWS account.');
   }
   if (deploymentTarget.region === undefined || !AWS_REGION_PATTERN.test(deploymentTarget.region)) {
-    throw new Error('ECR application image mode requires CDK_DEFAULT_REGION to be a concrete AWS Region.');
+    throw new Error('Workload deployment requires CDK_DEFAULT_REGION to be a concrete AWS Region.');
   }
 }
 
@@ -244,11 +255,54 @@ function parseIntegerInRange(
   return parsedValue;
 }
 
+function parseAuditPublisherConfig(
+  context: PlatformConfigContext,
+  deploymentTarget: { readonly account: string; readonly region: string },
+): AuditPublisherConfig {
+  const eventBusArn = parseRequiredString(
+    context.auditEventBusArn,
+    'auditEventBusArn',
+    `arn:aws:events:${deploymentTarget.region}:222222222222:event-bus/movie-platform-audit`,
+  );
+  const match = EVENT_BUS_ARN_PATTERN.exec(eventBusArn);
+  if (match === null) {
+    throw new Error(
+      'CDK context value "auditEventBusArn" must be a complete custom EventBridge event-bus ARN without wildcards.',
+    );
+  }
+  const [, region, account, busName] = match;
+  if (region !== deploymentTarget.region) {
+    throw new Error('auditEventBusArn must use the workload deployment Region.');
+  }
+  if (account === deploymentTarget.account) {
+    throw new Error('auditEventBusArn must belong to the separate audit account.');
+  }
+  if (busName === 'default') {
+    throw new Error('auditEventBusArn must select the dedicated custom audit bus, not the default bus.');
+  }
+
+  return {
+    eventBusArn,
+    timeoutMs: parseIntegerInRange(
+      context.auditPublishTimeoutMs,
+      'auditPublishTimeoutMs',
+      1_000,
+      100,
+      5_000,
+    ),
+  };
+}
+
 /** Validate all external context once before constructing any AWS resources. */
 export function resolvePlatformConfig(
   context: PlatformConfigContext,
   deploymentTarget: DeploymentTarget = {},
 ): PlatformConfig {
+  const allowedIngressPrefixListId = parseAllowedIngressPrefixListId(
+    context.allowedIngressPrefixListId,
+  );
+  assertConcreteDeploymentTarget(deploymentTarget);
+  const applicationImages = parseApplicationImages(context, deploymentTarget);
   const demoAuthEnabled = parseBoolean(context.demoAuthEnabled, 'demoAuthEnabled');
   let demoAuthSecretArn: string | undefined;
   if (demoAuthEnabled) {
@@ -264,8 +318,9 @@ export function resolvePlatformConfig(
     platformName: 'movie-reservation-platform',
     serviceName: 'movie-platform-demo',
     environmentName: 'aws-demo',
-    allowedIngressPrefixListId: parseAllowedIngressPrefixListId(context.allowedIngressPrefixListId),
-    applicationImages: parseApplicationImages(context, deploymentTarget),
+    allowedIngressPrefixListId,
+    applicationImages,
+    auditPublisher: parseAuditPublisherConfig(context, deploymentTarget),
     vpcMaxAzs: 2,
     workloadAzCount: 1,
     enableEcsExec: parseBoolean(context.enableEcsExec, 'enableEcsExec'),

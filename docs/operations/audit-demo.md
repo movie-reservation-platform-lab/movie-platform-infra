@@ -113,6 +113,20 @@ check existing trails first because duplicate copies can add charges.
 
 ## 4. Deploy the six exact application versions
 
+The workload now needs the exact central bus ARN exported by the separately
+deployed `AuditAccountIngestionStack`. Carry its `AuditEventBusArn` output in the
+reviewed, private environment release; do not discover AWS state during CDK
+synthesis or substitute the default event bus.
+
+```bash
+export AUDIT_EVENT_BUS_ARN='<reviewed AuditEventBusArn output>'
+```
+
+The ARN is configuration rather than a credential, but it contains the audit
+account ID and must still match the intended Region and separate audit account.
+The workload configuration rejects missing, wildcard, same-account,
+wrong-Region and default-bus values before synthesis.
+
 Use the images from the coordinated PRs. The three service images must contain
 the OCSF emitters and demo auth endpoints; the web image must contain the audit
 screen and proxies. Unchanged MCP images can keep their previously reviewed
@@ -126,6 +140,7 @@ to the synth-only wrapper:
 npm run demo:workload -- --release /absolute/path/to/release.json \
   --selection proposed --output .local/audit-demo/workload-assembly \
   --prefix-list-id "$ALLOWED_PREFIX_LIST_ID" \
+  --audit-event-bus-arn "$AUDIT_EVENT_BUS_ARN" \
   --demo-auth-secret-arn "$DEMO_AUTH_SECRET_ARN"
 ```
 
@@ -155,6 +170,7 @@ export RECOMMENDATION_SERVICE_VERSION='<version-in-this-image>'
 npm run cdk -- synth MovieReservationWorkloadStack --no-lookups \
   --output .local/audit-demo/workload-assembly \
   -c allowedIngressPrefixListId="$ALLOWED_PREFIX_LIST_ID" \
+  -c auditEventBusArn="$AUDIT_EVENT_BUS_ARN" \
   -c applicationImageReference="$RESERVATION_SERVICE_IMAGE" \
   -c applicationServiceVersion="$RESERVATION_SERVICE_VERSION" \
   -c reservationWebImageReference="$RESERVATION_WEB_IMAGE" \
