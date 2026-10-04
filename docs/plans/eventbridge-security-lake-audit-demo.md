@@ -849,6 +849,13 @@ merge dependencies are stated explicitly.
    audit requirements.
 10. Promote the live smoke into a release quality gate after its flake rate and
     operating cost are understood.
+11. Keep `AuditPublisher` as the transport-neutral port and add deliberately
+    named adapters where needed: EventBridge for authoritative AWS acceptance,
+    sanitized stdout for local development, a test fake, an explicitly
+    non-production discarding/no-op adapter, and a best-effort mirror decorator.
+    Define acceptance semantics per adapter so stdout or no-op can never be
+    mistaken for durable Security Lake delivery; production configuration must
+    reject silent discard modes.
 
 ## 13. Testing Strategy
 
