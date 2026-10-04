@@ -11,6 +11,7 @@ interface SynthesizedResource {
 
 const target = { account: '111111111111', region: 'eu-central-1' };
 const baseContext = {
+  auditEventBusArn: 'arn:aws:events:eu-central-1:222222222222:event-bus/movie-platform-audit',
   allowedIngressPrefixListId: 'pl-0123456789abcdef0',
   ...Object.fromEntries(APPLICATION_COMPONENT_INPUTS.flatMap(input => [
     [input.imageReferenceKey, `${target.account}.dkr.ecr.${target.region}.amazonaws.com/${input.repositoryName}@sha256:${'a'.repeat(64)}`],

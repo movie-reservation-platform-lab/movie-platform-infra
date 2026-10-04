@@ -20,13 +20,21 @@ const release = () => ({
   authority: { selected: false, deployed: false, durableAdmissionRecorded: false },
   previous: composition('previous-version'), proposed: composition('proposed-version'),
 });
-const options = { selection: 'proposed', output: '.local/test-assembly', prefixListId: 'pl-0123456789abcdef0' } as const;
+const auditEventBusArn =
+  'arn:aws:events:eu-central-1:222222222222:event-bus/movie-platform-audit';
+const options = {
+  selection: 'proposed',
+  output: '.local/test-assembly',
+  prefixListId: 'pl-0123456789abcdef0',
+  auditEventBusArn,
+} as const;
 
 test('prepares only offline synth with the exact selected six-image composition', () => {
   const invocation = prepareWorkloadSynth(release(), options, {});
   expect(invocation.args.slice(0, 3)).toEqual(['synth', 'MovieReservationWorkloadStack', '--no-lookups']);
   expect(invocation.args).not.toContain('deploy');
   expect(invocation.args).toContain('applicationServiceVersion=proposed-version');
+  expect(invocation.args).toContain(`auditEventBusArn=${auditEventBusArn}`);
   expect(invocation.args.filter(value => value.startsWith('demoAuthEnabled'))).toHaveLength(0);
   expect(invocation.env).toMatchObject({ CDK_DEFAULT_ACCOUNT: target.accountId, CDK_DEFAULT_REGION: target.region });
   expect(prepareWorkloadSynth(release(), { ...options, selection: 'previous' }, {}).args).toContain('applicationServiceVersion=previous-version');

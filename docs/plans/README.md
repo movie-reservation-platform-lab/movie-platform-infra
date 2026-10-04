@@ -81,6 +81,9 @@ Unit tests, CDK assertions, synth contracts, script checks, and smoke tests.
 
 ## Current Review Work
 
+- [Workload audit EventBridge connection (PR 7)](./workload-audit-eventbridge-connection.md):
+  private workload networking, exact cross-account publication permission, and
+  reservation-service runtime configuration for the central audit bus.
 - [Audit-account application composition (PR 6)](./audit-account-composition.md):
   staged Security Lake foundation, explicit custom-source API handoff, and
   reusable ingestion composition for the dedicated audit account.
