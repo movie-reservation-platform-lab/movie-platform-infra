@@ -68,7 +68,7 @@
     "ci": "npm run validate:aws-account-preflight && npm run validate:audit-account-config && npm run validate:audit-contract-vendor && npm run validate:audit-ingestion && npm run validate:audit-account-operator && npm run validate:artifact-foundation-cleanup && npm run validate:artifact-copy && npm run build && npm run validate:workspace-boundaries && npm run test:workspace-boundaries && npm run test:cdk && npm run test:tooling && npm run validate:adot-image && npm run validate:xray-smoke && npm run validate:managed-metrics-smoke && npm run validate:integrated-demo-smoke && npm run validate:grafana-dashboard && npm run synth:ecr-contract && npm run synth:artifact-foundation && npm run synth:github-oidc-trust && npm run synth:audit && npm run synth:audit-account && npm run synth:security-lake-audit-ingestion && npm run synth:observability && npm run validate:audit-router",
     "cdk:audit": "npm run cdk --workspace @movie-platform/legacy-audit-demo --",
     "cdk:observability": "cdk --app \"npx ts-node --prefer-ts-exts bin/observability.ts\"",
-    "test:cdk:observability-foundations": "jest --runInBand --runTestsByPath test/observability-foundations.test.ts",
+    "test:cdk:observability-foundations": "jest --runInBand --runTestsByPath test/observability-foundations.test.ts test/observability-stack.test.ts",
     "test:cdk:audit-foundations": "npm test --workspace @movie-platform/legacy-audit-demo",
     "test:cdk:audit-account": "npm test --workspace @movie-platform/audit-account",
     "test:cdk:security-lake-audit-ingestion": "npm test --workspace @movie-platform/security-lake-firehose-spike",
