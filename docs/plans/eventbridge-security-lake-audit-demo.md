@@ -15,8 +15,10 @@ port; an EventBridge adapter will implement the first transport. The audit
 account will own routing, buffering, OCSF-compatible Parquet delivery, retention,
 query access, alarms, and native CloudTrail ingestion.
 
-This is a representative demo with outcome-aware delivery to EventBridge. It is
-not an authoritative, transactionally coupled record of reservation commits.
+This is a representative demo with outcome-aware delivery to EventBridge. An
+unaccepted audit event never changes the authentication result (fail open,
+alerted; section 6.3). It is not an authoritative, transactionally coupled record
+of reservation commits.
 The managed EventBridge-to-Firehose design is preferred because it has less code
 and operational ownership than an SQS-backed custom processor. The boundaries
 must still permit that processor, local workload buses, additional event classes,
@@ -32,8 +34,11 @@ FireLens dependencies that would otherwise have been hidden inside large PRs.
 
 - Show a TypeScript service consuming and exact-pinning a reusable audit SDK.
 - Emit constrained OCSF 1.3 Authentication events through an abstract publisher.
-- Require bounded EventBridge acceptance before successful authentication is
-  returned, while preserving an already-rejected authentication result.
+- Await bounded EventBridge acceptance for each authentication attempt and
+  return an audit receipt only for an accepted event. An unaccepted event never
+  changes the authentication result; it is logged, counted and alarmed (fail
+  open). A durable producer-side outbox (#76) is the target for closing the
+  resulting unaudited-success gap.
 - Ingest custom audit events into Amazon Security Lake through a managed path.
 - Enable native CloudTrail management events in Security Lake for the demo.
 - Put Security Lake and central ingestion resources in a dedicated audit account.
@@ -80,10 +85,10 @@ handoff:
 - `test/fixtures/audit/platform-audit-event-v1.schema.json`
 - `test/fixtures/audit/platform-audit-contract-v1.json`
 
-The HTTP demo login already fails with a redacted 503 when an otherwise
-successful authentication cannot be audited. Existing GraphQL rejection tests
-preserve the rejection if audit emission fails. This policy becomes explicit
-and is retained when the sink becomes asynchronous.
+Before PR 8b the HTTP demo login failed with a redacted 503 when an otherwise
+successful authentication could not be audited, and GraphQL rejection tests
+preserved the rejection if audit emission failed. PR 8b changes successful
+authentication to fail open (section 6.3); rejections are unchanged.
 
 ### Infrastructure
 
@@ -150,7 +155,8 @@ The repository strategy and ingestion comparison are recorded in:
 - Run a credential-free offline suite in pull requests and a bounded live smoke
   test after deployment.
 - Run the old stdout path as a short, best-effort comparison mirror. EventBridge
-  remains the required path and controls request success behavior.
+  remains the required path and decides whether a receipt is returned; the
+  authentication result depends only on the credential decision.
 - Provide a two-level teardown model: stop expensive demo resources while
   retaining the baseline, or fully remove the account application and data.
 - Deliver the work as a small PR train, with no giant cross-repository PR.
@@ -287,21 +293,39 @@ failed audit attempt.
 For the short comparison window, a service-owned decorator invokes EventBridge
 as the required publisher and then writes the same already-built event and event
 ID to stdout best-effort. Stdout failures increment a comparison metric but do
-not change the required publisher result. The decorator is removed after the
-comparison article is complete.
+not change the required publisher result. The decorator is removed only after
+the comparison decision gate (section 12) selects the EventBridge path.
 
 ### 6.3 Outcome-aware behavior
 
 | Authentication outcome | EventBridge accepted | API behavior |
 |---|---|---|
 | Accepted credentials | Yes | Return the existing success response and audit receipt. |
-| Accepted credentials | No/timeout | Return the existing redacted audit-unavailable failure. |
+| Accepted credentials | No/timeout | Return the success response without receipt fields; record safe operational failure telemetry. |
 | Rejected credentials | Yes | Return the existing rejection and audit receipt. |
-| Rejected credentials | No/timeout | Preserve the rejection; record safe operational failure telemetry. |
+| Rejected credentials | No/timeout | Preserve the rejection without receipt fields; record safe operational failure telemetry. |
 
-This policy avoids converting a rejected request into an apparent infrastructure
-failure while preventing an authenticated response whose audit event was not
-accepted by EventBridge. It still does not guarantee downstream persistence.
+Decision (2026-10-05, service issue
+[movie-reservation-service#51](https://github.com/movie-reservation-platform-lab/movie-reservation-service/issues/51)):
+authentication fails open on an unaccepted audit event. This replaces the
+original fail-closed row, which returned a redacted 503 for accepted credentials.
+
+- Login availability no longer depends on EventBridge. The publish is still
+  awaited within the bounded timeout, so a slow EventBridge adds latency but no
+  longer fails requests.
+- Cost: an accepted authentication can exist without an accepted audit event.
+  Its only trace is the service's `audit.emit.failed` operational log (event,
+  request, correlation, trace and ingress IDs, `auth_status_id`, bounded
+  `failure_reason`), which is not a replayable audit record.
+- Because nothing else notices an unaudited success, the service failure
+  signals in section 6.6 must be alarmed, not only graphed.
+- The target design is a durable producer-side outbox relayed to EventBridge
+  ([#76](https://github.com/movie-reservation-platform-lab/movie-platform-infra/issues/76)):
+  the request then waits only for a local durable write. The service keeps the
+  receipt meaning "a durable store accepted this event", so the outbox replaces
+  the publisher without changing authentication code.
+
+Accepted publication still does not guarantee downstream persistence.
 
 ### 6.4 Event envelope and contract
 
@@ -386,6 +410,16 @@ The audit account alarms on:
 Alarm delivery must use the existing observability notification pattern where it
 fits. The application logs one safe failure record with the audit event ID and a
 bounded reason, without serializing the original AWS exception or audit payload.
+
+Because authentication fails open (section 6.3), the workload side also alarms on
+service signals, tracked in
+[#78](https://github.com/movie-reservation-platform-lab/movie-platform-infra/issues/78):
+
+- `audit_publish_total{audit_publisher_role="required",result="failed"}` by
+  `failure_reason` (`timeout`, `throttled`, `configuration`, `unavailable`, ...);
+- `audit.emit.failed` logs with `auth_status_id=1`: each one is an accepted
+  authentication without an accepted audit event;
+- `audit_publish_duration_ms` p95/p99 approaching the configured timeout.
 
 ### 6.7 Live smoke contract
 
@@ -614,9 +648,17 @@ records must not be written into the valid Security Lake source prefix.
 - If sustained volume, enrichment, poison-record control, or retry horizon exceeds
   the managed path's useful limits, migrate the adapter behind the central rule
   to the SQS processor without changing producers.
-- Request-path dependency on EventBridge is a deliberate availability tradeoff.
-  The timeout protects service capacity but cannot eliminate added latency or a
-  central-service blast radius.
+- Request-path dependency on EventBridge is now a latency dependency only:
+  authentication fails open (section 6.3), so an outage leaves events unaudited
+  rather than failing requests. The timeout protects service capacity but cannot
+  eliminate added latency. The outbox (#76) removes both from the request path.
+- Throughput: the default `PutEvents` quota in `eu-central-1` is 2,400 requests
+  per second per account (adjustable; 10,000 in `us-east-1`, `us-west-2` and
+  `eu-west-1`), shared by every producer in the workload account. The end-to-end
+  ceiling in both the EventBridge and the legacy FireLens transport is the
+  Firehose Direct Put stream quota (1 MiB/s by default in this Region), not
+  EventBridge. Rejected attempts are audited too, so unauthenticated traffic
+  drives audit volume; ingress rate limiting is the standard control.
 
 ## 12. Implementation Steps and Pull Request Train
 
@@ -738,9 +780,12 @@ merge dependencies are stated explicitly.
   add the temporary required-EventBridge/best-effort-stdout decorator.
 - Likely files/modules: service `src/config.ts`, `src/di/audit/**`, authentication
   use cases/controllers/middleware, observability metrics, unit/integration tests.
-- Verification: accepted, partial failure, timeout, successful-auth fail-closed,
-  rejected-auth preserved, redaction, correlation, and low-cardinality metric
-  tests; existing authentication behavior suite passes.
+- Verification: accepted, partial failure, timeout, successful-auth fail-open
+  (success without receipt plus failure log and metric), rejected-auth
+  preserved, redaction, correlation, and low-cardinality metric tests; existing
+  authentication behavior suite passes.
+- Delivered as two slices: 8a (service #46, SDK integration over stdout) and 8b
+  (service #51, publisher selection, EventBridge, mirror, metrics, fail open).
 - Review boundary: service behavior; infrastructure input is only a validated bus
   ARN and bounded publisher settings. Requires the released PR 3 package; deploys
   only after PR 7 connectivity exists.
@@ -764,7 +809,16 @@ merge dependencies are stated explicitly.
 
 - Change: after explicit release authorization, deploy the audit account and
   workload changes, run the smoke, compare the same event IDs in stdout and
-  Security Lake, and record latency/count/query ergonomics.
+  Security Lake, and record latency/count/query ergonomics. This is the only
+  window in which both transports receive the same events, so the evidence must
+  answer the comparison criteria below before PR 10 or PR 11 merges.
+- Comparison criteria (same event IDs through both transports):
+  - request-path latency each transport adds (`audit_publish_duration_ms` by
+    `audit_publisher`);
+  - per-event-ID reconciliation: events present in one store but not the other;
+  - loss under controlled failure: forced task stop, publish timeout or
+    throttling, and Firehose delivery failure;
+  - end-to-end delivery delay, query ergonomics and cost observations.
 - Evidence: open the normal `movie-platform-environments` release-state/evidence
   PR separately; it pins the exact infra and service revisions and attaches or
   references the sanitized, versioned smoke result.
@@ -775,11 +829,25 @@ merge dependencies are stated explicitly.
   changes. A failed checkpoint rolls the service back to stdout and leaves the
   legacy stack intact.
 
+### Comparison decision gate before PR 10
+
+- Change: record a decision from the checkpoint evidence: keep the EventBridge
+  path, keep the FireLens path, or keep both for longer. Throughput is not the
+  deciding factor (section 11); the trade-off is request-path latency and
+  acknowledged acceptance (EventBridge) versus no request-path wait and
+  unacknowledged local buffering (FireLens).
+- Evidence: the decision links to the sanitized checkpoint results.
+- Boundary: PR 10 and PR 11 remove the legacy transport and must not merge
+  before this decision selects the EventBridge path. If it selects otherwise,
+  re-plan PR 10 to PR 13 instead. PR 12 only writes up evidence collected here,
+  which is why it can follow the removal PRs.
+
 ### PR 10: remove the temporary stdout comparison
 
 - Repository: `movie-reservation-service`.
-- Change: remove the comparison decorator and toggle after evidence is accepted;
-  keep the EventBridge publisher as the only audit path.
+- Change: after the comparison decision gate selects the EventBridge path,
+  remove the comparison decorator and toggle; keep the EventBridge publisher as
+  the only audit path.
 - Likely files/modules: service audit composition/configuration and associated
   tests/documentation.
 - Verification: EventBridge-only outcome matrix, configuration, redaction,
@@ -799,15 +867,18 @@ merge dependencies are stated explicitly.
 - Verification: every application still has its expected CloudWatch log group and
   bounded buffering; task-definition assertions contain no legacy stream output;
   a change set shows no unintended service replacement or log loss.
-- Review boundary: workload log transport only. The legacy stack remains deployed
+- Review boundary: workload log transport only. Requires the comparison decision
+  gate to have selected the EventBridge path. The legacy stack remains deployed
   until this PR is live and verified.
 
 ### PR 12: publish the evidence-based comparison article
 
 - Repository: `movie-platform-infra`.
-- Change: turn the accepted comparison evidence into a concise architecture
-  article covering acceptance latency, query visibility, counts, cost observations,
-  failure behavior, and why the managed path remains selected.
+- Change: turn the evidence collected at the live checkpoint and the recorded
+  gate decision into a concise architecture article covering request-path
+  latency, acceptance latency, per-event reconciliation, query visibility,
+  counts, cost observations, loss under controlled failure, and the reasons for
+  the decision.
 - Likely files/modules: `docs/architecture/security-lake-audit-demo-results.md`,
   architecture index, sanitized diagrams/query examples.
 - Verification: every claim links to versioned sanitized evidence; no archive,
@@ -924,12 +995,13 @@ dispatched and never required for ordinary forked pull requests.
 6. Deploy service configuration with the EventBridge publisher plus temporary
    stdout mirror.
 7. Run both smoke phases and controlled authentication attempts. Compare event
-   IDs, counts, latency, partitions, query ergonomics, and failures.
+   IDs, counts, latency, partitions, query ergonomics, and failures against the
+   comparison criteria in section 12, then record the gate decision.
 8. Roll back by selecting stdout only and revoking the central-bus permission if
    the demo path is unstable. This restores the previous demo behavior but gives
    up Security Lake delivery; record the gap explicitly.
-9. After a clean observation window, remove stdout mirroring and retain the
-   EventBridge path.
+9. After a clean observation window and a gate decision that selects the
+   EventBridge path, remove stdout mirroring and retain the EventBridge path.
 10. Detach the workload from the legacy Firehose/FireLens audit output while
     preserving ordinary application logs.
 11. Publish the evidence-based comparison, create the immutable legacy tag/history
@@ -947,7 +1019,8 @@ release actions with explicit operator authorization and recorded evidence.
 |---|---:|---:|---|
 | Firehose cannot produce the exact supported OCSF Parquet/partition shape | High | Medium | Run the narrow spike before freezing APIs; update the plan and compare a transformer with option B. |
 | `PutEvents` appears successful but entries partially fail or bus is wrong | High | Medium | Inspect every result, use exact ARN/config validation, and require end-to-end smoke evidence. |
-| EventBridge outage affects successful authentication | High | Low/Medium | Bound timeout, alert on failure, preserve rejected outcomes, document deliberate availability tradeoff and rollback switch. |
+| EventBridge outage leaves successful authentications unaudited (fail open) | High | Low/Medium | Bounded timeout; correlated `audit.emit.failed` log; alarmed service failure metrics (#78); preserve rejected outcomes; outbox target (#76). |
+| Legacy transport removed before the comparison is decided | Medium | Medium | Comparison decision gate blocks PR 10 and PR 11; criteria fixed before the live checkpoint. |
 | Shared ECS role lets sibling containers publish audit events | High | High | Exact bus permission, strict matching, document the limitation, and prioritize per-service tasks/roles in backlog. |
 | Isolated ECS task cannot reach EventBridge | High | High before change | Dedicated EventBridge interface endpoint, restricted endpoint policy, and deployed-application smoke phase. |
 | Sensitive authentication data enters the lake | High | Low/Medium | Allowlisted builder, schema bounds, forbidden-field tests, safe adapter logging, least-privilege query access. |
@@ -978,7 +1051,8 @@ release actions with explicit operator authorization and recorded evidence.
 - The bounded smoke returns a successful versioned JSON result and is reproducible.
 - Demo-stop and full-removal are documented and rehearsed in a disposable account;
   retained evidence remains decryptable.
-- The temporary stdout mirror is removed after the recorded comparison.
+- The temporary stdout mirror is removed after the comparison decision gate
+  selects the EventBridge path.
 - Ordinary application logs are detached safely from the legacy audit stream.
 - The legacy custom lake is represented by an immutable tag and historical page,
   then removed according to a reviewed retention decision.
