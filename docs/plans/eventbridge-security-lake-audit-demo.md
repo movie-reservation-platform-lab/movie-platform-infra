@@ -415,7 +415,7 @@ Because authentication fails open (section 6.3), the workload side also alarms o
 service signals, tracked in
 [#78](https://github.com/movie-reservation-platform-lab/movie-platform-infra/issues/78):
 
-- `audit_publish_total{audit_publisher_role="required",result="failed"}` by
+- `audit_publish_total{audit_publisher_role="primary",result="failed"}` by
   `failure_reason` (`timeout`, `throttled`, `configuration`, `unavailable`, ...);
 - `audit.emit.failed` logs with `auth_status_id=1`: each one is an accepted
   authentication without an accepted audit event;
