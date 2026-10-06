@@ -120,6 +120,18 @@ remains pending until a coordinated deployment observes the translated series
 and freshness in the managed backends. Missing queryable evidence is unknown,
 not a healthy zero.
 
+### Pending producer evidence
+
+These families are **Expected** but not yet part of the collector fixture,
+because their producer PR has not merged. Add them to
+`test/fixtures/five-backend-signal-contract.json` with the merge commit, and
+choose CloudWatch dimensions, as part of the audit alarm work in
+[#78](https://github.com/movie-reservation-platform-lab/movie-platform-infra/issues/78).
+
+| Producer evidence | Native metric families | Type and unit | Exact bounded attributes | Zero, idle, and freshness semantics |
+| --- | --- | --- | --- | --- |
+| [reservation service PR #52](https://github.com/movie-reservation-platform-lab/movie-reservation-service/pull/52) (open) | `audit_publish_total`, `audit_publish_duration_ms` | cumulative monotonic sum with empty OTLP unit; cumulative histogram `ms` | `audit_publisher` (`stdout`/`eventbridge`), `audit_publisher_role` (`primary`/`comparison`), `result` (`accepted`/`failed`), `failure_reason` (bounded SDK reason or `none`; counter only) | The composition root initializes zero counter series for each configured publisher and role. Histograms never receive synthetic observations. Failures with `audit_publisher_role="primary"` are unaudited authentications under fail-open authentication and need an alarm. |
+
 ### Collector projection
 
 The machine-readable evidence fixture at
