@@ -7,8 +7,8 @@ synthesis are authorized; deployment and provider subscription are not.
 
 Reconcile the reservation service's merged audit publish metrics into the
 five-backend signal contract, project bounded CloudWatch series, and add native
-CloudWatch alarms for primary publisher failures, unaudited successful logins,
-and primary publish latency approaching the configured timeout. Keep alarm
+CloudWatch alarms for primary publisher failures and unaudited successful
+logins. The primary publish-latency warning is deferred; see section 6. Keep alarm
 thresholds and a provider-neutral SNS action in `MovieReservationWorkloadStack`,
 outside the reusable `AuditIngestion` construct.
 
@@ -23,7 +23,8 @@ to receive every native attribute for comparison and transport investigation.
 - Detect every primary audit publish failure, including telemetry-pipeline loss.
 - Detect the specific fail-open case of an authenticated login without an
   accepted audit event.
-- Warn when primary publish p99 reaches 80% of the configured publish timeout.
+- ~~Warn when primary publish p99 reaches 80% of the configured publish timeout.~~
+  Deferred during implementation; see "Percentile export finding" in section 6.
 - Route alarm transitions to one composition-owned, unsubscribed SNS topic.
 - Prove the CloudFormation contracts with focused CDK assertions and offline
   synth only.
@@ -104,21 +105,17 @@ itself make the multi-account deployment path executable.
 - Treat a missing counter datapoint as breaching. Startup-created zero series
   make absence a telemetry-path failure rather than a healthy zero.
 - Match `audit.emit.failed` and numeric `auth_status_id=1` together.
-- Alarm on p99 publish duration approaching the configured timeout.
+- ~~Alarm on p99 publish duration approaching the configured timeout.~~ Deferred.
 - Keep thresholds and alarm actions in workload composition.
 - Make no AWS mutations.
 
 ### Assumptions
 
-- “Approaching” means 80% of `auditPublisher.timeoutMs`: 800 ms under the current
-  default. This is an early warning before the service's hard timeout.
+- (Deferred warning) “Approaching” means 80% of `auditPublisher.timeoutMs`:
+  800 ms under the current default.
 - One 60-second breaching period is appropriate for primary failure and
   unaudited-success alarms because a single audit gap is actionable.
-- The p99 alarm evaluates one 60-second period and explicitly evaluates low
-  sample counts. Ignoring low samples would make the alarm inert in this
-  low-traffic demo; CloudWatch considers p99 statistically weak below roughly
-  1,000 samples per period.
-- Missing log-filter and histogram points are non-breaching because no matching
+- Missing log-filter points are non-breaching because no matching
   successful-login failure and no login traffic are normal. Counter alarms are
   the independent telemetry-liveness guard.
 - Only `ALARM` transitions publish to SNS in this slice. Recovery and
@@ -140,7 +137,7 @@ PR #52 row into reconciled evidence. Use these CloudWatch dimension sets:
 | Metric | CloudWatch dimensions | Reason and bounded cost |
 | --- | --- | --- |
 | `audit_publish_total` | `ServiceName`, `Environment`, `audit_publisher_role`, `result`, `failure_reason` | `audit_publisher_role` has two values and separates critical primary failure from best-effort comparison failure. `failure_reason` has six failed values plus accepted `none`; it costs five additional failed streams per role compared with one aggregate failure stream, but directly selects the response playbook. `result` is required to separate accepted from failed attempts. |
-| `audit_publish_duration_ms` | `ServiceName`, `Environment`, `audit_publisher_role` | Role keeps primary latency separate from comparison overhead. Omitting result produces one useful latency distribution per role and avoids splitting a sparse p99. |
+| `audit_publish_duration_ms` | `ServiceName`, `Environment`, `audit_publisher_role` | Role keeps primary latency separate from comparison overhead. Omitting result produces one useful latency distribution per role and avoids splitting a sparse distribution. |
 
 Omit `audit_publisher` from both CloudWatch shapes. It is bounded, but including
 it would couple alarms to the active transport and split series while old and new
@@ -148,20 +145,24 @@ tasks overlap during rollback. The native attribute remains queryable in AMP.
 With the current primary-plus-comparison composition, the counter materializes
 at most 14 known streams (seven per role) and duration materializes two streams.
 
-### Percentile-capable export
+### Percentile export finding (latency warning deferred)
 
-The AWSEMF exporter defaults `detailed_metrics` to false, which reduces an OTel
-histogram to a CloudWatch statistic set. CloudWatch generally cannot calculate
-p99 from such statistic sets. Add a second AWSEMF exporter that:
+The original design added a second AWSEMF exporter with `detailed_metrics: true`
+so CloudWatch could compute p99. Implementation found that the `awsemf` exporter
+publishes explicit-bucket histograms, which the service's JS SDK uses by default,
+only as Count/Sum/Min/Max statistic sets regardless of `detailed_metrics`. Only
+exponential histograms receive Values/Counts. Histograms are also not converted
+to deltas, so every CloudWatch histogram statistic in this repository describes
+the process lifetime rather than one period.
 
-- uses the same namespace and metrics log group but a distinct log stream;
-- enables `detailed_metrics: true`;
-- declares only `audit_publish_duration_ms`; and
-- is attached only to the reservation-service CloudWatch pipeline.
-
-Keep all existing metrics plus `audit_publish_total` on the current exporter.
-This localizes the larger detailed histogram payload instead of changing every
-existing application latency metric.
+A per-period p99 therefore needs a service change (exponential aggregation for
+`audit_publish_duration_ms`) plus collector-side `cumulativetodelta` and a
+detailed exporter. The engineer chose to defer the latency warning rather than
+broaden this slice. `audit_publish_duration_ms` is still projected on the
+existing exporter for consistency with the other latency families; timeouts
+remain covered by the `failure_reason=timeout` alarm. Follow-up work: the
+deferred latency warning and the cumulative-histogram projection for all
+existing latency families.
 
 ### Alarms and routing
 
@@ -179,10 +180,7 @@ the exact JSON conjunction `event = "audit.emit.failed"` and
 greater-than-zero comparison, one evaluation period, and `NOT_BREACHING` missing
 data.
 
-Create one p99 alarm for the primary duration series. Its threshold is
-`auditPublisher.timeoutMs * 0.8`, period is 60 seconds, comparison is
-greater-than-or-equal, low-sample handling is `evaluate`, and missing data is
-`NOT_BREACHING`.
+The p99 latency alarm is deferred; see the percentile export finding above.
 
 The resulting CDK code synthesizes `AWS::CloudWatch::Alarm`,
 `AWS::Logs::MetricFilter`, `AWS::SNS::Topic`, and topic-policy resources. It does
@@ -195,7 +193,7 @@ not create or change any live resource until a separately approved deployment.
 - Pros: one exporter and minimal collector-test changes.
 - Cons: expands EMF payloads for every existing application histogram, outside
   this slice's need.
-- Decision: Reject; use a filtered detailed exporter for audit duration only.
+- Decision: Reject; superseded by the percentile export finding in section 6.
 
 ### Alarm from AMP or Grafana
 
@@ -247,7 +245,6 @@ topic are disposable infrastructure resources.
 
 - Six reason alarms intentionally trade a small fixed alarm count for immediate
   failure classification. No dynamic alarm-per-value mechanism is introduced.
-- Detailed histogram export is restricted to one metric to bound EMF log volume.
 - `BREACHING` missing data on the continuously preinitialized counter catches a
   broken producer/collector/EMF path. Deployment overlap can transiently combine
   cumulative series but does not change the strict any-failure policy.
@@ -263,11 +260,11 @@ Learning target: connect a structured CloudWatch Logs filter to a metric alarm
 and explain the synthesized resources.
 
 AI owns: issue and plan scaffolding; evidence/collector changes; dimension and
-cost documentation; six counter alarms; p99 alarm; SNS action boundary;
+cost documentation; six counter alarms; SNS action boundary;
 surrounding tests and verification.
 
 Engineer owns: the `audit.emit.failed` + `auth_status_id=1` metric filter and its
-alarm in `lib/infra-stack.ts`, plus focused assertions in `test/infra.test.ts`.
+alarm in `lib/audit-gap-alarms.ts`, plus focused assertions in `test/infra.test.ts`.
 
 Done evidence: assertions prove the exact JSON conjunction, namespace/name,
 threshold, comparison, period, missing-data policy, and SNS alarm action.
@@ -282,45 +279,57 @@ Support level: guided.
    - Verification: collector contract test sees 23 native families and exact
      declarations.
 
-2. Preserve percentile data only for audit duration. **AI-owned**
-   - Change: declare the counter on the existing exporter; add the filtered,
-     detailed duration exporter and wire it only to reservation service.
-   - Files: `adot-collector/adot-config.yaml`,
-     `test/collector-signal-contract.test.ts`, `scripts/validate-adot-image.sh`.
-   - Verification: contract assertions prove unique selectors/dimensions and the
-     pinned collector image accepts the configuration.
+2. ~~Preserve percentile data only for audit duration.~~ **Deferred**
+   - Change: none in this slice; both families use the existing exporter.
+   - Files: `adot-collector/adot-config.yaml`, `scripts/validate-adot-image.sh`.
+   - Verification: the pinned collector accepts 23 declared selectors.
 
 3. Compose alarm routing and metric alarms. **AI-owned**
-   - Change: create the SNS topic/action, six reason alarms, p99 alarm, and topic
-     ARN output in workload composition.
+   - Change: create the SNS topic/action, six reason alarms, and topic ARN
+     output in workload composition.
    - Files: `lib/infra-stack.ts`, `test/infra.test.ts`.
-   - Verification: CDK assertions inspect dimensions, extended statistic,
-     threshold, missing-data policy, low-sample behavior, and `AlarmActions`.
+   - Verification: CDK assertions inspect dimensions, threshold, missing-data
+     policy, and `AlarmActions`.
 
 4. Add the unaudited-success log alarm. **Engineer-owned**
    - Change: add one JSON metric filter and alarm to workload composition and the
      focused assertions described in the ownership card.
-   - Files: `lib/infra-stack.ts`, `test/infra.test.ts`.
+   - Files: `lib/audit-gap-alarms.ts`, `test/infra.test.ts`.
    - Verification: `npx jest --runInBand --runTestsByPath test/infra.test.ts`.
 
 5. Document operator meaning and verify the slice. **AI-owned**
    - Change: document severity, missing-data meaning, topic boundary, and the
-     first response for each failure reason and latency warning.
+     first response for each failure reason, and the deferred latency warning.
    - Files: likely `docs/operations/audit-publish-alarms.md` and operations index.
    - Verification: inspect documentation diff, run focused/full offline checks,
      and synthesize without lookups.
 
+### Implementation decisions (2026-10-09)
+
+- The topic and alarms live in a local `AuditGapAlarms` construct
+  (`lib/audit-gap-alarms.ts`) instantiated by workload composition, following
+  the `PrivateTempo` precedent, so the workload stack does not grow further.
+- The six reason alarms have no actions; one composite alarm (any child in
+  `ALARM`) is the single notifier, so one outage sends one notification while
+  the children still name the reason. Incident grouping and deduplication
+  beyond that remain the future incident tool's job. The unaudited-success
+  alarm notifies separately because it is the higher-severity signal.
+- The successful-login signal is log-derived for now. Follow-up
+  ([movie-reservation-service#54](https://github.com/movie-reservation-platform-lab/movie-reservation-service/issues/54)): the service
+  emits the login outcome as a bounded OTel attribute, after which the log
+  metric filter can be replaced or kept as an independent path.
+
+- Ownership change: the engineer wrote the metric filter and the first alarm
+  draft; at the engineer's request the AI completed the alarm (compile fix and
+  description) and the focused assertions.
+
 ## 13. Testing Strategy
 
-- Update the collector contract test from 21 to 23 evidenced families and make
-  it understand declarations from the standard and detailed AWSEMF exporters.
-- Assert the detailed exporter selects only audit duration and the reservation
-  pipeline is the only pipeline that uses it.
+- Update the collector contract test from 21 to 23 evidenced families and
+  validate per-metric producer evidence.
 - Add focused CDK assertions for exactly six reason alarms, exact dimension maps,
   strict comparison, 60-second periods, one evaluation period, breaching missing
   data, and SNS actions.
-- Assert the latency alarm's p99 extended statistic, timeout-derived threshold,
-  low-sample evaluation, non-breaching missing data, and SNS action.
 - Assert the log filter's exact JSON conjunction and its alarm contract.
 - Run `npm run build:root`, the two focused Jest files,
   `npm run validate:adot-image`, `npm run synth:ecr-contract`, and
@@ -330,8 +339,8 @@ Support level: guided.
 ## 14. Rollout / Migration Plan
 
 This slice stops at offline synthesis. A later deployment must review `cdk diff`,
-confirm the expected eight alarms, one metric filter, one topic and topic policy,
-then verify zero counter datapoints and p99 queryability before treating the
+confirm the expected seven alarms, one metric filter, one topic and topic policy,
+then verify zero counter datapoints before treating the
 alarms as operational. Provider subscription requires separate approval.
 
 Rollback is a stack-code revert. The service's `AUDIT_PUBLISHER=stdout` rollback
@@ -350,9 +359,8 @@ acceptance work and remain outside issue #88's synth-only authorization.
 
 | Risk | Impact | Likelihood | Mitigation |
 | --- | ---: | ---: | --- |
-| Statistic-set export makes p99 unavailable | High | High without change | Dedicated `detailed_metrics` exporter plus collector contract and later live queryability check. |
+| Statistic-set export makes p99 unavailable | Medium | Certain | Latency warning deferred; timeouts still alarm through `failure_reason=timeout`. |
 | Counter telemetry stops and looks healthy | High | Low/Medium | Treat missing preinitialized primary failure series as breaching. |
-| Sparse p99 never evaluates | Medium | High if low samples are ignored | Explicitly set low-sample handling to evaluate and document sensitivity. |
 | Rollback changes publisher and invalidates selectors | High | Medium | Omit publisher from CloudWatch dimensions; select `primary` role. |
 | Comparison failures page as production audit gaps | Medium | Medium | Retain role and alarm only on `primary`. |
 | High-cardinality custom metrics increase cost | High | Low | Only bounded role/result/reason dimensions; no identifiers or exception text. |
@@ -362,9 +370,9 @@ acceptance work and remain outside issue #88's synth-only authorization.
 
 - The merged PR #52 evidence and both metrics are reconciled in fixture/docs.
 - CloudWatch projection has the documented bounded dimensions and 23 unique
-  family selectors across its exporters.
-- Six primary failure alarms, one unaudited-success alarm, and one p99 latency
-  alarm synthesize with explicit missing-data behavior and SNS actions.
+  family selectors.
+- Six primary failure alarms and one unaudited-success alarm synthesize with
+  explicit missing-data behavior and SNS actions.
 - Alarm policy remains in workload composition and `AuditIngestion` is unchanged.
 - Operator documentation explains severity, response, missing data, and the
   unsubscribed routing boundary.
