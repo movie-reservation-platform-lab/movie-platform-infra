@@ -638,6 +638,95 @@ describe('MovieReservationWorkloadStack', () => {
     });
   });
 
+  describe('audit-gap alarms', () => {
+    const topicLogicalId = () => Object.keys(template.findResources('AWS::SNS::Topic'))[0];
+
+    it('routes alarm transitions to one TLS-only topic without a subscription', () => {
+      template.resourceCountIs('AWS::SNS::Topic', 1);
+      template.resourceCountIs('AWS::SNS::Subscription', 0);
+      template.hasResourceProperties('AWS::SNS::TopicPolicy', {
+        PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({
+          Effect: 'Deny',
+          Condition: { Bool: { 'aws:SecureTransport': 'false' } },
+        })]) },
+      });
+      expect(template.toJSON().Outputs.AuditAlarmTopicArn.Value).toEqual({ Ref: topicLogicalId() });
+    });
+
+    it('watches every bounded primary publish failure reason and telemetry loss', () => {
+      const failureAlarms = resources(template, 'AWS::CloudWatch::Alarm')
+        .filter(({ Properties }) => Properties?.MetricName === 'audit_publish_total');
+      const reasons = failureAlarms.map(({ Properties }) =>
+        (Properties?.Dimensions as { Name: string; Value: string }[])
+          .find(({ Name }) => Name === 'failure_reason')?.Value);
+      expect(reasons.sort()).toEqual(['aborted', 'configuration', 'rejected', 'throttled', 'timeout', 'unavailable']);
+
+      for (const { Properties } of failureAlarms) {
+        expect(Properties).toMatchObject({
+          Namespace: 'MoviePlatform/aws-demo/applications',
+          Statistic: 'Sum',
+          Period: 60,
+          EvaluationPeriods: 1,
+          Threshold: 0,
+          ComparisonOperator: 'GreaterThanThreshold',
+          // The service pre-creates zero series, so absence is a broken pipeline, not health.
+          TreatMissingData: 'breaching',
+        });
+        // Children only explain the cause; the composite is the single notifier.
+        expect(Properties).not.toHaveProperty('AlarmActions');
+        // Role, not transport: the selector survives an EventBridge-to-stdout rollback.
+        expect(Properties?.Dimensions).toEqual(expect.arrayContaining([
+          { Name: 'ServiceName', Value: 'movie-reservation-service' },
+          { Name: 'Environment', Value: 'aws-demo' },
+          { Name: 'audit_publisher_role', Value: 'primary' },
+          { Name: 'result', Value: 'failed' },
+        ]));
+        expect(Properties?.Dimensions).toHaveLength(5);
+      }
+    });
+
+    it('notifies once when any primary publish failure alarm fires', () => {
+      const failureAlarmIds = Object.keys(template.findResources('AWS::CloudWatch::Alarm', {
+        Properties: { MetricName: 'audit_publish_total' },
+      }));
+      const [composite] = resources(template, 'AWS::CloudWatch::CompositeAlarm');
+      expect(resources(template, 'AWS::CloudWatch::CompositeAlarm')).toHaveLength(1);
+      expect(composite.Properties?.AlarmActions).toEqual([{ Ref: topicLogicalId() }]);
+
+      // AlarmRule synthesizes as ALARM("<arn>") OR ALARM("<arn>") ... with ARNs via Fn::GetAtt.
+      const rule = JSON.stringify(composite.Properties?.AlarmRule);
+      expect(failureAlarmIds).toHaveLength(6);
+      for (const alarmId of failureAlarmIds) {
+        expect(rule).toContain(`{"Fn::GetAtt":["${alarmId}","Arn"]}`);
+      }
+      expect(rule.match(/ OR /g)).toHaveLength(5);
+    });
+
+    it('alarms when a successful login is not audited', () => {
+      const filters = Object.values(template.findResources('AWS::Logs::MetricFilter'));
+      expect(filters).toHaveLength(1);
+      const [{ Properties: filter }] = filters;
+      // Both conditions must hold, and the status is matched as a number.
+      expect(filter.FilterPattern).toBe('{ ($.event = "audit.emit.failed") && ($.auth_status_id = 1) }');
+      expect(filter.LogGroupName).toEqual({ 'Fn::ImportValue': expect.stringContaining(':ReservationServiceLogGroupName') });
+      const [transformation] = filter.MetricTransformations;
+      expect(transformation).toMatchObject({ MetricNamespace: 'MoviePlatform/aws-demo/audit-gaps', MetricValue: '1' });
+
+      // Filter and alarm are linked only by namespace + metric name.
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        Namespace: transformation.MetricNamespace,
+        MetricName: transformation.MetricName,
+        Statistic: 'Sum',
+        Period: 60,
+        EvaluationPeriods: 1,
+        Threshold: 0,
+        ComparisonOperator: 'GreaterThanThreshold',
+        TreatMissingData: 'notBreaching',
+        AlarmActions: [{ Ref: topicLogicalId() }],
+      });
+    });
+  });
+
   describe('ECS Exec', () => {
     it('enables ECS Exec and its endpoint only when explicitly requested', () => {
       expect(JSON.stringify(template.toJSON())).not.toContain('ssmmessages:CreateControlChannel');
@@ -690,6 +779,7 @@ describe('MovieReservationWorkloadStack', () => {
         'GrafanaWorkspaceId',
         'GrafanaWorkspaceUrl',
         'AdotLogGroupName',
+        'AuditAlarmTopicArn',
         'ReservationWebLogGroupName',
         'ReservationAgentLogGroupName',
         'ReservationMcpLogGroupName',
