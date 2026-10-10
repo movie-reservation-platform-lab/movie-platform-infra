@@ -110,6 +110,7 @@ X-Ray, and optional Tempo without claiming backend queryability.
 | Producer evidence | Native metric families | Type and unit | Exact bounded attributes | Zero, idle, and freshness semantics |
 | --- | --- | --- | --- | --- |
 | [reservation service PR #43](https://github.com/movie-reservation-platform-lab/movie-reservation-service/pull/43) | `http_request_total`, `http_request_duration_ms`; `graphql_operation_total`, `graphql_operation_duration_ms`, `graphql_operation_exceptions_total`; `reservation_request_created_total`, `reservation_processor_claim_total`, `reservation_processor_outcome_total`, `reservation_processor_duration_ms`, `reservation_processor_exceptions_total` | cumulative monotonic sums and histograms; counters have empty OTLP units, durations use `ms` | HTTP: `http_method`, `http_route`, `http_status_code`, `status_family`, `outcome`; GraphQL: `business_operation`, `graphql_operation_type`, `outcome` or `exception_type`; worker: bounded `business_operation`, `outcome`, or `exception_type` | GraphQL and worker outcome sums initialize bounded zero series. HTTP counters start with eligible traffic. Histograms never receive synthetic observations. |
+| [reservation service PR #52](https://github.com/movie-reservation-platform-lab/movie-reservation-service/pull/52) | `audit_publish_total`, `audit_publish_duration_ms` | cumulative monotonic sum with empty OTLP unit; cumulative histogram `ms` | `audit_publisher` (`stdout`/`eventbridge`), `audit_publisher_role` (`primary`/`comparison`), `result` (`accepted`/`failed`), `failure_reason` (six bounded SDK reasons or `none`; counter only) | The composition root initializes seven zero counter series per configured publisher and role. Histograms never receive synthetic observations. Primary failures are unaudited authentications under fail-open authentication; see [audit publish alarms](../operations/audit-publish-alarms.md). |
 | [reservation agent PR #22](https://github.com/movie-reservation-platform-lab/movie-reservation-agent/pull/22) | `http.server.active_requests`, `http.server.duration`, `http.server.response.size`, `movie_reservation_agent.http.server.requests` | up/down sum `{request}`; cumulative histograms `ms`/`By`; cumulative monotonic sum `{request}` | native bounded method, templated target, integer status; custom `http.request.method`, complete `http.route`, status class, `outcome` | Custom 4xx/5xx series initialize to real zero per eligible route/method. Health/readiness are excluded. Native route targets omit the application router prefix with the locked SDK. |
 | [reservation MCP PR #15](https://github.com/movie-reservation-platform-lab/movie-reservation-mcp/pull/15) | `movie_reservation_mcp_tool_calls`, `movie_reservation_mcp_tool_duration` | cumulative monotonic sum `{call}` and cumulative histogram `s` | `mcp.tool.name`, `outcome` | No point exists before a real tool call; no invented calls, error zeros, or durations. |
 | [recommendation MCP PR #14](https://github.com/movie-reservation-platform-lab/movie-recommendation-mcp/pull/14) | `axum_tools_mcp_tool_calls_total`, `axum_tools_mcp_tool_duration_ms` | cumulative monotonic sum `{call}` and cumulative histogram `ms` | `mcp.tool.name`, `outcome` | No point exists before a real tool call; no invented calls, error zeros, or durations. |
@@ -120,24 +121,12 @@ remains pending until a coordinated deployment observes the translated series
 and freshness in the managed backends. Missing queryable evidence is unknown,
 not a healthy zero.
 
-### Pending producer evidence
-
-These families are **Expected** but not yet part of the collector fixture,
-because their producer PR has not merged. Add them to
-`test/fixtures/five-backend-signal-contract.json` with the merge commit, and
-choose CloudWatch dimensions, as part of the audit alarm work in
-[#78](https://github.com/movie-reservation-platform-lab/movie-platform-infra/issues/78).
-
-| Producer evidence | Native metric families | Type and unit | Exact bounded attributes | Zero, idle, and freshness semantics |
-| --- | --- | --- | --- | --- |
-| [reservation service PR #52](https://github.com/movie-reservation-platform-lab/movie-reservation-service/pull/52) (open) | `audit_publish_total`, `audit_publish_duration_ms` | cumulative monotonic sum with empty OTLP unit; cumulative histogram `ms` | `audit_publisher` (`stdout`/`eventbridge`), `audit_publisher_role` (`primary`/`comparison`), `result` (`accepted`/`failed`), `failure_reason` (bounded SDK reason or `none`; counter only) | The composition root initializes zero counter series for each configured publisher and role. Histograms never receive synthetic observations. Failures with `audit_publisher_role="primary"` are unaudited authentications under fail-open authentication and need an alarm. |
-
 ### Collector projection
 
 The machine-readable evidence fixture at
 [`test/fixtures/five-backend-signal-contract.json`](../../test/fixtures/five-backend-signal-contract.json)
 records every native type, unit, attribute set, producer merge commit, and exact
-CloudWatch dimension projection. The collector contract test requires all 21
+CloudWatch dimension projection. The collector contract test requires all 23
 families to appear once and only once in these declaration groups:
 
 | Signal group | CloudWatch dimensions after fixed identity injection |
@@ -155,6 +144,21 @@ families to appear once and only once in these declaration groups:
 | Both MCP tool families | `ServiceName`, `Environment`, `mcp.tool.name`, `outcome` |
 | Recommendation HTTP traffic/latency | `ServiceName`, `Environment`, `http.route`, `http.status_code`, `http.status_class`, `outcome` |
 | Recommendation results | `ServiceName`, `Environment`, `preference.present` |
+| Audit publish attempts | `ServiceName`, `Environment`, `audit_publisher_role`, `result`, `failure_reason` |
+| Audit publish latency | `ServiceName`, `Environment`, `audit_publisher_role` |
+
+The audit projection omits `audit_publisher` so alarms select the semantic
+`primary` role across an EventBridge-to-stdout rollback; the transport stays in
+AMP. Keeping `failure_reason` costs five more failed streams per role than one
+aggregate stream, but directly selects the response playbook. With primary and
+comparison publishers, the counter materializes at most 14 streams and latency
+two. Latency omits `result` to avoid splitting a sparse distribution.
+
+`awsemf` exports explicit-bucket histograms, including every latency family
+above, as cumulative statistic sets: CloudWatch `Average`, `Min`, `Max` and
+`SampleCount` describe the process lifetime rather than one period, and
+percentiles are unavailable. Use AMP for per-interval latency until this export
+path is revisited.
 
 AMP receives every native family through its producer-specific pipeline. The
 collector adds only fixed `service_name` and `deployment_environment` labels,

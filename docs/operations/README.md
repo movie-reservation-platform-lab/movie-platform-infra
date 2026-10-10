@@ -9,6 +9,9 @@ infrastructure repository.
   three-stack deployment, demo credentials, correlation queries and full cost
   cleanup. Supersedes the old single-stack deployment sequence below.
 
+- [Audit Publish Alarms](./audit-publish-alarms.md): critical audit-gap alarms,
+  their unsubscribed SNS boundary, missing-data meaning and first responses.
+
 - [AWS Artifact Foundation Runbook](./aws-artifact-foundation.md): controlling
   path for the persistent ECR foundation, its deployment, verification,
   admission handoff, recovery, and guarded final cleanup.

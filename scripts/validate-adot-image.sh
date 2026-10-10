@@ -97,8 +97,8 @@ if ! grep --fixed-strings --quiet '    dimension_rollup_option: NoDimensionRollu
   printf 'ADOT CloudWatch metrics must disable automatic dimension rollups\n' >&2
   exit 1
 fi
-if [[ "$(grep --extended-regexp --count '^[[:space:]]+- \^.+\$$' "${collector_directory}/adot-config.yaml")" -ne 21 ]]; then
-  printf 'ADOT CloudWatch metrics must declare exactly 21 observed application instruments\n' >&2
+if [[ "$(grep --extended-regexp --count '^[[:space:]]+- \^.+\$$' "${collector_directory}/adot-config.yaml")" -ne 23 ]]; then
+  printf 'ADOT CloudWatch metrics must declare exactly 23 observed application instruments\n' >&2
   exit 1
 fi
 

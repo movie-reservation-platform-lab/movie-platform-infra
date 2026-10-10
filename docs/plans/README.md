@@ -81,6 +81,9 @@ Unit tests, CDK assertions, synth contracts, script checks, and smoke tests.
 
 ## Current Review Work
 
+- [Reservation audit publish failure alarms](./reservation-audit-publish-failure-alarms.md):
+  workload-account detection for primary audit publication failures, unaudited
+  successful logins, and publish latency near the service timeout.
 - [Workload audit EventBridge connection (PR 7)](./workload-audit-eventbridge-connection.md):
   private workload networking, exact cross-account publication permission, and
   reservation-service runtime configuration for the central audit bus.
