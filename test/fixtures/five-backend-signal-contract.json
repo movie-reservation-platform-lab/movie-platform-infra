@@ -80,6 +80,30 @@
           "unit": "",
           "attributes": ["exception_type"],
           "cloudWatchDimensions": ["ServiceName", "Environment", "exception_type"]
+        },
+        {
+          "name": "audit_publish_total",
+          "type": "cumulative-monotonic-sum",
+          "unit": "",
+          "attributes": ["audit_publisher", "audit_publisher_role", "result", "failure_reason"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "audit_publisher_role", "result", "failure_reason"],
+          "evidence": {
+            "url": "https://github.com/movie-reservation-platform-lab/movie-reservation-service/pull/52",
+            "mergeCommit": "3fae4d186b45556e7d1c9c7530997e21a071b555",
+            "source": "docs/audit-authentication-demo.md"
+          }
+        },
+        {
+          "name": "audit_publish_duration_ms",
+          "type": "cumulative-histogram",
+          "unit": "ms",
+          "attributes": ["audit_publisher", "audit_publisher_role", "result"],
+          "cloudWatchDimensions": ["ServiceName", "Environment", "audit_publisher_role"],
+          "evidence": {
+            "url": "https://github.com/movie-reservation-platform-lab/movie-reservation-service/pull/52",
+            "mergeCommit": "3fae4d186b45556e7d1c9c7530997e21a071b555",
+            "source": "docs/audit-authentication-demo.md"
+          }
         }
       ]
     },

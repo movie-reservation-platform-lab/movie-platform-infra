@@ -287,6 +287,16 @@ exporters:
           - [ServiceName, Environment, preference.present]
         metric_name_selectors:
           - ^movie_recommendation_service_recommendations_total$
+      # Role, not transport: alarms keep selecting `primary` across the
+      # EventBridge-to-stdout rollback. `audit_publisher` remains in AMP.
+      - dimensions:
+          - [ServiceName, Environment, audit_publisher_role, result, failure_reason]
+        metric_name_selectors:
+          - ^audit_publish_total$
+      - dimensions:
+          - [ServiceName, Environment, audit_publisher_role]
+        metric_name_selectors:
+          - ^audit_publish_duration_ms$
   prometheusremotewrite/application:
     endpoint: ${env:AMP_REMOTE_WRITE_ENDPOINT}
     auth:

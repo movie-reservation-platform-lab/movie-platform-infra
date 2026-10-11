@@ -12,6 +12,7 @@ import { importFoundationOutput } from './stack-bindings';
 import { Construct } from 'constructs';
 
 import { resolveApplicationImage } from './application-image';
+import { AuditGapAlarms } from './audit-gap-alarms';
 import type { PlatformConfig } from './config/platform-config';
 import { PrivateTempo } from './private-tempo';
 
@@ -732,6 +733,12 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       deregistrationDelay: cdk.Duration.seconds(30),
     });
 
+    const auditGapAlarms = new AuditGapAlarms(this, 'AuditGapAlarms', {
+      applicationMetricsNamespace: cloudWatchApplicationMetricsNamespace,
+      environmentName: platformConfig.environmentName,
+      reservationServiceLogGroup: componentLogGroups['reservation-service'],
+    });
+
     new cdk.CfnOutput(this, 'LoadBalancerDnsName', {
       value: loadBalancer.loadBalancerDnsName,
       description: 'Public DNS name for the temporary integrated demo web ALB',
@@ -750,6 +757,10 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         description: `CloudWatch log group for ${componentId}`,
       });
     }
+    new cdk.CfnOutput(this, 'AuditAlarmTopicArn', {
+      value: auditGapAlarms.alarmTopic.topicArn,
+      description: 'Unsubscribed SNS topic receiving audit-gap alarm transitions',
+    });
     new cdk.CfnOutput(this, 'AdotLogGroupName', {
       value: adotLogGroup.logGroupName,
       description: 'CloudWatch log group for the task-local ADOT collector',

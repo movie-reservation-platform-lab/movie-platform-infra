@@ -6,6 +6,8 @@ interface MetricEvidence {
   readonly unit: string;
   readonly attributes: readonly string[];
   readonly cloudWatchDimensions: readonly string[];
+  /** Set when a later producer PR added this family after the producer's baseline evidence. */
+  readonly evidence?: PullRequestEvidence;
 }
 
 interface PullRequestEvidence {
@@ -77,9 +79,12 @@ test('routes every evidenced producer through one unique private OTLP receiver',
   expect(overlay).toContain(`      receivers: ${traceReceiverList}\n`);
 
   for (const producer of fixture.producers) {
-    expect(producer.evidence.url).toMatch(/^https:\/\/github\.com\/movie-reservation-platform-lab\/.+\/pull\/\d+$/);
-    expect(producer.evidence.mergeCommit).toMatch(/^[0-9a-f]{40}$/);
-    expect(producer.evidence.source).toMatch(/^docs\//);
+    const evidence = [producer.evidence, ...producer.metrics.flatMap(({ evidence }) => evidence ?? [])];
+    for (const { url, mergeCommit, source } of evidence) {
+      expect(url).toMatch(/^https:\/\/github\.com\/movie-reservation-platform-lab\/.+\/pull\/\d+$/);
+      expect(mergeCommit).toMatch(/^[0-9a-f]{40}$/);
+      expect(source).toMatch(/^docs\//);
+    }
 
     const receiverBlock = [
       `  otlp/${producer.receiver}:`,
@@ -111,7 +116,7 @@ test('routes every evidenced producer through one unique private OTLP receiver',
 
 test('maps every emitted metric to its exact bounded CloudWatch dimensions', () => {
   const emittedMetrics = fixture.producers.flatMap(({ metrics }) => metrics);
-  expect(emittedMetrics).toHaveLength(21);
+  expect(emittedMetrics).toHaveLength(23);
   expect(new Set(emittedMetrics.map(({ name }) => name)).size).toBe(emittedMetrics.length);
 
   const declarations = cloudWatchDeclarations();
