@@ -18,6 +18,13 @@ accept the pinned source/detail/envelope contract and forward only the OCSF
 record at `$.detail.event`. Firehose converts records with a shared Glue schema
 and writes valid and quarantined records to separate prefixes.
 
+Each account's resources live under the construct scope `Producer<accountId>`,
+so their CloudFormation logical IDs follow the account, not its position in the
+list: adding, removing, or reordering accounts never replaces another account's
+resources. Physical names stay CloudFormation-generated. The resources carry a
+`movie-platform:workload-account` tag (`WORKLOAD_ACCOUNT_TAG`) for console and
+cost filtering; composing apps tag their per-account alarms the same way.
+
 The package owns no custom-source lifecycle or bucket. Its caller supplies the
 Security Lake destination and provider role returned by account composition.
 The source allowlist is deliberately explicit: adding a service requires a
