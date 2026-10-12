@@ -59,7 +59,7 @@
     "validate:artifact-copy": "npm run typecheck:artifact-copy && npm run test:artifact-copy && npm run build:artifact-copy-cli && node automation/artifact-copy/dist/main.js --help",
     "preflight:aws": "ts-node --project packages/aws-account-preflight/tsconfig.json packages/aws-account-preflight/src/main.ts",
     "cleanup:artifact-foundation": "ts-node --project automation/artifact-foundation-cleanup/tsconfig.json automation/artifact-foundation-cleanup/src/main.ts",
-    "compare:audit-transports": "ts-node --project automation/audit-transport-comparison/tsconfig.json automation/audit-transport-comparison/src/main.ts",
+    "compare:audit-transports": "ts-node --project automation/audit-transport-comparison/tsconfig.json automation/audit-transport-comparison/src/cli/main.ts",
     "copy:artifact": "ts-node --project automation/artifact-copy/tsconfig.json automation/artifact-copy/src/main.ts",
     "smoke:xray": "bash scripts/xray-smoke.sh",
     "smoke:managed-metrics": "bash scripts/managed-metrics-smoke.sh",

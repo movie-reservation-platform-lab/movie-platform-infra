@@ -1,5 +1,5 @@
-import { legacyLookupQuery, securityLakeLookupQuery } from '../src/athena-queries';
-import { ID_ACCEPTED, ID_REJECTED } from './test-support';
+import { legacyLookupQuery, securityLakeLookupQuery } from '../../src/adapters/athena-queries';
+import { ID_ACCEPTED, ID_REJECTED } from '../support/fakes';
 
 const WINDOW = {
   days: [new Date('2026-10-12T00:00:00Z'), new Date('2026-10-13T00:00:00Z')],
@@ -26,11 +26,12 @@ describe('Athena lookup queries', () => {
     ].join('\n'));
   });
 
-  it('refuses anything that is not a UUID or a plain identifier', () => {
-    expect(() => legacyLookupQuery('db', 'table', ["x' OR '1'='1"], WINDOW)).toThrow('UUIDs');
-    expect(() => legacyLookupQuery('db', 'table', [], WINDOW)).toThrow('non-empty');
-    expect(() => securityLakeLookupQuery('db', 'Table-1', [ID_ACCEPTED], WINDOW)).toThrow('plain lowercase identifiers');
-    expect(() => securityLakeLookupQuery('db', 'table', [ID_ACCEPTED], { ...WINDOW, workloadAccountId: "1' OR '1" }))
-      .toThrow('invalid account or Region');
+  it.each([
+    ['a non-UUID event ID', () => legacyLookupQuery('db', 'table', ["x' OR '1'='1"], WINDOW), 'UUIDs'],
+    ['an empty ID list', () => legacyLookupQuery('db', 'table', [], WINDOW), 'non-empty'],
+    ['a non-identifier table', () => securityLakeLookupQuery('db', 'Table-1', [ID_ACCEPTED], WINDOW), 'plain lowercase identifiers'],
+    ['a forged account', () => securityLakeLookupQuery('db', 'table', [ID_ACCEPTED], { ...WINDOW, workloadAccountId: "1' OR '1" }), 'invalid account or Region'],
+  ])('refuses %s', (_label, build, message) => {
+    expect(build).toThrow(message);
   });
 });

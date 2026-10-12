@@ -1,7 +1,8 @@
-import type { LoginClient, LoginRequest, LoginResponse } from './model';
+import { AUDIT_EVENT_ID } from '../core/identifiers';
+import type { LoginClient, LoginRequest, LoginResponse } from '../core/ports';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REQUEST_TIMEOUT_MS = 10_000;
+const MAX_RESPONSE_BYTES = 64 * 1024;
 
 /** Posts one credential check to the demo login route; never retries. */
 export class HttpLoginClient implements LoginClient {
@@ -19,6 +20,8 @@ export class HttpLoginClient implements LoginClient {
         'X-Request-ID': request.requestId,
       },
       body: JSON.stringify({ username: request.username, password: request.password }),
+      // A redirect would resend the credentials to wherever it points; report it instead.
+      redirect: 'manual',
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     return { httpStatus: response.status, auditEventId: await readAuditEventId(response) };
@@ -27,9 +30,13 @@ export class HttpLoginClient implements LoginClient {
 
 /** The receipt is optional: authentication fails open without it. */
 async function readAuditEventId(response: Response): Promise<string | null> {
+  const text = await response.text();
+  if (text.length > MAX_RESPONSE_BYTES) {
+    return null;
+  }
   let body: unknown;
   try {
-    body = await response.json();
+    body = JSON.parse(text) as unknown;
   } catch {
     return null;
   }
@@ -37,6 +44,6 @@ async function readAuditEventId(response: Response): Promise<string | null> {
     return null;
   }
   const id = (body as Record<string, unknown>).audit_event_id;
-  // Validated here because it is later interpolated into Athena SQL.
-  return typeof id === 'string' && UUID.test(id) ? id : null;
+  // Validated here because the ID is later interpolated into Athena SQL.
+  return typeof id === 'string' && AUDIT_EVENT_ID.test(id) ? id : null;
 }
