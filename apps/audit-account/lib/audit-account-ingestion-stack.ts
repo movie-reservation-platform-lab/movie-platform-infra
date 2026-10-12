@@ -64,7 +64,10 @@ export class AuditAccountIngestionStack extends Stack {
       name: AUDIT_INVESTIGATION_WORKGROUP,
       recursiveDeleteOption: true,
       workGroupConfiguration: {
+        // A query without partition filters would scan all of Security Lake; cap each query at 1 GiB.
+        bytesScannedCutoffPerQuery: 1024 ** 3,
         enforceWorkGroupConfiguration: true,
+        engineVersion: { selectedEngineVersion: 'Athena engine version 3' },
         managedQueryResultsConfiguration: { enabled: true },
         publishCloudWatchMetricsEnabled: true,
       },

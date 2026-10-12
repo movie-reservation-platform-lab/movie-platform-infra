@@ -95,14 +95,16 @@ describe('AuditAccountIngestionStack', () => {
     });
   });
 
-  it('provides an Athena workgroup with enforced managed query results', () => {
+  it('provides an Athena workgroup with enforced managed results and a per-query scan cap', () => {
     const ingestionTemplate = createIngestionTemplate();
 
     ingestionTemplate.resourceCountIs('AWS::S3::Bucket', 0);
     ingestionTemplate.hasResourceProperties('AWS::Athena::WorkGroup', {
       Name: 'movie-platform-audit-investigation',
       WorkGroupConfiguration: {
+        BytesScannedCutoffPerQuery: 1_073_741_824,
         EnforceWorkGroupConfiguration: true,
+        EngineVersion: { SelectedEngineVersion: 'Athena engine version 3' },
         ManagedQueryResultsConfiguration: { Enabled: true },
         PublishCloudWatchMetricsEnabled: true,
       },
