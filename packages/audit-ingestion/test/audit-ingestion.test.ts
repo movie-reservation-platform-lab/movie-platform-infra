@@ -124,6 +124,36 @@ describe('AuditIngestion', () => {
     });
   });
 
+  it('keeps each producer\'s logical IDs when other accounts are removed or reordered', () => {
+    const producerLogicalIds = (template: Template, accountId: string): string[] =>
+      Object.keys(template.toJSON().Resources as Record<string, unknown>)
+        .filter((logicalId) => logicalId.includes(`Producer${accountId}`))
+        .sort();
+    const original = producerLogicalIds(createTemplate(), '444444444444');
+
+    expect(original).not.toHaveLength(0);
+    expect(producerLogicalIds(createTemplate({
+      ...TEST_PROPS,
+      producers: [{ workloadAccountId: '444444444444' }],
+    }), '444444444444')).toEqual(original);
+    expect(producerLogicalIds(createTemplate({
+      ...TEST_PROPS,
+      producers: [...TEST_PROPS.producers].reverse(),
+    }), '444444444444')).toEqual(original);
+  });
+
+  it('tags producer resources with their workload account', () => {
+    const template = createTemplate();
+    const accountTag = { Key: 'movie-platform:workload-account', Value: '444444444444' };
+
+    template.hasResourceProperties('AWS::SQS::Queue', {
+      Tags: Match.arrayWith([accountTag]),
+    });
+    template.hasResourceProperties('AWS::KinesisFirehose::DeliveryStream', {
+      Tags: Match.arrayWith([accountTag]),
+    });
+  });
+
   it('rejects missing, duplicate, and malformed producer accounts', () => {
     expect(() => createTemplate({ ...TEST_PROPS, producers: [] })).toThrow(
       'requires at least one producer',

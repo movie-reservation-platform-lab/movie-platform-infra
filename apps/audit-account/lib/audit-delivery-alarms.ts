@@ -1,8 +1,8 @@
-import { Duration } from 'aws-cdk-lib';
+import { Duration, Tags } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import type { AuditProducerResources } from '@movie-platform/audit-ingestion';
+import { type AuditProducerResources, WORKLOAD_ACCOUNT_TAG } from '@movie-platform/audit-ingestion';
 import { Construct } from 'constructs';
 
 const RUNBOOK = 'docs/runbooks/audit-delivery-alarms.md';
@@ -36,11 +36,11 @@ export class AuditDeliveryAlarms extends Construct {
     const freshnessThreshold = props.deliveryFreshnessThreshold ?? Duration.minutes(15);
     const oneMinute = Duration.minutes(1);
 
-    props.producers.forEach(({ metrics, workloadAccountId }, index) => {
-      // Same scope naming as the package, so alarm IDs line up with Producer<n> resources.
-      // TODO(#90): key by workloadAccountId together with the package; position-based
-      // IDs replace alarms whenever an account is removed or reordered.
-      const producerScope = new Construct(this, `Producer${index + 1}`);
+    props.producers.forEach(({ metrics, workloadAccountId }) => {
+      // Keyed by account like the package's producer resources, so removing or
+      // reordering an account never replaces another account's alarms.
+      const producerScope = new Construct(this, `Producer${workloadAccountId}`);
+      Tags.of(producerScope).add(WORKLOAD_ACCOUNT_TAG, workloadAccountId);
       const alarmProps = {
         comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,

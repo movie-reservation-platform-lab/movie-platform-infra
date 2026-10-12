@@ -4,6 +4,7 @@ import {
   Duration,
   RemovalPolicy,
   Stack,
+  Tags,
 } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -22,6 +23,9 @@ import {
   AUDIT_EVENTBRIDGE_ENVELOPE_VERSION,
   AUDIT_EVENTBRIDGE_SOURCES,
 } from './transport-contract';
+
+/** Tag naming the workload account a producer resource serves, for console and cost filtering. */
+export const WORKLOAD_ACCOUNT_TAG = 'movie-platform:workload-account';
 
 /** Identifies one trusted workload account that may publish audit envelopes. */
 export interface AuditProducerBinding {
@@ -108,7 +112,6 @@ interface ProducerResourceOptions {
   readonly deadLetterRetention?: Duration;
   readonly destination: SecurityLakeDestination;
   readonly eventBus: events.EventBus;
-  readonly index: number;
   readonly maxEventAge?: Duration;
   readonly producer: AuditProducerBinding;
   readonly quarantinePolicy: iam.CfnPolicy;
@@ -155,13 +158,12 @@ export class AuditIngestion extends Construct {
       stack,
       props.destination,
     );
-    this.producers = props.producers.map((producer, index) =>
+    this.producers = props.producers.map((producer) =>
       createProducerResources(this, {
         conversionSchema,
         deadLetterRetention: props.deadLetterRetention,
         destination: props.destination,
         eventBus: this.eventBus,
-        index,
         maxEventAge: props.maxEventAge,
         producer,
         quarantinePolicy,
@@ -357,7 +359,6 @@ function createProducerResources(
     deadLetterRetention,
     destination,
     eventBus,
-    index,
     maxEventAge,
     producer,
     quarantinePolicy,
@@ -365,10 +366,11 @@ function createProducerResources(
     retryAttempts,
     stack,
   } = options;
-  // TODO(#90): key by workloadAccountId. Logical IDs follow list position, so
-  // removing or reordering an account replaces every later account's resources
-  // and orphans their retained DLQs and streams. Fix before the first deploy.
-  const producerScope = new Construct(scope, `Producer${index + 1}`);
+  // Keyed by account, not list position: logical IDs derive from this path, so a
+  // positional key would replace later accounts' resources (and orphan their
+  // retained DLQs and streams) whenever an account is removed or reordered.
+  const producerScope = new Construct(scope, `Producer${producer.workloadAccountId}`);
+  Tags.of(producerScope).add(WORKLOAD_ACCOUNT_TAG, producer.workloadAccountId);
   const deadLetterQueue = new sqs.Queue(producerScope, 'TargetDeadLetterQueue', {
     encryption: sqs.QueueEncryption.SQS_MANAGED,
     enforceSSL: true,

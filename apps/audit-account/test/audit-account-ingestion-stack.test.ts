@@ -203,11 +203,12 @@ describe('AuditAccountIngestionStack', () => {
       });
 
       ingestionTemplate.resourceCountIs('AWS::CloudWatch::Alarm', 10);
-      for (const [producer, accountId] of [['Producer1', '333333333333'], ['Producer2', '444444444444']]) {
-        const producerAlarms = Object.values(alarmsMatching(ingestionTemplate, `AuditDeliveryAlarms${producer}`));
+      for (const accountId of ['333333333333', '444444444444']) {
+        const producerAlarms = Object.values(alarmsMatching(ingestionTemplate, `AuditDeliveryAlarmsProducer${accountId}`));
         expect(producerAlarms).toHaveLength(5);
         for (const { Properties } of producerAlarms) {
           expect(Properties.AlarmDescription).toContain(accountId);
+          expect(Properties.Tags).toContainEqual({ Key: 'movie-platform:workload-account', Value: accountId });
           expect(Properties.AlarmActions).toEqual([{ Ref: expect.stringMatching(/^AuditDeliveryAlarmsAlarmTopic/) }]);
         }
       }
