@@ -63,6 +63,8 @@ export interface AuditIngestionProps {
 export interface AuditIngestionMetrics {
   /** Age in seconds of the oldest record waiting for successful S3 delivery. */
   readonly deliveryFreshness: cloudwatch.Metric;
+  /** Records that failed Parquet conversion and were written to the quarantine prefix. */
+  readonly failedConversionRecords: cloudwatch.Metric;
   /** EventBridge rule invocations that exhausted or could not reach the target. */
   readonly failedInvocations: cloudwatch.Metric;
   /** Records accepted by the workload account's Firehose stream. */
@@ -363,6 +365,9 @@ function createProducerResources(
     retryAttempts,
     stack,
   } = options;
+  // TODO(#90): key by workloadAccountId. Logical IDs follow list position, so
+  // removing or reordering an account replaces every later account's resources
+  // and orphans their retained DLQs and streams. Fix before the first deploy.
   const producerScope = new Construct(scope, `Producer${index + 1}`);
   const deadLetterQueue = new sqs.Queue(producerScope, 'TargetDeadLetterQueue', {
     encryption: sqs.QueueEncryption.SQS_MANAGED,
@@ -473,6 +478,12 @@ function createProducerMetrics(
       metricName: 'DeliveryToS3.DataFreshness',
       namespace: 'AWS/Firehose',
       statistic: 'Maximum',
+    }),
+    failedConversionRecords: new cloudwatch.Metric({
+      dimensionsMap: { DeliveryStreamName: deliveryStream.ref },
+      metricName: 'FailedConversion.Records',
+      namespace: 'AWS/Firehose',
+      statistic: 'Sum',
     }),
     failedInvocations: new cloudwatch.Metric({
       dimensionsMap: {
