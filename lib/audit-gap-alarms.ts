@@ -68,7 +68,7 @@ export class AuditGapAlarms extends Construct {
     });
     new cloudwatch.CompositeAlarm(this, 'PrimaryAuditPublishFailureAlarm', {
       alarmDescription: 'Primary audit publisher failed: logins may be unaudited. The child alarm in ' +
-        'ALARM names the failure reason; see docs/operations/audit-publish-alarms.md.',
+        'ALARM names the failure reason; see docs/runbooks/audit-publish-alarms.md.',
       alarmRule: cloudwatch.AlarmRule.anyOf(...primaryAuditPublishFailureAlarms),
     }).addAlarmAction(alarmAction);
 
@@ -92,7 +92,7 @@ export class AuditGapAlarms extends Construct {
 
     new cloudwatch.Alarm(this, 'UnauditedSuccessfulLoginAlarm', {
       alarmDescription: 'A successful login was not audited: the audit event was not accepted. ' +
-        'Find it via audit.emit.failed with auth_status_id=1; see docs/operations/audit-publish-alarms.md.',
+        'Find it via audit.emit.failed with auth_status_id=1; see docs/runbooks/audit-publish-alarms.md.',
       metric: unauditedSuccessfulLoginsMetric,
       threshold: 0,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,

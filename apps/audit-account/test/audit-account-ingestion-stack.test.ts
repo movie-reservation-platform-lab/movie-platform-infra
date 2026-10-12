@@ -24,12 +24,12 @@ const TEST_CUSTOM_SOURCE = {
   sourceVersion: '1.0',
 } as const satisfies SecurityLakeCustomSourceResponse;
 
-function createIngestionTemplate(): Template {
+function createIngestionTemplate(config: AuditAccountConfig = TEST_CONFIG): Template {
   const stack = new AuditAccountIngestionStack(
     new App(),
     'AuditAccountIngestionStack',
     {
-      config: TEST_CONFIG,
+      config,
       customSource: TEST_CUSTOM_SOURCE,
       env: {
         account: TEST_CONFIG.auditAccountId,
@@ -84,6 +84,133 @@ describe('AuditAccountIngestionStack', () => {
     ingestionTemplate.resourceCountIs('AWS::KinesisFirehose::DeliveryStream', 1);
     ingestionTemplate.hasResourceProperties('AWS::Events::Rule', {
       EventPattern: Match.objectLike({ account: ['333333333333'] }),
+    });
+  });
+
+  describe('delivery alarms', () => {
+    const topicAction = [{ Ref: Match.stringLikeRegexp('^AuditDeliveryAlarmsAlarmTopic') }];
+
+    function alarmsMatching(template: Template, logicalIdFragment: string): Record<string, { Properties: Record<string, unknown> }> {
+      const alarms = template.findResources('AWS::CloudWatch::Alarm');
+      return Object.fromEntries(
+        Object.entries(alarms).filter(([logicalId]) => logicalId.includes(logicalIdFragment)),
+      ) as Record<string, { Properties: Record<string, unknown> }>;
+    }
+
+    it('routes to one unsubscribed TLS-only topic exposed as an output', () => {
+      const ingestionTemplate = createIngestionTemplate();
+
+      ingestionTemplate.resourceCountIs('AWS::SNS::Topic', 1);
+      ingestionTemplate.resourceCountIs('AWS::SNS::Subscription', 0);
+      ingestionTemplate.hasResourceProperties('AWS::SNS::TopicPolicy', {
+        PolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([Match.objectLike({
+            Condition: { Bool: { 'aws:SecureTransport': 'false' } },
+            Effect: 'Deny',
+          })]),
+        }),
+      });
+      ingestionTemplate.hasOutput('AuditDeliveryAlarmTopicArn', {
+        Value: { Ref: Match.stringLikeRegexp('^AuditDeliveryAlarmsAlarmTopic') },
+      });
+    });
+
+    it('alarms on permanent EventBridge failures and DLQ messages', () => {
+      const ingestionTemplate = createIngestionTemplate();
+
+      ingestionTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmActions: topicAction,
+        ComparisonOperator: 'GreaterThanThreshold',
+        Dimensions: Match.arrayWith([
+          Match.objectLike({ Name: 'EventBusName' }),
+          Match.objectLike({ Name: 'RuleName' }),
+        ]),
+        EvaluationPeriods: 1,
+        MetricName: 'FailedInvocations',
+        Namespace: 'AWS/Events',
+        Period: 60,
+        Statistic: 'Sum',
+        Threshold: 0,
+        TreatMissingData: 'notBreaching',
+      });
+      ingestionTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmActions: topicAction,
+        ComparisonOperator: 'GreaterThanThreshold',
+        Dimensions: [{
+          Name: 'QueueName',
+          Value: { 'Fn::GetAtt': [Match.stringLikeRegexp('TargetDeadLetterQueue'), 'QueueName'] },
+        }],
+        EvaluationPeriods: 1,
+        MetricName: 'ApproximateNumberOfMessagesVisible',
+        Namespace: 'AWS/SQS',
+        Period: 60,
+        Statistic: 'Maximum',
+        Threshold: 0,
+        TreatMissingData: 'notBreaching',
+      });
+    });
+
+    it('alarms on stale delivery, conversion failures, and sustained throttling', () => {
+      const ingestionTemplate = createIngestionTemplate();
+      const streamDimension = [{
+        Name: 'DeliveryStreamName',
+        Value: { Ref: Match.stringLikeRegexp('DeliveryStream') },
+      }];
+
+      ingestionTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmActions: topicAction,
+        ComparisonOperator: 'GreaterThanThreshold',
+        Dimensions: streamDimension,
+        EvaluationPeriods: 3,
+        MetricName: 'DeliveryToS3.DataFreshness',
+        Namespace: 'AWS/Firehose',
+        Period: 60,
+        Statistic: 'Maximum',
+        Threshold: 900,
+        TreatMissingData: 'notBreaching',
+      });
+      ingestionTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmActions: topicAction,
+        ComparisonOperator: 'GreaterThanThreshold',
+        Dimensions: streamDimension,
+        EvaluationPeriods: 1,
+        MetricName: 'FailedConversion.Records',
+        Namespace: 'AWS/Firehose',
+        Period: 60,
+        Statistic: 'Sum',
+        Threshold: 0,
+        TreatMissingData: 'notBreaching',
+      });
+      ingestionTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmActions: topicAction,
+        ComparisonOperator: 'GreaterThanThreshold',
+        DatapointsToAlarm: 3,
+        Dimensions: streamDimension,
+        EvaluationPeriods: 5,
+        MetricName: 'ThrottledRecords',
+        Namespace: 'AWS/Firehose',
+        Period: 60,
+        Statistic: 'Sum',
+        Threshold: 0,
+        TreatMissingData: 'notBreaching',
+      });
+    });
+
+    it('creates one alarm set per configured workload account, each notifying the topic', () => {
+      const ingestionTemplate = createIngestionTemplate({
+        ...TEST_CONFIG,
+        workloadAccountIds: ['333333333333', '444444444444'],
+      });
+
+      ingestionTemplate.resourceCountIs('AWS::CloudWatch::Alarm', 10);
+      for (const [producer, accountId] of [['Producer1', '333333333333'], ['Producer2', '444444444444']]) {
+        const producerAlarms = Object.values(alarmsMatching(ingestionTemplate, `AuditDeliveryAlarms${producer}`));
+        expect(producerAlarms).toHaveLength(5);
+        for (const { Properties } of producerAlarms) {
+          expect(Properties.AlarmDescription).toContain(accountId);
+          expect(Properties.AlarmActions).toEqual([{ Ref: expect.stringMatching(/^AuditDeliveryAlarmsAlarmTopic/) }]);
+        }
+      }
     });
   });
 });

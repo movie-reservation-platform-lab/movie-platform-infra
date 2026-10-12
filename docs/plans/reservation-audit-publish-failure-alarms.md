@@ -300,7 +300,7 @@ Support level: guided.
 5. Document operator meaning and verify the slice. **AI-owned**
    - Change: document severity, missing-data meaning, topic boundary, and the
      first response for each failure reason, and the deferred latency warning.
-   - Files: likely `docs/operations/audit-publish-alarms.md` and operations index.
+   - Files: likely `docs/runbooks/audit-publish-alarms.md` and runbooks index.
    - Verification: inspect documentation diff, run focused/full offline checks,
      and synthesize without lookups.
 

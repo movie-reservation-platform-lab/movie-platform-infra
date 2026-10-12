@@ -3,6 +3,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import type { AuditAccountConfig } from '@movie-platform/audit-account-config';
 import { AuditIngestion } from '@movie-platform/audit-ingestion';
 import type { Construct } from 'constructs';
+import { AuditDeliveryAlarms } from './audit-delivery-alarms';
 import type { SecurityLakeCustomSourceResponse } from './security-lake-custom-source-response';
 
 export interface AuditAccountIngestionStackProps extends StackProps {
@@ -49,6 +50,10 @@ export class AuditAccountIngestionStack extends Stack {
       sid: 'AllowConfiguredWorkloadAccounts',
     }));
 
+    const deliveryAlarms = new AuditDeliveryAlarms(this, 'AuditDeliveryAlarms', {
+      producers: ingestion.producers,
+    });
+
     new CfnOutput(this, 'AuditEventBusArn', {
       description: 'Exact central event-bus ARN consumed by workload composition.',
       exportName: 'MoviePlatformAuditEventBusArn',
@@ -58,6 +63,10 @@ export class AuditAccountIngestionStack extends Stack {
       description: 'Central event-bus name used by operational tooling.',
       exportName: 'MoviePlatformAuditEventBusName',
       value: ingestion.eventBus.eventBusName,
+    });
+    new CfnOutput(this, 'AuditDeliveryAlarmTopicArn', {
+      description: 'Unsubscribed delivery-alarm topic for a future incident-provider subscription.',
+      value: deliveryAlarms.alarmTopic.topicArn,
     });
   }
 }
