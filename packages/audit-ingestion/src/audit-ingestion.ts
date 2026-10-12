@@ -49,6 +49,11 @@ export interface SecurityLakeDestination {
 export interface AuditIngestionProps {
   /** How long EventBridge retains accepted envelopes for replay. Defaults to 7 days. */
   readonly archiveRetention?: Duration;
+  /**
+   * Longest time Firehose buffers records before writing to Security Lake.
+   * Defaults to 300 seconds; shorter means lower delivery delay and more objects.
+   */
+  readonly bufferInterval?: Duration;
   /** How long exhausted EventBridge deliveries remain in each target DLQ. Defaults to 14 days. */
   readonly deadLetterRetention?: Duration;
   /** Pre-existing Security Lake destination created by audit-account composition. */
@@ -108,6 +113,7 @@ interface ConversionSchemaResources extends ConversionCatalogResources {
 
 /** Dependencies required to assemble one account-isolated ingestion path. */
 interface ProducerResourceOptions {
+  readonly bufferInterval: Duration;
   readonly conversionSchema: ConversionSchemaResources;
   readonly deadLetterRetention?: Duration;
   readonly destination: SecurityLakeDestination;
@@ -122,6 +128,7 @@ interface ProducerResourceOptions {
 
 /** Inputs that bind one Firehose stream to one trusted workload account. */
 interface DeliveryStreamOptions {
+  readonly bufferInterval: Duration;
   readonly conversionSchema: ConversionSchemaResources;
   readonly destination: SecurityLakeDestination;
   readonly producer: AuditProducerBinding;
@@ -160,6 +167,7 @@ export class AuditIngestion extends Construct {
     );
     this.producers = props.producers.map((producer) =>
       createProducerResources(this, {
+        bufferInterval: props.bufferInterval ?? Duration.seconds(300),
         conversionSchema,
         deadLetterRetention: props.deadLetterRetention,
         destination: props.destination,
@@ -355,6 +363,7 @@ function createProducerResources(
   options: ProducerResourceOptions,
 ): AuditProducerResources {
   const {
+    bufferInterval,
     conversionSchema,
     deadLetterRetention,
     destination,
@@ -378,6 +387,7 @@ function createProducerResources(
     retentionPeriod: deadLetterRetention ?? Duration.days(14),
   });
   const deliveryStream = createDeliveryStream(producerScope, {
+    bufferInterval,
     conversionSchema,
     destination,
     producer,
@@ -413,7 +423,7 @@ function createDeliveryStream(
   scope: Construct,
   options: DeliveryStreamOptions,
 ): firehose.CfnDeliveryStream {
-  const { conversionSchema, destination, producer, stack } = options;
+  const { bufferInterval, conversionSchema, destination, producer, stack } = options;
   const partitioning = buildFirehosePartitioning(
     destination.sourcePrefix,
     stack.region,
@@ -431,7 +441,7 @@ function createDeliveryStream(
         resource: destination.bucketName,
         service: 's3',
       }),
-      bufferingHints: { intervalInSeconds: 300, sizeInMBs: 64 },
+      bufferingHints: { intervalInSeconds: bufferInterval.toSeconds(), sizeInMBs: 64 },
       compressionFormat: 'UNCOMPRESSED',
       dataFormatConversionConfiguration: {
         enabled: true,
@@ -523,6 +533,11 @@ function validateProps(props: AuditIngestionProps): void {
     || new Set(accountIds).size !== accountIds.length
   ) {
     throw new Error('AuditIngestion producer account IDs must be unique 12-digit values.');
+  }
+  const bufferSeconds = props.bufferInterval?.toSeconds();
+  if (bufferSeconds !== undefined && (bufferSeconds < 60 || bufferSeconds > 900)) {
+    // Dynamic partitioning requires at least 60 s; Firehose allows at most 900 s.
+    throw new Error('AuditIngestion bufferInterval must be between 60 and 900 seconds.');
   }
   if (
     !props.destination.sourcePrefix.startsWith('ext/')

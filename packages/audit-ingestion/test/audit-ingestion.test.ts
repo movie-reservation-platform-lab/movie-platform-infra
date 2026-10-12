@@ -1,4 +1,4 @@
-import { App, Stack } from 'aws-cdk-lib';
+import { App, Duration, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { AuditIngestion, type AuditIngestionProps } from '../src';
 
@@ -152,6 +152,20 @@ describe('AuditIngestion', () => {
     template.hasResourceProperties('AWS::KinesisFirehose::DeliveryStream', {
       Tags: Match.arrayWith([accountTag]),
     });
+  });
+
+  it('buffers for 300 seconds unless the caller chooses a bounded interval', () => {
+    const bufferingHints = (template: Template): unknown =>
+      Object.values(template.findResources('AWS::KinesisFirehose::DeliveryStream'))
+        .map((resource) => resource.Properties.ExtendedS3DestinationConfiguration.BufferingHints)[0];
+
+    expect(bufferingHints(createTemplate())).toEqual({ IntervalInSeconds: 300, SizeInMBs: 64 });
+    expect(bufferingHints(createTemplate({ ...TEST_PROPS, bufferInterval: Duration.seconds(60) })))
+      .toEqual({ IntervalInSeconds: 60, SizeInMBs: 64 });
+    expect(() => createTemplate({ ...TEST_PROPS, bufferInterval: Duration.seconds(59) }))
+      .toThrow('bufferInterval must be between 60 and 900 seconds');
+    expect(() => createTemplate({ ...TEST_PROPS, bufferInterval: Duration.seconds(901) }))
+      .toThrow('bufferInterval must be between 60 and 900 seconds');
   });
 
   it('rejects missing, duplicate, and malformed producer accounts', () => {
