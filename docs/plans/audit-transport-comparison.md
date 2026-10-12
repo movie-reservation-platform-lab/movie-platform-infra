@@ -13,7 +13,7 @@ through the deployed reservation service and reports, per audit event, whether
 and when it reached each audit store.
 
 ```text
-POST /demo/auth/login --> audit_event_id (OCSF metadata.uid)
+POST /audit-demo/reservation/login (web proxy) --> audit_event_id (OCSF metadata.uid)
    |-- primary:  PutEvents -> central bus (audit account) -> Firehose -> Security Lake -> Athena
    `-- mirror:   stdout -> FireLens -> legacy Firehose (workload account) -> S3 -> Athena
 ```
@@ -70,44 +70,35 @@ destination, but is days of work; revisit after the gate decision.
 
 ## Runner design
 
-New workspace `automation/audit-transport-comparison`
-(`@movie-platform/audit-transport-comparison`), following
-`automation/artifact-foundation-cleanup`: a thin CLI, a pure comparison core,
-injectable AWS SDK adapters, and Jest tests with fakes.
+Workspace `automation/audit-transport-comparison`
+(`@movie-platform/audit-transport-comparison`). Its
+[README](../../automation/audit-transport-comparison/README.md) owns the run-file
+fields, defaults, and exit codes. Following the repository's clean-architecture
+skill, it has three layers rather than four, because the domain is a handful of
+pure rules:
 
-Inputs (one JSON run file, written by the environments repository):
+- `core/`: the use case, verdict rules, evidence contract, and the ports it owns;
+- `adapters/`: Athena, Glue, SQS/CloudWatch, HTTP, private files, terminal output;
+- `cli/`: run-file parsing, exit codes, and the composition root.
 
-- `endpoint`: reservation-service base URL;
-- `credentialsFile`: demo username/password file, never printed or copied;
-- `attempts`: successful and rejected login counts (default 3 + 3);
-- `workloadTargetFile`, `auditTargetFile`: `aws-account-preflight` target files,
-  validated before any AWS call; ambient credentials are never used;
-- `legacyStore`: Athena workgroup, database, table (`movie-platform-audit`,
-  `movie_platform_audit`, `authentication`);
-- `securityLakeStore`: Athena workgroup and the Security Lake-created crawler
-  name; the runner reads the queryable database and table from the crawler's
-  catalog target, because they differ from the `tableArn` in the custom-source
-  response;
-- `deliveryAlarmPrefix`, `deadLetterQueueUrl`: audit-account health inputs;
-- `timeout` (default 20 min) and `pollInterval` (default 30 s);
-- `output`: absolute evidence path.
+Run sequence:
 
-Phases, each with its own status in the result:
-
-1. Preflight both account targets.
-2. Send the logins with unique `X-Correlation-Id`/`X-Request-Id`; record HTTP
-   status, response time, and `audit_event_id` (or its absence).
-3. After one buffer interval, optionally (`refreshCatalog`) start the Security
-   Lake crawler once, because new `eventday` partitions are invisible to Athena
-   until it runs. Then poll both stores with bounded Athena queries (`metadata.uid IN (...)`,
+1. Validate the run file, both preflight targets, their SDK identities, and that
+   the DLQ URL belongs to the audit account. Nothing is sent before this passes.
+2. Send the logins with unique `X-Correlation-ID`/`X-Request-ID`; record HTTP
+   status, response time, and `audit_event_id` (or its absence, or a redacted
+   transport error).
+3. Poll both stores with bounded Athena queries (`metadata.uid IN (...)`,
    restricted to the run's UTC partitions) until every ID is found or the
-   timeout expires. Record the first poll that saw each ID.
-4. Check the audit-account DLQ depth and that no delivery alarm is in `ALARM`.
-5. Write versioned JSON (`audit-transport-comparison/v1`) and print a short
-   per-event table.
+   deadline passes. Once one buffer interval after the last login, optionally
+   start the Security Lake crawler, because new `eventday` partitions are
+   invisible to Athena until it runs.
+4. Read the audit-account DLQ depth and the delivery alarms in `ALARM`.
+5. Print a summary and create the evidence file.
 
-The runner never retries a login, never loops without a deadline, and exits
-non-zero when any event is missing from either store.
+The runner never retries a login and never sleeps past the deadline. A store
+still missing events at the deadline is `incomplete`; one whose query failed is
+`error`. Error text is redacted before it is printed or stored.
 
 ## Infrastructure changes
 
@@ -117,6 +108,8 @@ non-zero when any event is missing from either store.
   result location). Add a dedicated workgroup with enforced
   **Athena-managed query results** to `AuditAccountIngestionStack`, so no result
   bucket exists. The October 2026 feasibility run created the same thing by hand.
+  Like the legacy workgroup, it pins engine version 3 and caps each query at
+  1 GiB scanned.
 
 ## Known risks for the live run
 
