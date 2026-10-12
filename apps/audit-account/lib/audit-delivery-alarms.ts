@@ -12,7 +12,8 @@ export interface AuditDeliveryAlarmsProps {
   readonly producers: readonly AuditProducerResources[];
   /**
    * Oldest undelivered record age that means S3 delivery is failing. Defaults
-   * to 15 minutes: three of the stream's 300-second buffer intervals.
+   * to 15 minutes, three times the package's longest default buffer (300 s), so
+   * it also holds for streams configured with a shorter buffer.
    */
   readonly deliveryFreshnessThreshold?: Duration;
 }

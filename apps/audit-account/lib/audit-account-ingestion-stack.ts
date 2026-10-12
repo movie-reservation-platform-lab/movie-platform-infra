@@ -1,10 +1,14 @@
-import { CfnOutput, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import * as athena from 'aws-cdk-lib/aws-athena';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import type { AuditAccountConfig } from '@movie-platform/audit-account-config';
 import { AuditIngestion } from '@movie-platform/audit-ingestion';
 import type { Construct } from 'constructs';
 import { AuditDeliveryAlarms } from './audit-delivery-alarms';
 import type { SecurityLakeCustomSourceResponse } from './security-lake-custom-source-response';
+
+/** Fixed name so operators and the comparison runner can select it directly. */
+export const AUDIT_INVESTIGATION_WORKGROUP = 'movie-platform-audit-investigation';
 
 export interface AuditAccountIngestionStackProps extends StackProps {
   /** Validated organization accounts and Region owned by this composition root. */
@@ -35,6 +39,9 @@ export class AuditAccountIngestionStack extends Stack {
 
     const ingestion = new AuditIngestion(this, 'AuditIngestion', {
       destination: props.customSource.destination,
+      // Matches the legacy stream's 60 s buffer so the transport comparison
+      // measures transports, not buffer settings.
+      bufferInterval: Duration.seconds(60),
       producers: props.config.workloadAccountIds.map((workloadAccountId) => ({
         workloadAccountId,
       })),
@@ -50,6 +57,19 @@ export class AuditAccountIngestionStack extends Stack {
       sid: 'AllowConfiguredWorkloadAccounts',
     }));
 
+    // Athena keeps query results in managed storage, so the audit account needs
+    // no result bucket. Enforced: queries cannot redirect results elsewhere.
+    const investigationWorkGroup = new athena.CfnWorkGroup(this, 'AuditInvestigationWorkGroup', {
+      description: 'Queries over the Security Lake audit custom source',
+      name: AUDIT_INVESTIGATION_WORKGROUP,
+      recursiveDeleteOption: true,
+      workGroupConfiguration: {
+        enforceWorkGroupConfiguration: true,
+        managedQueryResultsConfiguration: { enabled: true },
+        publishCloudWatchMetricsEnabled: true,
+      },
+    });
+
     const deliveryAlarms = new AuditDeliveryAlarms(this, 'AuditDeliveryAlarms', {
       producers: ingestion.producers,
     });
@@ -63,6 +83,10 @@ export class AuditAccountIngestionStack extends Stack {
       description: 'Central event-bus name used by operational tooling.',
       exportName: 'MoviePlatformAuditEventBusName',
       value: ingestion.eventBus.eventBusName,
+    });
+    new CfnOutput(this, 'AuditInvestigationWorkGroupName', {
+      description: 'Athena workgroup for Security Lake audit queries and the transport comparison.',
+      value: investigationWorkGroup.ref,
     });
     new CfnOutput(this, 'AuditDeliveryAlarmTopicArn', {
       description: 'Unsubscribed delivery-alarm topic for a future incident-provider subscription.',

@@ -87,6 +87,31 @@ describe('AuditAccountIngestionStack', () => {
     });
   });
 
+  it('buffers for 60 seconds to match the legacy stream in the transport comparison', () => {
+    createIngestionTemplate().hasResourceProperties('AWS::KinesisFirehose::DeliveryStream', {
+      ExtendedS3DestinationConfiguration: Match.objectLike({
+        BufferingHints: { IntervalInSeconds: 60, SizeInMBs: 64 },
+      }),
+    });
+  });
+
+  it('provides an Athena workgroup with enforced managed query results', () => {
+    const ingestionTemplate = createIngestionTemplate();
+
+    ingestionTemplate.resourceCountIs('AWS::S3::Bucket', 0);
+    ingestionTemplate.hasResourceProperties('AWS::Athena::WorkGroup', {
+      Name: 'movie-platform-audit-investigation',
+      WorkGroupConfiguration: {
+        EnforceWorkGroupConfiguration: true,
+        ManagedQueryResultsConfiguration: { Enabled: true },
+        PublishCloudWatchMetricsEnabled: true,
+      },
+    });
+    ingestionTemplate.hasOutput('AuditInvestigationWorkGroupName', {
+      Value: { Ref: Match.stringLikeRegexp('^AuditInvestigationWorkGroup') },
+    });
+  });
+
   describe('delivery alarms', () => {
     const topicAction = [{ Ref: Match.stringLikeRegexp('^AuditDeliveryAlarmsAlarmTopic') }];
 
