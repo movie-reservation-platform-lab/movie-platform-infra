@@ -44,6 +44,12 @@ Firehose, Glue conversion metadata, Parquet conversion, Security Lake
 partitioning, and malformed-record quarantine. This application supplies the
 real account topology and Security Lake destination.
 
+The package exposes per-account delivery metrics but creates no alarms. This
+application owns the alarm thresholds (`lib/audit-delivery-alarms.ts`) and routes
+them to an unsubscribed SNS topic, exported as the `AuditDeliveryAlarmTopicArn`
+output. See the
+[audit delivery alarms runbook](../../docs/runbooks/audit-delivery-alarms.md).
+
 Run credential-free checks from the repository root:
 
 ```bash
