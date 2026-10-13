@@ -121,7 +121,38 @@ describe('AuditIngestion', () => {
           Match.objectLike({ Principal: { Service: 'firehose.amazonaws.com' } }),
         ]),
       },
+      Policies: Match.arrayWith([
+        Match.objectLike({
+          PolicyDocument: {
+            Statement: Match.arrayWith([
+              Match.objectLike({
+                Action: [
+                  'glue:GetTable',
+                  'glue:GetTableVersion',
+                  'glue:GetTableVersions',
+                ],
+              }),
+            ]),
+          },
+          PolicyName: 'SchemaRead',
+        }),
+      ]),
     });
+    const conversionRoles = Object.entries(template.findResources('AWS::IAM::Role'))
+      .filter(([, resource]) => JSON.stringify(resource).includes('glue:GetTableVersions'));
+    expect(conversionRoles).toHaveLength(1);
+    const [conversionRoleLogicalId] = conversionRoles[0];
+    for (const stream of Object.values(
+      template.findResources('AWS::KinesisFirehose::DeliveryStream'),
+    )) {
+      expect(stream).toHaveProperty(
+        'Properties.ExtendedS3DestinationConfiguration.DataFormatConversionConfiguration.SchemaConfiguration.RoleARN',
+        { 'Fn::GetAtt': [conversionRoleLogicalId, 'Arn'] },
+      );
+    }
+    expect(Object.values(template.findResources('AWS::IAM::Policy'))
+      .some((resource) => JSON.stringify(resource).includes('glue:GetTableVersions')))
+      .toBe(false);
   });
 
   it('keeps each producer\'s logical IDs when other accounts are removed or reordered', () => {

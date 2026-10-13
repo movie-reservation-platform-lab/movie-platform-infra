@@ -262,28 +262,30 @@ function createConversionSchemaRole(
   stack: Stack,
   catalog: ConversionCatalogResources,
 ): iam.Role {
-  const role = new iam.Role(scope, 'ConversionSchemaRole', {
+  return new iam.Role(scope, 'ConversionSchemaRole', {
     assumedBy: new iam.ServicePrincipal('firehose.amazonaws.com'),
     description: 'Allows Firehose to read the platform audit conversion schema',
+    inlinePolicies: {
+      SchemaRead: new iam.PolicyDocument({
+        statements: [new iam.PolicyStatement({
+          actions: ['glue:GetTable', 'glue:GetTableVersion', 'glue:GetTableVersions'],
+          resources: [
+            Arn.format({ service: 'glue', resource: 'catalog' }, stack),
+            Arn.format({
+              service: 'glue',
+              resource: 'database',
+              resourceName: catalog.database.ref,
+            }, stack),
+            Arn.format({
+              service: 'glue',
+              resource: 'table',
+              resourceName: `${catalog.database.ref}/${catalog.table.ref}`,
+            }, stack),
+          ],
+        })],
+      }),
+    },
   });
-  role.addToPolicy(new iam.PolicyStatement({
-    actions: ['glue:GetTable', 'glue:GetTableVersion', 'glue:GetTableVersions'],
-    resources: [
-      Arn.format({ service: 'glue', resource: 'catalog' }, stack),
-      Arn.format({
-        service: 'glue',
-        resource: 'database',
-        resourceName: catalog.database.ref,
-      }, stack),
-      Arn.format({
-        service: 'glue',
-        resource: 'table',
-        resourceName: `${catalog.database.ref}/${catalog.table.ref}`,
-      }, stack),
-    ],
-  }));
-
-  return role;
 }
 
 /** Authorize the conversion role through Lake Formation as well as IAM. */
@@ -376,8 +378,8 @@ function createProducerResources(
     stack,
   } = options;
   // Keyed by account, not list position: logical IDs derive from this path, so a
-  // positional key would replace later accounts' resources (and orphan their
-  // retained DLQs and streams) whenever an account is removed or reordered.
+  // positional key would replace later accounts' resources whenever an account
+  // is removed or reordered.
   const producerScope = new Construct(scope, `Producer${producer.workloadAccountId}`);
   Tags.of(producerScope).add(WORKLOAD_ACCOUNT_TAG, producer.workloadAccountId);
   const deadLetterQueue = new sqs.Queue(producerScope, 'TargetDeadLetterQueue', {

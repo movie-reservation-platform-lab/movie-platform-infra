@@ -45,7 +45,9 @@ export class AuditAccountIngestionStack extends Stack {
       producers: props.config.workloadAccountIds.map((workloadAccountId) => ({
         workloadAccountId,
       })),
-      removalPolicy: RemovalPolicy.RETAIN,
+      // Security Lake is the retained record. These bounded recovery buffers
+      // must be deleted with their bus so create rollback and teardown complete.
+      removalPolicy: RemovalPolicy.DESTROY,
     });
 
     ingestion.eventBus.addToResourcePolicy(new iam.PolicyStatement({
