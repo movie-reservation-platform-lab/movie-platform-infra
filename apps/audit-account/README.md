@@ -44,6 +44,13 @@ Firehose, Glue conversion metadata, Parquet conversion, Security Lake
 partitioning, and malformed-record quarantine. This application supplies the
 real account topology and Security Lake destination.
 
+The ingestion stack deletes its seven-day EventBridge archive and fourteen-day
+target DLQs with the central event bus. Security Lake remains the retained audit
+record. Before an intentional ingestion-stack deletion after traffic has flowed,
+inspect the archive and DLQs and replay, drain, or explicitly accept any pending
+events; retaining the archive would leave its managed rule blocking event-bus
+deletion.
+
 The package exposes per-account delivery metrics but creates no alarms. This
 application owns the alarm thresholds (`lib/audit-delivery-alarms.ts`) and routes
 them to an unsubscribed SNS topic, exported as the `AuditDeliveryAlarmTopicArn`

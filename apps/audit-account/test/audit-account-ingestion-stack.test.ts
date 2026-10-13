@@ -95,6 +95,21 @@ describe('AuditAccountIngestionStack', () => {
     });
   });
 
+  it('deletes bounded recovery buffers with the event bus', () => {
+    const ingestionTemplate = createIngestionTemplate();
+
+    for (const resourceType of ['AWS::Events::Archive', 'AWS::SQS::Queue']) {
+      const resources = Object.values(ingestionTemplate.findResources(resourceType));
+      expect(resources).not.toHaveLength(0);
+      for (const resource of resources) {
+        expect(resource).toMatchObject({
+          DeletionPolicy: 'Delete',
+          UpdateReplacePolicy: 'Delete',
+        });
+      }
+    }
+  });
+
   it('provides an Athena workgroup with enforced managed results and a per-query scan cap', () => {
     const ingestionTemplate = createIngestionTemplate();
 

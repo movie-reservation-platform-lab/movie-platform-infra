@@ -18,6 +18,13 @@ accept the pinned source/detail/envelope contract and forward only the OCSF
 record at `$.detail.event`. Firehose converts records with a shared Glue schema
 and writes valid and quarantined records to separate prefixes.
 
+The archive and target DLQs are bounded operational recovery buffers rather
+than the retained audit store. Their removal policy is caller-configurable and
+defaults to deletion with the stack. A composing app that permits stack
+deletion must inspect or drain nonempty buffers first; retaining an archive
+while deleting its event bus leaves the archive's managed rule blocking bus
+deletion.
+
 Each account's resources live under the construct scope `Producer<accountId>`,
 so their CloudFormation logical IDs follow the account, not its position in the
 list: adding, removing, or reordering accounts never replaces another account's
