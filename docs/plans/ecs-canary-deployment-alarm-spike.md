@@ -1,6 +1,7 @@
 # Implementation Plan: ECS Canary Deployment Alarm Spike (S1)
 
-Status: **plan only, awaiting review.** Nothing in this plan authorizes an AWS
+Status: **plan only, awaiting review.** Consultation decisions from
+2026-10-16 are applied (see Decisions). Nothing in this plan authorizes an AWS
 mutation. Every live run in §6.4 needs its own operator approval when it runs.
 
 Issue: #100. Parent epic:
@@ -33,7 +34,7 @@ This plan defines a time-boxed, disposable spike that answers those questions
 with evidence. It adds a separate CDK application,
 `apps/ecs-canary-alarm-spike`, modelled on `apps/security-lake-firehose-spike`.
 The app has one Fargate service behind an ALB, configured for ECS-native
-canary, plus a small alarm set. A sequence of 11 targeted live runs (and one
+canary, plus a small alarm set. A sequence of 12 targeted live runs (and one
 optional run) varies the three rollback mechanisms one at a time:
 
 - CloudFormation stack rollback;
@@ -73,8 +74,11 @@ answer to the D4 question in §6.6.
 - Testing CodePipeline itself (parallel actions, stage conditions, event
   shapes). That is #101. This spike only records which deploy primitive the
   pipeline must call.
-- Service Connect traffic shifting, lifecycle hooks, test listeners, linear
-  and blue/green strategies. §5.3 explains why these are deferred.
+- Service Connect traffic shifting. AWS documents support for it, and live
+  verification moves to #103's first split PR, where service-to-service calls
+  exist (see Decisions).
+- Lifecycle hooks, test listeners, linear and blue/green strategies. They use
+  the same mechanism with different step shapes (Option G).
 - Polished dashboards or production-grade alarms.
 
 ## Current State
@@ -236,6 +240,7 @@ answer to the D4 question in §6.6.
 | H8 | An alarm in `INSUFFICIENT_DATA` at deployment start does not disable monitoring, and it halts the deployment if it later moves to `ALARM`. | R6b | §6.1 treats `INSUFFICIENT_DATA` as an error in blocking evaluations. ECS may treat it differently. |
 | H9 | A task crash during canary (tasks never become healthy) is caught by the circuit breaker before any production traffic shift. 5xx alarms never fire, because green receives no traffic. Without the circuit breaker, CloudFormation waits until the ECS stage timeout. | R8a, R8b | Shows whether #103 needs the circuit breaker or a task-health alarm as well as 5xx alarms. |
 | H10 | Time-to-detect for a real 5xx fault is dominated by the 60-second ALB metric resolution and the alarm's evaluation periods. The time from alarm to ECS halt is under one minute. | R2, R7, R7b | Sets the paging SLO and the canary bake length. |
+| H11 | After a freeze, a roll-forward (a new digest via `update-stack` from `UPDATE_FAILED`) is accepted and replaces the frozen deployment. Because the error alarm is still in `ALARM` at its start, ECS does **not** monitor alarms during the roll-forward. | R9 | Roll-forward is the human recovery path for completed releases and break-glass freezes. A fix that ships with no alarm safety net needs an explicit guard in #103/#101. |
 
 ### 2. Spike topology (`apps/ecs-canary-alarm-spike`)
 
@@ -447,10 +452,11 @@ starts an ECS deployment.
 | R5b | `revert` / **rollback enabled** | healthy digest change | Forced error-rate `ALARM`, canary step | H5: is CloudFormation's rollback benign after an ECS revert? Decides #101. | Automatic (observed) |
 | R6a | `halt`, bridge `breaching` / disable-rollback | healthy digest change | Bridge already `ALARM` at `T0` (no data, treated as breaching). Then force error-rate `ALARM` at the canary step. | H7: are **all** alarms ignored? | Per R3 if halted; none needed if the deployment completed |
 | R6b | `halt`, bridge `missing` / disable-rollback | healthy digest change | Bridge `INSUFFICIENT_DATA` at `T0`. At the canary step, publish `WatchVerdict=1` so the bridge moves to `ALARM`. | H8 | Per R3 |
-| R7 | profile chosen at the gate (§6.6 rule) / disable-rollback | known-good digest → `bad-5xx` | Real 5xx, steady probe | H10: real detect, react, exposure | Per the chosen profile |
+| R7 | `revert` (chosen Option A; confirmed at the gate per §6.6) / disable-rollback | known-good digest → `bad-5xx` | Real 5xx, steady probe | H10: real detect, react, exposure for the chosen behaviour | Reconcile the stack (per R4's finding) |
 | R7b (optional) | same as R7 | healthy digest change | `put-metric-data WatchVerdict=1` at the canary step | D8 end-to-end bridge latency with a 10s high-resolution alarm | Per profile |
 | R8a | `breaker` / disable-rollback | → `crash` | Task crash loop | H9 part 1: circuit-breaker time to `FAILED`, stack status, no traffic shift | Redeploy the last-known-good digest |
 | R8b | `halt` (no circuit breaker) / disable-rollback | → `crash` | Task crash loop, **time-boxed to 45 min** | H9 part 2: how long CloudFormation waits; the ECS lifecycle stage reached | `aws ecs stop-service-deployment --stop-type ROLLBACK`, then observe the stack. This is also the human-triggered in-flight revert for D4. |
+| R9 | `halt` (break-glass freeze) / disable-rollback | known-good → `bad-5xx`, then roll forward to a new healthy digest | Real 5xx. The frozen canary keeps the error-rate alarm genuinely in `ALARM`. | H11: is a roll-forward from `UPDATE_FAILED` plus a `FAILED` ECS deployment accepted? What happens to the frozen green and blue? Are alarms monitored during the roll-forward (expected: no)? | The roll-forward is the recovery: measure time to restore |
 
 Planned live time:
 
@@ -458,9 +464,9 @@ Planned live time:
   scale-up 2–3 min, canary step 5 min, bake 5 min, and a recovery deployment
   that itself runs through canary.
 - R8b is time-boxed to about 55 minutes.
-- **Total: about 6–7 hours over two sessions.**
+- **Total: about 7–8 hours over two sessions.**
   - Session A: R0–R5b.
-  - Session B: R6a–R8b.
+  - Session B: R6a–R9.
 - The stack is torn down between sessions unless the sessions are on the same
   day.
 
@@ -519,6 +525,7 @@ Abort if: stack not terminal after <N> min, unexpected resource in change set,
 | Are composite alarms accepted? | R0 (create-time validation), R4 (runtime monitoring) |
 | Alarm in `ALARM` or `INSUFFICIENT_DATA` at start | R6a, R6b |
 | `rollback-stack` versus redeploying the last-known-good digest | R2 vs R3 recovery: time to restore, extra ECS deployment, monitoring during recovery, final drift |
+| Does roll-forward work after a freeze, and is it monitored? | R9 |
 | Can the CodePipeline CloudFormation action be used? | R5b (is CloudFormation's own rollback benign?) plus the documented action options. Confirmed in #101. |
 
 #### 6.6 The D4 question: abandon in flight automatically, or freeze?
@@ -539,8 +546,19 @@ There are three options:
   approval, which contradicts the hands-off workload lane (D1). It is
   documented only and not tested.
 
-Before any evidence, the plan's position is to **recommend Option A, if R2
-shows that freeze leaves the bad revision serving traffic.** The argument:
+**Engineer direction (consultation, 2026-10-16): Option A, with a break-glass
+freeze.**
+
+- **In-flight canary:** ECS abandons it automatically. ECS alarm rollback is
+  `true`, and CloudFormation rollback stays disabled.
+- **Completed deployment:** nothing automatic. Humans decide, and the normal
+  recovery is a roll-forward PR through the pipeline.
+- **Break-glass:** a per-release opt-out that uses Option F (freeze) instead.
+  It is expected to map to the design's planned `rollbackSafe: false` release
+  flag, so a release that declares itself unsafe to abandon freezes instead.
+
+The spike now **confirms** this direction rather than choosing it. The
+argument for it:
 
 - During a canary, the blue revision has never stopped. It is serving 90% or
   more of traffic, and it is the last revision that passed bake.
@@ -554,12 +572,17 @@ shows that freeze leaves the bad revision serving traffic.** The argument:
 - Freezing keeps real users on a revision that is known to be bad, for as
   long as paging takes.
 
-Recommending Option A means narrowing D4 to "no automatic rollback after a
-deployment completes; ECS may abandon an in-flight canary". That decision is
-recorded in `movie-platform-environments` and needs the engineer's approval.
-The spike only supplies the evidence.
+- Freezing cannot undo damage that green has already done. It only lets that
+  damage keep growing until a human acts. Freezing is genuinely better only
+  when users are pinned to green, for example by sticky sessions. Routing here
+  is not sticky.
 
-The evidence decides as follows:
+Option A narrows D4 to "no automatic rollback after a deployment completes;
+ECS may abandon an in-flight canary; a release may opt into freeze". The
+evidence PR proposes that amendment in `movie-platform-environments`, where it
+is recorded.
+
+The evidence confirms or overturns the direction as follows:
 
 | Observation | Recommendation |
 |---|---|
@@ -569,8 +592,10 @@ The evidence decides as follows:
 | R5b: CloudFormation's own rollback after an ECS revert is a no-op or very fast | Option A also makes the CodePipeline CloudFormation action viable (#101) |
 | R3: an alarm during the post-shift bake with rollback `false` leaves 100% on bad green | Option A matters even more. Blue is still running during bake, so abandoning remains "in flight". |
 
-The profile for R7 is the option the evidence from R2–R5b favors. The
-operator confirms it at the R7 gate.
+R7 runs with the `revert` profile, which is the chosen Option A. If R2–R5b
+overturn the direction, the operator changes the profile at the R7 gate and
+the evidence records why. R9 exercises the break-glass freeze path and the
+roll-forward recovery it depends on.
 
 #### 6.7 Recommendations this spike must produce
 
@@ -622,8 +647,12 @@ For **#101** (deploy mechanism):
   Rejected.
 - **Option E: private subnets with VPC endpoints, or NAT, like the workload
   stack.** More faithful networking, but it adds roughly $0.05–0.10/h and more
-  resources without affecting deployment semantics. Rejected for the spike.
-  #103 still targets private subnets.
+  resources without affecting deployment semantics. A missing endpoint would
+  also make tasks fail to start, which looks exactly like a deployment failure
+  and would confound R8a/R8b. Rejected for the spike. Whether the platform's
+  private subnets use VPC endpoints only or a NAT gateway is a separate
+  decision for the L2 substrate issue. The deciding question there is whether
+  any service needs internet egress, for example an external LLM API.
 - **Option F: CloudFormation `RollbackConfiguration` triggers (stack-level
   monitored alarms).** These are automatic stack rollbacks by design, which
   contradicts D4. Documented only.
@@ -710,6 +739,33 @@ For **#101** (deploy mechanism):
 This PR adds only this plan and a README index entry. The steps below are the
 follow-up implementation PR, and then the separately approved live work.
 
+The follow-up implementation runs in **hybrid teaching mode**. The proposed
+ownership card is agreed before any code is written:
+
+```text
+Learning target: the ECS-native canary API in CDK, and what it synthesizes
+                 (deploymentStrategy, canaryConfiguration, bakeTime,
+                 deploymentAlarms, AlternateTarget + production listener rule)
+AI owns:         steps 1–3 and 5–7 (workspace, config boundary, repository
+                 stack, fixture image, probe/observer tools, runbook), the
+                 non-canary parts of step 4 (VPC, ALB, target groups, alarms,
+                 events rule), and the CDK assertion tests for step 4
+Engineer owns:   in step 4, the Fargate service's deployment wiring: the
+                 canary strategy and timings, deploymentAlarms per profile,
+                 and the AlternateTarget binding to the two target groups and
+                 the production listener rule. Plus a short teach-back mapping
+                 it to the synthesized AWS::ECS::Service properties.
+Done evidence:   the step 4 assertion tests pass for all three profiles;
+                 `npm run synth:ecs-canary-alarm-spike` succeeds; the
+                 engineer explains the synthesized DeploymentConfiguration
+                 and LoadBalancers.AdvancedConfiguration
+Support level:   guided (the engineer asks for hints when stuck)
+```
+
+The agent writes the step 4 assertion tests **before** the engineer's slice,
+so the engineer works against failing tests that describe the expected
+CloudFormation shape.
+
 1. **Workspace skeleton.**
    - Change: create `apps/ecs-canary-alarm-spike` with `package.json`
      (`@movie-platform/ecs-canary-alarm-spike`), `cdk.json`, `tsconfig.json`,
@@ -781,7 +837,7 @@ follow-up implementation PR, and then the separately approved live work.
    - Verification: `npm run ci` and a manual review of the synthesized
      template.
 9. **Live sessions (each run separately approved).** Session A covers
-   R0–R5b. Session B covers R6a–R8b. Teardown is approved separately.
+   R0–R5b. Session B covers R6a–R9. Teardown is approved separately.
 10. **Evidence PR.**
     - Change:
       - `docs/plans/evidence/ecs-canary-deployment-alarm-spike-<date>.md`,
@@ -820,19 +876,23 @@ follow-up implementation PR, and then the separately approved live work.
 | Private identifiers leak into the public evidence | Exposure | Low | Labels only, private raw directory, pre-commit grep for `arn:`, 12-digit numbers, and `amazonaws.com` |
 | Spike results get generalized to Service Connect east-west canary | A wrong #103 default | Medium | Mark it untested; #103's first split PR verifies it |
 
-## Open Questions
+## Decisions (consultation, 2026-10-16)
 
-1. **D4 scope.** Is a narrow amendment ("ECS may abandon an in-flight canary;
-   no automatic action after `COMPLETED`") open for decision if the evidence
-   supports it? Or is D4 fixed, which would make R4, R5b, and R7's profile
-   inputs to #101 only?
-2. **Service Connect.** Do we accept the documented support for canary over
-   Service Connect and defer live verification and proxy-overhead
-   measurement to #103's first split PR? Or should this spike add a run?
-3. **Network shape.** Are public subnets with public task IPs acceptable for
-   this spike (§2, Option E)?
-4. **Budget and sessions.** Is a $10 cap with two live sessions of about
-   3–4 hours each acceptable?
+1. **D4 direction: Option A with a break-glass freeze** (§6.6). ECS abandons
+   in-flight canaries, completed deployments are human-owned and rolled
+   forward, and a release can opt into freeze. The spike confirms the
+   direction, and the evidence PR proposes the D4 amendment in
+   `movie-platform-environments`.
+2. **Roll-forward is the primary human recovery.** Run R9 tests it after a
+   freeze while the alarm is still firing.
+3. **Network: public subnets for the spike only** (Option E). Endpoints versus
+   NAT for the platform goes to the L2 substrate issue.
+4. **Service Connect is deferred to #103.** There it is the engineer-owned,
+   hybrid-teaching slice: namespace, registration, and client configuration.
+   Canary behaviour over Service Connect is verified in the first split PR.
+5. **Budget: $10 cap, two live sessions.** Each run is approved separately.
+6. **Implementation in hybrid teaching mode.** The agent scaffolds, and the
+   engineer owns the core service construct (see Implementation Steps).
 
 ## Done Criteria
 
@@ -843,7 +903,7 @@ follow-up implementation PR, and then the separately approved live work.
 - [ ] The evidence file records, for each run: timings, the traffic split at
       halt, the ECS and CloudFormation state sequences, and the final digest
       read-back.
-- [ ] H1–H10 are each marked confirmed, refuted, or inconclusive, with
+- [ ] H1–H11 are each marked confirmed, refuted, or inconclusive, with
       evidence.
 - [ ] Teardown is verified and recorded. No `Spike=infra-100` resources
       remain.
@@ -856,7 +916,10 @@ follow-up implementation PR, and then the separately approved live work.
 
 ```text
 Implement steps 1–8 of docs/plans/ecs-canary-deployment-alarm-spike.md
-(offline only; no AWS calls, no deploy).
+(offline only; no AWS calls, no deploy) in hybrid teaching mode, using the
+ownership card in Implementation Steps. Do not write the engineer-owned
+deployment wiring in step 4; write its assertion tests first and stop for the
+engineer's attempt.
 
 Constraints:
 - Stay inside apps/ecs-canary-alarm-spike, scripts/ecs-canary-spike,
