@@ -11,6 +11,8 @@ describe('fixture image repository', () => {
       EmptyOnDelete: true,
     });
     template.hasResource('AWS::ECR::Repository', { DeletionPolicy: 'Delete' });
+    template.hasOutput('RepositoryUri', {});
+    template.hasOutput('RepositoryName', {});
   });
 });
 

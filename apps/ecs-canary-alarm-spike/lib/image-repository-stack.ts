@@ -1,4 +1,4 @@
-import { RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import { CfnOutput, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import type { Construct } from 'constructs';
 
@@ -21,5 +21,9 @@ export class EcsCanarySpikeImageRepositoryStack extends Stack {
       emptyOnDelete: true,
       removalPolicy: RemovalPolicy.DESTROY,
     });
+
+    // The runbook pushes fixture variants here before the service stack exists.
+    new CfnOutput(this, 'RepositoryUri', { value: this.repository.repositoryUri });
+    new CfnOutput(this, 'RepositoryName', { value: this.repository.repositoryName });
   }
 }

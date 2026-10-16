@@ -169,6 +169,9 @@ jobs:
       - name: Validate integrated-demo smoke tooling
         run: npm run validate:integrated-demo-smoke
 
+      - name: Validate ECS canary spike probe and observer tools
+        run: npm run validate:ecs-canary-spike-tools
+
       - name: Validate Grafana dashboard
         run: npm run validate:grafana-dashboard
 

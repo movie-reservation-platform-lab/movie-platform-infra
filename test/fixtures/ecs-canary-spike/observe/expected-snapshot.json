@@ -1,0 +1,29 @@
+{
+  "observedAt": "2026-10-16T12:00:00.000Z",
+  "service": {
+    "status": "ACTIVE", "desiredCount": 1, "runningCount": 2, "pendingCount": 0,
+    "deployments": [
+      {"status": "PRIMARY", "rolloutState": "IN_PROGRESS", "rolloutStateReason": "ECS deployment ecs-svc/2 in progress.",
+       "taskDefinition": "arn:aws:ecs:eu-central-1:111111111111:task-definition/spike:3", "runningCount": 1, "failedTasks": 0},
+      {"status": "ACTIVE", "rolloutState": "COMPLETED", "rolloutStateReason": "ECS deployment ecs-svc/1 completed.",
+       "taskDefinition": "arn:aws:ecs:eu-central-1:111111111111:task-definition/spike:2", "runningCount": 1, "failedTasks": 0}
+    ]
+  },
+  "serviceDeployments": [
+    {"arn": "arn:aws:ecs:eu-central-1:111111111111:service-deployment/c/s/abc", "status": "IN_PROGRESS", "statusReason": null,
+     "lifecycleStage": "PRODUCTION_TRAFFIC_SHIFT", "targetRevision": "arn:aws:ecs:eu-central-1:111111111111:service-revision/c/s/3",
+     "rollback": null, "circuitBreaker": {"status": "DISABLED"},
+     "alarms": {"status": "MONITORING", "alarmNames": ["EcsCanarySpike-ErrorRate"]}}
+  ],
+  "ruleWeights": [
+    {"targetGroupArn": "arn:aws:elasticloadbalancing:eu-central-1:111111111111:targetgroup/blue/1", "weight": 90},
+    {"targetGroupArn": "arn:aws:elasticloadbalancing:eu-central-1:111111111111:targetgroup/green/2", "weight": 10}
+  ],
+  "healthyTargets": {"blue": 1, "green": 1},
+  "stackStatus": "UPDATE_IN_PROGRESS",
+  "recentStackEvents": [
+    {"id": "e2", "time": "2026-10-16T11:59:50Z", "resource": "Service", "status": "UPDATE_IN_PROGRESS", "reason": null},
+    {"id": "e1", "time": "2026-10-16T11:59:40Z", "resource": "EcsCanarySpikeServiceStack", "status": "UPDATE_IN_PROGRESS", "reason": "User Initiated"}
+  ],
+  "alarms": {"EcsCanarySpike-ErrorRate": "OK", "EcsCanarySpike-WatchVerdict": "INSUFFICIENT_DATA", "EcsCanarySpike-Rollback": "OK"}
+}

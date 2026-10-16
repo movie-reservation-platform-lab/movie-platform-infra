@@ -1,0 +1,5 @@
+{"services":[{"serviceName":"spike","status":"ACTIVE","desiredCount":1,"runningCount":2,"pendingCount":0,
+"deployments":[
+ {"id":"ecs-svc/2","status":"PRIMARY","taskDefinition":"arn:aws:ecs:eu-central-1:111111111111:task-definition/spike:3","runningCount":1,"failedTasks":0,"rolloutState":"IN_PROGRESS","rolloutStateReason":"ECS deployment ecs-svc/2 in progress."},
+ {"id":"ecs-svc/1","status":"ACTIVE","taskDefinition":"arn:aws:ecs:eu-central-1:111111111111:task-definition/spike:2","runningCount":1,"failedTasks":0,"rolloutState":"COMPLETED","rolloutStateReason":"ECS deployment ecs-svc/1 completed."}
+]}]}
