@@ -12,6 +12,8 @@ package.
 Current composition roots:
 
 - `legacy-audit-demo`: the existing custom S3/Athena audit lake;
-- `audit-account`: the stable dedicated audit-account boundary; and
+- `audit-account`: the stable dedicated audit-account boundary;
 - `security-lake-firehose-spike`: a disposable feasibility checkpoint for
-  Firehose conversion and Security Lake custom-source delivery.
+  Firehose conversion and Security Lake custom-source delivery; and
+- `ecs-canary-alarm-spike`: a disposable experiment for ECS-native canary
+  halt semantics under CloudFormation (#100).
