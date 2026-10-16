@@ -1,4 +1,4 @@
-import { CfnOutput, CfnParameter, Duration, Fn, RemovalPolicy, Stack, Tags, type StackProps } from 'aws-cdk-lib';
+import { Annotations, CfnOutput, CfnParameter, Duration, Fn, RemovalPolicy, Stack, Tags, type StackProps } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import type * as ecr from 'aws-cdk-lib/aws-ecr';
@@ -152,6 +152,22 @@ export class EcsCanarySpikeServiceStack extends Stack {
       greenTargetGroup,
       productionListenerRule,
     });
+
+    // Strong cross-stack references are intended: CloudFormation then refuses
+    // to delete the image repository while this stack still uses it, which
+    // enforces the teardown order (service stack first).
+    Annotations.of(this).acknowledgeWarning(
+      '@aws-cdk/core:crossStackReferencesDefaultStrong',
+      'Strong reference protects the fixture repository until the service stack is deleted.',
+    );
+    if (config.profile !== 'breaker') {
+      // halt and revert run without the circuit breaker on purpose: run R8b
+      // measures how long a never-stabilizing deployment holds CloudFormation.
+      Annotations.of(service).acknowledgeWarning(
+        '@aws-cdk/aws-ecs:shouldUseCircuitBreaker',
+        'Spike profiles halt/revert omit the circuit breaker deliberately (run R8b).',
+      );
+    }
 
     // ECS's own deployment events give authoritative timestamps for each run.
     const ecsEventsLogGroup = new logs.LogGroup(this, 'EcsEventsLogGroup', {
