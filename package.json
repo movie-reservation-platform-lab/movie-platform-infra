@@ -104,7 +104,7 @@
     "@aws-sdk/client-sqs": "^3.1149.0",
     "@aws-sdk/client-sts": "^3.1116.0",
     "@aws-sdk/credential-providers": "^3.1116.0",
-    "aws-cdk-lib": "^2.244.0",
+    "aws-cdk-lib": "^2.273.0",
     "constructs": "^10.5.1"
   }
 }

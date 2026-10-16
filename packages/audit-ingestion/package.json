@@ -18,7 +18,7 @@
     "test": "jest --config jest.config.cjs --runInBand"
   },
   "dependencies": {
-    "aws-cdk-lib": "^2.244.0",
+    "aws-cdk-lib": "^2.273.0",
     "constructs": "^10.5.1"
   }
 }
