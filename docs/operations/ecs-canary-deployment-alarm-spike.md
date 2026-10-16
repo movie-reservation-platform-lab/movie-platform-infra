@@ -17,7 +17,7 @@ over to a re-run, a changed profile, or teardown.
 
 | Item | Value |
 |---|---|
-| Account | Development workload account (`movie-platform-demo` SSO profile) |
+| Account | Development workload member account (`movie-platform-workload-development` SSO profile). Not the management account behind `movie-platform-demo`. |
 | Region | `eu-central-1` |
 | Stacks | `EcsCanarySpikeImageRepositoryStack`, `EcsCanarySpikeServiceStack` |
 | Tags | `Spike=infra-100`, `Lifecycle=disposable`, `ExpiresOn=<date>` |
@@ -54,9 +54,12 @@ The `AWS::ECS::Service` must have:
 ## Session setup
 
 ```bash
-aws sso login --profile movie-platform-demo
-export AWS_PROFILE=movie-platform-demo
+aws sso login --profile movie-platform-workload-development
+export AWS_PROFILE=movie-platform-workload-development
 export AWS_REGION=eu-central-1
+# The preflight defaults to the management-account target file. Point it at
+# the private workload-development target instead.
+export MOVIE_PLATFORM_AWS_TARGET_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/movie-platform/workload-development-aws-target.json"
 export ALLOWED_INGRESS_PREFIX_LIST_ID='<pl-…>'   # existing operator prefix list
 export SPIKE_EXPIRES_ON='<YYYY-MM-DD>'          # teardown deadline for the tag
 export EVIDENCE_DIR="$PWD/.local/ecs-canary-spike/$(date +%F)"
@@ -64,8 +67,30 @@ mkdir -p "$EVIDENCE_DIR"
 npm run preflight:aws
 ```
 
-The preflight must pass before every group of mutations. Also check that the
-VPC quota leaves room for one more VPC (the default is 5 per Region):
+The preflight must pass before every group of mutations, and it must report
+the workload-development account. If it validates against the management
+account, stop: `MOVIE_PLATFORM_AWS_TARGET_FILE` is not set in this terminal.
+
+The spike deploys with CDK, so the account needs a CDK bootstrap in
+`eu-central-1`. Check it read-only; if it is missing, stop and ask, because
+bootstrapping is outside the spike's approval:
+
+```bash
+aws cloudformation describe-stacks --stack-name CDKToolkit \
+  --query 'Stacks[0].StackStatus' --output text
+```
+
+Managed prefix lists belong to one account. Confirm the operator prefix
+list exists in this account and contains your current IP:
+
+```bash
+aws ec2 get-managed-prefix-list-entries \
+  --prefix-list-id "$ALLOWED_INGRESS_PREFIX_LIST_ID" --output table
+curl -s https://checkip.amazonaws.com
+```
+
+Also check that the VPC quota leaves room for one more VPC (the default is
+5 per Region):
 
 ```bash
 aws ec2 describe-vpcs --query 'length(Vpcs)'
