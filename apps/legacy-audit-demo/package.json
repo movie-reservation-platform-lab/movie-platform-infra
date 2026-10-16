@@ -19,7 +19,7 @@
     "synth": "AWS_REGION=eu-central-1 CDK_DEFAULT_ACCOUNT=111111111111 CDK_DEFAULT_REGION=eu-central-1 npm run cdk -- synth AuditStack --no-lookups --output ../../cdk.out/audit"
   },
   "dependencies": {
-    "aws-cdk-lib": "^2.244.0",
+    "aws-cdk-lib": "^2.273.0",
     "constructs": "^10.5.1"
   }
 }
