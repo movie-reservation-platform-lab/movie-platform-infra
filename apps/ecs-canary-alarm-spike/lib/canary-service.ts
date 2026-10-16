@@ -83,6 +83,7 @@ export function createCanaryService(
       behavior: ALARM_BEHAVIOR[props.profile],
     },
     circuitBreaker,
+    minHealthyPercent: 100,
   });
 
   const target = service.loadBalancerTarget({
