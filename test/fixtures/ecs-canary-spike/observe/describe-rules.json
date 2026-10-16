@@ -1,0 +1,3 @@
+{"Rules":[{"RuleArn":"arn:aws:elasticloadbalancing:eu-central-1:111111111111:listener-rule/app/x/y/z/r","Priority":"10","Actions":[{"Type":"forward","ForwardConfig":{"TargetGroups":[
+ {"TargetGroupArn":"arn:aws:elasticloadbalancing:eu-central-1:111111111111:targetgroup/blue/1","Weight":90},
+ {"TargetGroupArn":"arn:aws:elasticloadbalancing:eu-central-1:111111111111:targetgroup/green/2","Weight":10}]}}]}]}

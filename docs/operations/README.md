@@ -19,6 +19,9 @@ infrastructure repository. Alarm response runbooks for on-call live in
 - [Security Lake Firehose Feasibility](./security-lake-firehose-feasibility.md):
   offline verification, private custom-source handoff, live evidence, and
   teardown rules for the disposable ingestion checkpoint.
+- [ECS Canary Deployment Alarm Spike](./ecs-canary-deployment-alarm-spike.md):
+  separately approved live runs for issue #100's canary halt, rollback, and
+  roll-forward experiment, with instruments and verified teardown.
 - [Standalone-Account Identity Center And Grafana Access Bootstrap](./standalone-account-access-bootstrap.md):
   persistent Organization/Identity Center prerequisites, MFA-backed operator
   access, and the temporary-Admin-to-Editor Grafana workflow.

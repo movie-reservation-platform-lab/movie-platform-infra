@@ -124,6 +124,9 @@ jobs:
       - name: Run Security Lake audit-ingestion tests
         run: npm run test:cdk:security-lake-audit-ingestion
 
+      - name: Run ECS canary alarm spike tests
+        run: npm run test:cdk:ecs-canary-alarm-spike
+
   # Validates repository tooling that supports deployability and operations,
   # including image, smoke-test, metrics, and dashboard checks.
   tooling:
@@ -165,6 +168,9 @@ jobs:
 
       - name: Validate integrated-demo smoke tooling
         run: npm run validate:integrated-demo-smoke
+
+      - name: Validate ECS canary spike probe and observer tools
+        run: npm run validate:ecs-canary-spike-tools
 
       - name: Validate Grafana dashboard
         run: npm run validate:grafana-dashboard
@@ -212,6 +218,9 @@ jobs:
 
       - name: Synthesize Security Lake audit ingestion
         run: npm run synth:security-lake-audit-ingestion
+
+      - name: Synthesize ECS canary alarm spike
+        run: npm run synth:ecs-canary-alarm-spike
 
       - name: Synthesize independent observability foundation
         run: npm run synth:observability

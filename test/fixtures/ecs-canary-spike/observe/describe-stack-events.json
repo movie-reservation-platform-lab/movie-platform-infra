@@ -1,0 +1,1 @@
+{"StackEvents":[{"EventId":"e2","Timestamp":"2026-10-16T11:59:50Z","LogicalResourceId":"Service","ResourceStatus":"UPDATE_IN_PROGRESS"},{"EventId":"e1","Timestamp":"2026-10-16T11:59:40Z","LogicalResourceId":"EcsCanarySpikeServiceStack","ResourceStatus":"UPDATE_IN_PROGRESS","ResourceStatusReason":"User Initiated"}]}

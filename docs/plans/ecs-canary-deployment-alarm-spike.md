@@ -273,7 +273,7 @@ can be pushed before the service stack starts its first task.
 | Task security group | Ingress only from the ALB security group on the container port | No direct internet ingress to tasks. |
 | Execution role | CDK default, scoped to the spike repository and log group | Image pull and logs only. No task role, because the fixture calls no AWS APIs. |
 | Log group, 1-day retention, `DESTROY` | `logs.LogGroup` | Container logs. |
-| `ImageReference` parameter | `CfnParameter` with an `AllowedPattern` that requires `…@sha256:<64 hex>` | Mirrors the #103 "digest as a parameter" contract. Fault runs change only this value. |
+| `ImageDigest` parameter | `CfnParameter` with an `AllowedPattern` of exactly `sha256:<64 hex>`. The image URI is built from the spike repository plus this digest. | Mirrors the #103 "digest as a parameter" contract. Fault runs change only this value. A digest-only parameter cannot point at another registry, and it keeps registry hosts out of runbook commands. |
 | **Error-rate alarm** (the service-level alarm) | `cloudwatch.Alarm` on metric math `100 * HTTPCode_Target_5XX_Count / RequestCount`, at the **load balancer** level, 60s period, 1 of 1 datapoints, threshold 2%, missing data `notBreaching` | Detects the real fault. It is LB-level because the two target groups swap roles on every deployment: a per-target-group alarm would watch the wrong group half the time. That is a finding #103 must design for. |
 | **Watch-verdict bridge alarm** | `cloudwatch.Alarm` on custom metric `EcsCanarySpike/WatchVerdict`, **10s high-resolution** period, 1 of 1 datapoints, threshold ≥ 1. Missing-data treatment comes from context. | Models D8's bridge alarm. It is also a **sticky**, deterministic fault lever: the operator publishes `1` with `put-metric-data`. It is also the only way to hold an alarm in `ALARM` or `INSUFFICIENT_DATA` at deployment start (R6a/R6b). |
 | **Rollback composite** | `cloudwatch.CompositeAlarm`, `anyOf(errorRate, watchVerdict)` | Models the `{component}-rollback` composite from §6.1. |
@@ -383,7 +383,7 @@ Two read-only operator tools, plus AWS's own records:
   - the service's primary task definition and its container image;
   - `ecs describe-tasks`, for the **runtime `imageDigest`** of each running
     task;
-  - the stack's current `ImageReference` parameter.
+  - the stack's current `ImageDigest` parameter.
 
   Comparing these three shows drift between the template and the running
   revision.
@@ -502,7 +502,7 @@ R<n>":
 Run: R<n>   Profile: <…>   CFN mode: <…>
 Account/Region: development workload account (movie-platform-demo), eu-central-1
 Preflight: npm run preflight:aws -> <pass/fail>
-Change: ImageReference <label-from> -> <label-to>   Fault: <method, timing>
+Change: ImageDigest <label-from> -> <label-to>   Fault: <method, timing>
 Expected worst case: <e.g. 10% of probe traffic receives 5xx until T_halt>
 Abort if: stack not terminal after <N> min, unexpected resource in change set,
           spend > budget, preflight fails
@@ -615,6 +615,9 @@ For **#103** (construct defaults), each with its evidence run:
 - a task-health or circuit-breaker signal for crash faults that 5xx alarms
   cannot see (R8);
 - ECS infrastructure role scope;
+- listener-rule ownership: whether CloudFormation drift detection flags the
+  production rule after ECS rewrites its weights (R1), and which rule
+  properties later stack updates must leave alone;
 - the stack update primitive and its disable-rollback flag;
 - the expected deployment duration and CloudFormation timeout;
 - a recovery runbook primitive: `rollback-stack` versus a last-known-good
@@ -800,7 +803,7 @@ CloudFormation shape.
      - ALB security group ingress only from the prefix list, and task
        security group ingress only from the ALB security group;
      - no NAT gateway;
-     - the `ImageReference` parameter `AllowedPattern` accepts a digest and
+     - the `ImageDigest` parameter `AllowedPattern` accepts a digest and
        rejects a tag (run the regex in the test);
      - error-rate metric math at LB level, the bridge alarm's 10s period and
        the `TreatMissingData` value from context, and the composite
