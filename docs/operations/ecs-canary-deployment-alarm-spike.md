@@ -315,6 +315,24 @@ variant is the next healthy change.
 | R8b | `halt` | disable | → `crash` | Task crash loop, **45 min time box** | `stop-service-deployment ROLLBACK`, then observe the stack | 60 min |
 | R9 | `halt` | disable | known-good → `bad-5xx`, wait for the freeze, then **roll forward** to the other good digest | Real 5xx keeps `ErrorRate` in `ALARM` | The roll-forward itself: are alarms monitored during it? | 60 min |
 
+**R1 extra observation (listener-rule ownership).** After the control
+deployment completes, record the live rule action and CloudFormation drift.
+ECS rewrites the production rule's forward weights during each deployment,
+so the template's "forward to blue" is expected to differ from the live
+rule. The rule's drift status is a construct note for #103.
+
+```bash
+rule_arn="$(stack_output "$SERVICE_STACK" ProductionListenerRuleArn)"
+aws elbv2 describe-rules --rule-arns "$rule_arn" --query 'Rules[0].Actions'
+drift_id="$(aws cloudformation detect-stack-drift --stack-name "$SERVICE_STACK" \
+  --query StackDriftDetectionId --output text)"
+sleep 30
+aws cloudformation describe-stack-drift-detection-status --stack-drift-detection-id "$drift_id"
+aws cloudformation describe-stack-resource-drifts --stack-name "$SERVICE_STACK" \
+  --stack-resource-drift-status-filters MODIFIED \
+  --query 'StackResourceDrifts[].{resource: LogicalResourceId, differences: PropertyDifferences}'
+```
+
 After R6a and R6b, redeploy with `bridgeMissingData=notBreaching`. After R7,
 R8a, R8b, and R9, confirm that the probe shows only the known-good variant
 before the next run.

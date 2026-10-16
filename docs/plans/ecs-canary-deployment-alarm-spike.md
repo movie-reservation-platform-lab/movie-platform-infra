@@ -615,6 +615,9 @@ For **#103** (construct defaults), each with its evidence run:
 - a task-health or circuit-breaker signal for crash faults that 5xx alarms
   cannot see (R8);
 - ECS infrastructure role scope;
+- listener-rule ownership: whether CloudFormation drift detection flags the
+  production rule after ECS rewrites its weights (R1), and which rule
+  properties later stack updates must leave alone;
 - the stack update primitive and its disable-rollback flag;
 - the expected deployment duration and CloudFormation timeout;
 - a recovery runbook primitive: `rollback-stack` versus a last-known-good
