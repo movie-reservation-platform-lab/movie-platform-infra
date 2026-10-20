@@ -82,9 +82,12 @@ Unit tests, CDK assertions, synth contracts, script checks, and smoke tests.
 ## Current Review Work
 
 - [ECS canary deployment alarm spike (S1)](./ecs-canary-deployment-alarm-spike.md):
-  disposable experiment for ECS-native canary halt semantics under
-  CloudFormation, deployment alarms, and the circuit breaker; feeds #103 and
-  #101. Live results (partial):
+  completed disposable experiment for ECS-native canary halt/revert semantics,
+  alarm state at release start, and CloudFormation/ECS ownership. Evidence PR
+  [#118](https://github.com/movie-reservation-platform-lab/movie-platform-infra/pull/118)
+  is awaiting merge; all live resources are torn down. Continue with S2
+  ([#101](https://github.com/movie-reservation-platform-lab/movie-platform-infra/issues/101));
+  the reusable construct and deferred lifecycle-hook work are #103. Final
   [evidence](./evidence/ecs-canary-deployment-alarm-spike-2026-10.md).
 - [Reservation audit publish failure alarms](./reservation-audit-publish-failure-alarms.md):
   workload-account detection for primary audit publication failures, unaudited
