@@ -433,6 +433,12 @@ These combinations are deliberately skipped:
 
 #### 6.2 Run matrix
 
+> **Superseded in part (2026-10-20).** R1 showed that CloudFormation rejects
+> `--disable-rollback` for every image change, so the rows that rely on it
+> (R2–R4, R6, R8b, R9) cannot run as written. Sessions 1–2 ran R0, R1, R5a,
+> R5b, R7, and R8a ([evidence](./evidence/ecs-canary-deployment-alarm-spike-2026-10.md)).
+> The remaining questions move to the Session 3 matrix in §6.8.
+
 Each run starts from a stack in `UPDATE_COMPLETE` or `CREATE_COMPLETE`,
 running a known-good digest, with all alarms `OK` (except in R6), and with the
 probe and observer running. Reconfiguration steps (`cdk deploy`, healthy
@@ -631,6 +637,75 @@ For **#101** (deploy mechanism):
 - otherwise, the exact CodeBuild command: `aws cloudformation deploy …
   --disable-rollback` or `update-stack … --disable-rollback`, and the stack
   status the action must treat as failure.
+
+#### 6.8 Session 3 re-plan (2026-10-20)
+
+The consultation of 2026-10-20 (see Decisions) moves image releases out of
+CloudFormation. Session 3 tests that model and the alarm-state questions the
+first matrix could not reach.
+
+**Release model under test ("pattern 2").**
+
+- **Infrastructure** (VPC, ALB, alarms, service shell, the *recipe* task
+  definition) stays in CDK/CloudFormation.
+- **Releases** go through ECS directly, as three steps:
+  1. *render*: take the recipe task definition (the latest one CloudFormation
+     created) and swap in the new image digest;
+  2. *register* it;
+  3. *deploy* it with `update-service`, setting the alarm behaviour for this
+     release: `revert` by default, or `halt` for a release flagged as not
+     rollback-safe.
+- **Infra deploys carry the running revision forward.** The service stack gets
+  an `ActiveTaskDefinitionArn` parameter. When it is set, the service points
+  at that revision instead of the recipe. An infra-deploy wrapper reads the
+  running task definition ARN from ECS and passes it in, and refuses to
+  deploy if it cannot. Raw `cdk deploy` of the service stack is not used.
+- **A recipe change triggers a release of the current image.** When an infra
+  deploy changes the recipe (CPU, memory, environment), the wrapper calls the
+  release step with the running digest, so the change rolls out at once
+  through the same canary, alarms, and revert. Infra deploys that leave the
+  recipe unchanged start no release.
+
+**Hypotheses.**
+
+| ID | Hypothesis | Run |
+|---|---|---|
+| H12 | A release through `update-service` with alarm rollback off (`halt`) stops on alarm and **stays** at the canary split: nothing reverts it, and the stack stays `UPDATE_COMPLETE`. | R5c-1 |
+| H13 | A roll-forward release started while a deployment alarm is still `ALARM` is accepted, but ECS does not monitor its alarms (H7/H11 in the new model). | R5c-2 |
+| H14 | An infra deploy through the wrapper (running task definition ARN passed in) changes the service stack without starting an ECS deployment and without changing the running image; when the recipe changes, the wrapper's follow-up release rolls it out with the running image. | R5c-3 |
+| H7 | A deployment alarm already in `ALARM` at release start disables all alarm monitoring for that release. | R6a |
+| H8 | An alarm in `INSUFFICIENT_DATA` at release start does not disable monitoring, and later halts the release when it moves to `ALARM`. | R6b |
+| H15 | A lifecycle hook at `POST_TEST_TRAFFIC_SHIFT` that returns `FAILED` stops the release before any production traffic reaches the new revision. | R10 (optional) |
+
+**Matrix.** All releases go through the release script; every run starts with
+all alarms `OK` except where stated, and with the probe and observer running.
+
+| Run | Setup | Release | Fault (when) | Observe | Recovery |
+|---|---|---|---|---|---|
+| R0b | Redeploy the service stack with the Session 3 template (`revert` default) and `good-1` | — | — | Stack and service healthy | — |
+| R5c-1 | — | `good-1` → `good-2`, `halt` | Sticky bridge loop (`WatchVerdict` = 1) at the canary step | Deployment `STOPPED`; weights stay 90/10 for 10 min; stack untouched | Continue in R5c-2 |
+| R5c-2 | Bridge loop still running (alarm `ALARM`) | Roll forward: → `good-1`, `revert` | — | Accepted? Alarms monitored (`alarms.status`)? Weights converge? | Stop the loop; verify `OK` |
+| R5c-3 | After R5c-2 | Infra deploy through the wrapper: first a non-recipe change (a tag), then a recipe change (an environment variable) | — | Tag: no ECS deployment, digest unchanged. Recipe: one release of the running digest with the new recipe | — |
+| R6a | `bridgeMissingData=breaching` via the wrapper; `WatchVerdict` `ALARM` (no data) | → other good, `revert` | Force `ErrorRate` at the canary step | Does ECS react at all? | Wrapper deploy back to `notBreaching` |
+| R6b | `bridgeMissingData=missing`; `WatchVerdict` `INSUFFICIENT_DATA` | → other good, `revert` | Sticky bridge loop at the canary step | Does ECS react? | Per profile |
+| R10 (optional) | Test listener and a `POST_TEST_TRAFFIC_SHIFT` Lambda hook | → `bad-5xx`, `revert` | The smoke runner hits the test listener and publishes a verdict | Release stops before production traffic; zero user errors | — |
+
+**R10 hook design.** The hook Lambda does not make HTTP calls: the ALB only
+admits the operator prefix list, and the spike has no NAT. Instead it waits for
+a verdict. A smoke runner (the operator's machine in the spike; a platform job
+later) calls the test listener, compares answers with expectations, and
+publishes the verdict as a metric. The hook returns `IN_PROGRESS` until a
+verdict arrives, then `SUCCEEDED` or `FAILED`. This mirrors the release
+verification building block: the platform owns the hook, the team owns the
+checks. If the hook costs more than a session to build, R10 moves to #103.
+
+**Dropped, with reasons.** R2, R3, R4, R9: built on CloudFormation rollback
+disabled and superseded by R5c. R8b: the circuit breaker is always on (R8a).
+R7b: optional and not needed.
+
+**Safety.** Each run is still a separate approval. The release script and the
+wrapper are the only mutating paths; teardown expects one target-group
+`DELETE_FAILED` and a retry.
 
 ## Alternatives Considered
 
@@ -899,17 +974,57 @@ CloudFormation shape.
 6. **Implementation in hybrid teaching mode.** The agent scaffolds, and the
    engineer owns the core service construct (see Implementation Steps).
 
+## Decisions (consultation, 2026-10-20)
+
+Taken after Sessions 1–2; see the
+[evidence](./evidence/ecs-canary-deployment-alarm-spike-2026-10.md).
+
+1. **Releases go through ECS directly; infrastructure stays in
+   CDK/CloudFormation** ("infra in IaC, releases through the platform").
+   Under CloudFormation-managed image deploys, `halt` cannot stay frozen
+   (CloudFormation reverts after about a minute, as a full canary), and
+   `--disable-rollback` is rejected for image changes.
+   - In-flight failure: `revert` by default; `halt` (freeze) for a release
+     flagged as not rollback-safe, chosen per release.
+   - After completion: no automatic rollback; a human rolls forward.
+   - Every release must run side by side with the previous one (N-1);
+     schema changes use expand/contract.
+   - This narrows decisions 1 and 2 of 2026-10-16: the freeze stays as a
+     per-release option and becomes a real freeze.
+2. **The infrastructure owns the task definition (the recipe); a release
+   swaps only the image.** The release pipeline is built as
+   *render → register → deploy*, so app-owned task definitions (an app spec
+   plus platform rules) can come later by replacing only *render*. The
+   direction is a team-owned slice of runtime configuration in the service
+   repository, like a Helm chart next to the code, checked against platform
+   rules.
+3. **Infra deploys carry the running revision forward** through a wrapper
+   that passes the running task definition ARN and refuses to deploy without
+   it. Raw `cdk deploy` of service stacks is blocked. Releases render from the
+   recipe, and an infra deploy that changes the recipe triggers a release of
+   the running image, so every change to what runs (image or recipe) rolls
+   out at once through the same safe path, as a Kubernetes spec change does.
+4. **Release verification is a platform building block.** The platform owns
+   the stages (pre-traffic hook, synthetic load during the canary, the
+   rollback composite, a pre-release gate that refuses to start unless every
+   rollback alarm is `OK`, and `revert`/`halt`). Teams configure smoke checks,
+   load profiles, and extra rollback alarms, with platform defaults. Fast
+   per-revision application metrics (10 s, through OpenTelemetry) are the
+   detection path; v1 is default smoke checks, baseline alarms, and the gate.
+5. **Session 3 scope:** R5c-1/2/3, R6a, R6b, and R10 if cheap (§6.8). R2–R4,
+   R8b, and R9 are dropped.
+
 ## Done Criteria
 
 - [ ] The implementation PR merges, with the spike app, tests, offline synth
       in CI, tools with self-tests, and the runbook.
-- [ ] Every run in §6.2 (except optional R7b) is executed with its own
-      approval, or explicitly skipped with a reason.
+- [ ] Every run in §6.2 and §6.8 is executed with its own approval, or
+      explicitly skipped with a reason.
 - [ ] The evidence file records, for each run: timings, the traffic split at
       halt, the ECS and CloudFormation state sequences, and the final digest
       read-back.
-- [ ] H1–H11 are each marked confirmed, refuted, or inconclusive, with
-      evidence.
+- [ ] H1–H15 are each marked confirmed, refuted, inconclusive, or not run
+      (with the reason), with evidence.
 - [ ] Teardown is verified and recorded. No `Spike=infra-100` resources
       remain.
 - [ ] #100 has a summary comment. #103 and #101 have the §6.7
