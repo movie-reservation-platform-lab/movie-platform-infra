@@ -1041,17 +1041,18 @@ Taken after Sessions 1–2; see the
 
 ## Done Criteria
 
-- [ ] The implementation PR merges, with the spike app, tests, offline synth
+- [x] The implementation PR merges, with the spike app, tests, offline synth
       in CI, tools with self-tests, and the runbook.
-- [ ] Every run in §6.2 and §6.8 is executed with its own approval, or
+- [x] Every run in §6.2 and §6.8 is executed with its own approval, or
       explicitly skipped with a reason.
-- [ ] The evidence file records, for each run: timings, the traffic split at
+- [x] The evidence file records, for each run: timings, the traffic split at
       halt, the ECS and CloudFormation state sequences, and the final digest
       read-back.
-- [ ] H1–H16 are each marked confirmed, refuted, inconclusive, or not run
+- [x] H1–H16 are each marked confirmed, refuted, inconclusive, or not run
       (with the reason), with evidence.
-- [ ] Teardown is verified and recorded. No `Spike=infra-100` resources
-      remain.
+- [x] Teardown is verified and recorded. No runnable or billable
+      `Spike=infra-100` resources remain; retained ECS records are explicitly
+      `INACTIVE` or `DELETE_IN_PROGRESS`.
 - [ ] #100 has a summary comment. #103 and #101 have the §6.7
       recommendations.
 - [ ] The D4 recommendation (§6.6) is raised in `movie-platform-environments`

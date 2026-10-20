@@ -502,15 +502,25 @@ CloudFormation itself during the stack update.
 
 ### R5c-4: a failed infra deploy after releases (H16)
 
-Precondition: the deployed template names an older revision than the one
-running. That is true right after R5c-3, because its recipe release ran after
-the stack update. Check it:
+Precondition: the deployed template names an older **image** than the one
+running. Right after R5c-3 the revision is older, but both revisions use the
+same image because the recipe release preserved the running digest. First
+release the other good digest and wait for `steady=true`; do not run another
+infra deploy, because the template must stay stale. Then check it:
+
+```bash
+spike_release <other good digest> revert
+spike_status
+```
+
+The running image must now differ from the revision named by the deployed
+template:
 
 ```bash
 spike_status    # note the running revision, e.g. <family>:5
 aws cloudformation get-template --stack-name "$SERVICE_STACK" --query TemplateBody --output json \
   | jq -r '.Resources[] | select(.Type == "AWS::ECS::Service") | .Properties.TaskDefinition'
-# expect an older revision than spike_status shows
+# expect an older revision with the other good image
 ```
 
 **R5c-4a, without the sync phase (shows the hole):**
@@ -627,7 +637,7 @@ for stack in "$SERVICE_STACK" "$REPOSITORY_STACK"; do
     && echo "$stack deleted" || echo "$stack STILL PRESENT"
 done
 aws resourcegroupstaggingapi get-resources --tag-filters Key=Spike,Values=infra-100 \
-  --query 'ResourceTagMappingList[].ResourceARN'   # expect [] (allow a few minutes)
+  --query 'ResourceTagMappingList[].ResourceARN'
 aws cloudwatch describe-alarms --alarm-name-prefix EcsCanarySpike \
   --alarm-types MetricAlarm CompositeAlarm --query '[MetricAlarms, CompositeAlarms][] | length(@)'
 aws ecs list-clusters --query 'clusterArns' | grep -i spike || echo 'no spike cluster'
@@ -652,6 +662,17 @@ done
 
 Deregistered revisions otherwise remain `INACTIVE`, at no cost. Remove the
 local images with `docker rmi`.
+
+The tagging query may continue to return ECS control-plane records after the
+live resources are gone. Confirm every returned task definition is
+`DELETE_IN_PROGRESS` and every returned cluster or service is `INACTIVE`.
+[AWS periodically purges task-definition records](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-definition-state.html):
+deletion can take up to 24 hours after a service deployment or task set is
+deleted. [Deleted clusters](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_DeleteCluster.html)
+can remain discoverable as `INACTIVE` for an unspecified period. The strict
+teardown boundary is therefore zero running or billable resources, zero active
+task definitions, and only those terminal or deleting ECS records in the tag
+result.
 
 Record the redacted verification output in the evidence file.
 
