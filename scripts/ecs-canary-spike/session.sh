@@ -93,6 +93,42 @@ spike_update_digest() {
     "$@"
 }
 
+# Session 3 ("pattern 2"): releases go through ECS, infra through the wrapper.
+#   spike_release "$DIGEST_GOOD_2" revert            # or halt
+#   spike_release "$DIGEST_GOOD_1" revert --skip-alarm-gate   # R5c-2, R6a, R6b only
+#   spike_release "$DIGEST_GOOD_2" revert --dry-run  # show, change nothing
+spike_release() {
+  local digest="$1" mode="$2"
+  if [ $# -lt 2 ]; then
+    echo "usage: spike_release <sha256:...> <revert|halt> [--dry-run] [--skip-alarm-gate]" >&2
+    return 2
+  fi
+  shift 2
+  marker "release request $(spike_digest_label "$digest") mode=${mode} $*"
+  "${SPIKE_REPO_ROOT}/scripts/ecs-canary-spike/release.sh" release --stack "$SERVICE_STACK" \
+    --digest "$digest" --mode "$mode" "$@"
+}
+
+# Infra deploys always carry the running revision. The context comes from
+# these variables, so every deploy in a session repeats the same values and a
+# forgotten flag cannot silently change the recipe:
+#   SPIKE_PROFILE (revert), SPIKE_BRIDGE_MISSING_DATA (notBreaching),
+#   SPIKE_INFRA_REVISION (1), SPIKE_RECIPE_REVISION (1),
+#   SPIKE_FAIL_INFRA_DEPLOY (false; true only for run R5c-4)
+# Examples (do not pass `--`; the helper adds it):
+#   spike_infra_deploy diff
+#   spike_infra_deploy deploy
+#   spike_infra_deploy deploy --no-sync     # run R5c-4a only
+#   spike_infra_deploy bootstrap --digest "$DIGEST_GOOD_1"
+spike_infra_deploy() {
+  "${SPIKE_REPO_ROOT}/scripts/ecs-canary-spike/infra-deploy.sh" "$@" -- \
+    -c spikeProfile="${SPIKE_PROFILE:-revert}" \
+    -c bridgeMissingData="${SPIKE_BRIDGE_MISSING_DATA:-notBreaching}" \
+    -c infraRevision="${SPIKE_INFRA_REVISION:-1}" \
+    -c recipeRevision="${SPIKE_RECIPE_REVISION:-1}" \
+    -c failInfraDeploy="${SPIKE_FAIL_INFRA_DEPLOY:-false}"
+}
+
 # good-1 / good-2 / bad-5xx / crash for a digest.
 spike_digest_label() {
   case "$1" in
@@ -131,7 +167,7 @@ spike_observe() {
 
 # Read-only one-screen status.
 spike_status() {
-  local stack stack_status digest
+  local stack stack_status digest running
   echo "evidence: ${EVIDENCE_DIR}"
   for stack in "$REPOSITORY_STACK" "$SERVICE_STACK"; do
     stack_status="$(aws cloudformation describe-stacks --stack-name "$stack" \
@@ -142,7 +178,13 @@ spike_status() {
     --query "Stacks[0].Parameters[?ParameterKey=='ImageDigest'].ParameterValue | [0]" \
     --output text 2>/dev/null)"
   if [ -n "$digest" ]; then
-    echo "service digest parameter: $(spike_digest_label "$digest")"
+    echo "service digest parameter: $(spike_digest_label "$digest") (Session 3: the recipe only)"
+    running="$("${SPIKE_REPO_ROOT}/scripts/ecs-canary-spike/release.sh" running --stack "$SERVICE_STACK" 2>/dev/null)"
+    if [ -n "$running" ]; then
+      echo "running: $(printf '%s' "$running" | jq -r '.taskDefinitionArn | split("/")[1]')" \
+        "image $(spike_digest_label "$(printf '%s' "$running" | jq -r .digest)")" \
+        "steady=$(printf '%s' "$running" | jq -r .steady)"
+    fi
   fi
   aws cloudwatch describe-alarms --alarm-name-prefix EcsCanarySpike \
     --alarm-types MetricAlarm CompositeAlarm \

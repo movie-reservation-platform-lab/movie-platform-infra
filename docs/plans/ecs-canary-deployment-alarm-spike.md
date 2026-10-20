@@ -655,11 +655,12 @@ first matrix could not reach.
   3. *deploy* it with `update-service`, setting the alarm behaviour for this
      release: `revert` by default, or `halt` for a release flagged as not
      rollback-safe.
-- **Infra deploys carry the running revision forward.** The service stack gets
-  an `ActiveTaskDefinitionArn` parameter. When it is set, the service points
-  at that revision instead of the recipe. An infra-deploy wrapper reads the
+- **Infra deploys carry the running revision forward.** The service stack
+  needs the running revision as `activeTaskDefinitionArn` context and points
+  the service at it instead of the recipe. An infra-deploy wrapper reads the
   running task definition ARN from ECS and passes it in, and refuses to
-  deploy if it cannot. Raw `cdk deploy` of the service stack is not used.
+  deploy if it cannot. A raw `cdk deploy` of the service stack fails
+  validation (see Tooling below).
 - **A recipe change triggers a release of the current image.** When an infra
   deploy changes the recipe (CPU, memory, environment), the wrapper calls the
   release step with the running digest, so the change rolls out at once
@@ -676,6 +677,7 @@ first matrix could not reach.
 | H7 | A deployment alarm already in `ALARM` at release start disables all alarm monitoring for that release. | R6a |
 | H8 | An alarm in `INSUFFICIENT_DATA` at release start does not disable monitoring, and later halts the release when it moves to `ALARM`. | R6b |
 | H15 | A lifecycle hook at `POST_TEST_TRAFFIC_SHIFT` that returns `FAILED` stops the release before any production traffic reaches the new revision. | R10 (optional) |
+| H16 | When releases happened since the last infra deploy, a failed infra deploy rolls the service back to the older revision named in the deployed template, and ECS deploys the older image; the wrapper's sync phase prevents it. | R5c-4a (hole), R5c-4b (fix) |
 
 **Matrix.** All releases go through the release script; every run starts with
 all alarms `OK` except where stated, and with the probe and observer running.
@@ -686,6 +688,8 @@ all alarms `OK` except where stated, and with the probe and observer running.
 | R5c-1 | — | `good-1` → `good-2`, `halt` | Sticky bridge loop (`WatchVerdict` = 1) at the canary step | Deployment `STOPPED`; weights stay 90/10 for 10 min; stack untouched | Continue in R5c-2 |
 | R5c-2 | Bridge loop still running (alarm `ALARM`) | Roll forward: → `good-1`, `revert` | — | Accepted? Alarms monitored (`alarms.status`)? Weights converge? | Stop the loop; verify `OK` |
 | R5c-3 | After R5c-2 | Infra deploy through the wrapper: first a non-recipe change (a tag), then a recipe change (an environment variable) | — | Tag: no ECS deployment, digest unchanged. Recipe: one release of the running digest with the new recipe | — |
+| R5c-4a | After R5c-3 (the deployed template names an older revision) | Wrapper deploy with `failInfraDeploy=true` and `--no-sync` | A wait condition fails after the service update | Does the rollback start an ECS deployment of the older image? | Roll forward with a release |
+| R5c-4b | One more release, so the template is stale again | Same, with the sync phase | Same | Sync: no ECS deployment. Rollback: the service stays on the running revision | — |
 | R6a | `bridgeMissingData=breaching` via the wrapper; `WatchVerdict` `ALARM` (no data) | → other good, `revert` | Force `ErrorRate` at the canary step | Does ECS react at all? | Wrapper deploy back to `notBreaching` |
 | R6b | `bridgeMissingData=missing`; `WatchVerdict` `INSUFFICIENT_DATA` | → other good, `revert` | Sticky bridge loop at the canary step | Does ECS react? | Per profile |
 | R10 (optional) | Test listener and a `POST_TEST_TRAFFIC_SHIFT` Lambda hook | → `bad-5xx`, `revert` | The smoke runner hits the test listener and publishes a verdict | Release stops before production traffic; zero user errors | — |
@@ -702,6 +706,27 @@ checks. If the hook costs more than a session to build, R10 moves to #103.
 **Dropped, with reasons.** R2, R3, R4, R9: built on CloudFormation rollback
 disabled and superseded by R5c. R8b: the circuit breaker is always on (R8a).
 R7b: optional and not needed.
+
+**Tooling.** `scripts/ecs-canary-spike/release.sh` (render → register →
+deploy, the pre-release gate, `--mode revert|halt`) and
+`scripts/ecs-canary-spike/infra-deploy.sh` (the wrapper). The running
+revision reaches the service stack as required synth-time context
+(`activeTaskDefinitionArn`), not as a parameter: `cdk deploy` reuses a
+parameter's previous value, so a raw deploy could silently point the service
+at an older revision, while missing context fails validation before AWS is
+called. The stack outputs `RecipeTaskDefinitionArn`. The `infraRevision`,
+`recipeRevision`, and `failInfraDeploy` context values give R5c-3 and R5c-4
+their changes. The runbook's Session 3 section has the commands.
+
+**Known gaps of this model, and their guards.** CloudFormation has no
+"ignore changes to this property" (Terraform's `ignore_changes`), so the
+service's task definition must be carried forward on every infra deploy:
+
+| Way an older image could return | Guard |
+|---|---|
+| A raw `cdk deploy` without the running revision | Required context; the stack fails validation. Later: only the pipeline role may deploy. |
+| A failed infra deploy rolls back to the revision in the last deployed template | The wrapper's sync phase first updates that template to the running revision (R5c-4). |
+| A release and an infra deploy overlap | Spike: one operator, one terminal. Platform: one lock (pipeline concurrency group) per service for releases and infra deploys. |
 
 **Safety.** Each run is still a separate approval. The release script and the
 wrapper are the only mutating paths; teardown expects one target-group
@@ -1011,7 +1036,7 @@ Taken after Sessions 1–2; see the
    load profiles, and extra rollback alarms, with platform defaults. Fast
    per-revision application metrics (10 s, through OpenTelemetry) are the
    detection path; v1 is default smoke checks, baseline alarms, and the gate.
-5. **Session 3 scope:** R5c-1/2/3, R6a, R6b, and R10 if cheap (§6.8). R2–R4,
+5. **Session 3 scope:** R5c-1/2/3/4, R6a, R6b, and R10 if cheap (§6.8). R2–R4,
    R8b, and R9 are dropped.
 
 ## Done Criteria
@@ -1023,7 +1048,7 @@ Taken after Sessions 1–2; see the
 - [ ] The evidence file records, for each run: timings, the traffic split at
       halt, the ECS and CloudFormation state sequences, and the final digest
       read-back.
-- [ ] H1–H15 are each marked confirmed, refuted, inconclusive, or not run
+- [ ] H1–H16 are each marked confirmed, refuted, inconclusive, or not run
       (with the reason), with evidence.
 - [ ] Teardown is verified and recorded. No `Spike=infra-100` resources
       remain.

@@ -1,0 +1,19 @@
+{
+  "services": [{
+    "serviceName": "SpikeService",
+    "taskDefinition": "arn:aws:ecs:eu-central-1:111111111111:task-definition/SpikeFamily:6",
+    "deploymentConfiguration": {
+      "deploymentCircuitBreaker": {"enable": false, "rollback": false},
+      "maximumPercent": 200,
+      "minimumHealthyPercent": 100,
+      "alarms": {"alarmNames": ["EcsCanarySpike-ErrorRate", "EcsCanarySpike-WatchVerdict", "EcsCanarySpike-Rollback"], "rollback": true, "enable": true},
+      "strategy": "CANARY",
+      "bakeTimeInMinutes": 5,
+      "canaryConfiguration": {"canaryPercent": 10.0, "canaryBakeTimeInMinutes": 5}
+    },
+    "deployments": [
+      {"status": "PRIMARY", "rolloutState": "COMPLETED", "taskDefinition": "arn:aws:ecs:eu-central-1:111111111111:task-definition/SpikeFamily:6"}
+    ]
+  }],
+  "failures": []
+}

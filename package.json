@@ -35,7 +35,7 @@
     "validate:xray-smoke": "bash -n scripts/xray-smoke.sh && bash scripts/xray-smoke.sh --self-test",
     "validate:managed-metrics-smoke": "bash -n scripts/managed-metrics-smoke.sh && bash scripts/managed-metrics-smoke.sh --self-test",
     "validate:integrated-demo-smoke": "bash -n scripts/integrated-demo-smoke.sh && bash scripts/integrated-demo-smoke.sh --self-test",
-    "validate:ecs-canary-spike-tools": "bash -n scripts/ecs-canary-spike/session.sh && bash -n scripts/ecs-canary-spike/probe.sh && bash -n scripts/ecs-canary-spike/observe.sh && bash scripts/ecs-canary-spike/probe.sh --self-test && bash scripts/ecs-canary-spike/observe.sh --self-test",
+    "validate:ecs-canary-spike-tools": "bash -n scripts/ecs-canary-spike/session.sh && bash -n scripts/ecs-canary-spike/probe.sh && bash -n scripts/ecs-canary-spike/observe.sh && bash -n scripts/ecs-canary-spike/release.sh && bash -n scripts/ecs-canary-spike/infra-deploy.sh && bash scripts/ecs-canary-spike/probe.sh --self-test && bash scripts/ecs-canary-spike/observe.sh --self-test && bash scripts/ecs-canary-spike/release.sh --self-test && bash scripts/ecs-canary-spike/infra-deploy.sh --self-test",
     "validate:grafana-dashboard": "bash -n scripts/validate-grafana-dashboard.sh && bash scripts/validate-grafana-dashboard.sh",
     "typecheck:automation": "npm run typecheck:aws-account-preflight && npm run typecheck:artifact-foundation-cleanup && npm run typecheck:artifact-copy && npm run typecheck:audit-transport-comparison",
     "typecheck:aws-account-preflight": "tsc --project packages/aws-account-preflight/tsconfig.json",

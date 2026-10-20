@@ -1,0 +1,3 @@
+EcsCanarySpike-ErrorRate OK
+EcsCanarySpike-WatchVerdict INSUFFICIENT_DATA
+EcsCanarySpike-Rollback NOT_FOUND

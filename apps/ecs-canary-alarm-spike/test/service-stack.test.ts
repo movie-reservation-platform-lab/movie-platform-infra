@@ -1,6 +1,7 @@
 import { Match } from 'aws-cdk-lib/assertions';
+import { Annotations } from 'aws-cdk-lib/assertions';
 import { IMAGE_DIGEST_PATTERN } from '../lib/service-stack';
-import { synthRepositoryTemplate, synthServiceTemplate } from './spike-template';
+import { synthRepositoryTemplate, synthServiceStack, synthServiceTemplate } from './spike-template';
 
 describe('fixture image repository', () => {
   it('is immutable, scanned, and removed with its images on teardown', () => {
@@ -162,6 +163,64 @@ describe('spike service stack infrastructure', () => {
         { Key: 'Project', Value: 'movie-platform-infra' },
         { Key: 'Spike', Value: 'infra-100' },
       ]),
+    });
+  });
+
+  it('changes the recipe, not the cluster, when recipeRevision changes', () => {
+    synthServiceTemplate({ recipeRevision: 'env-2' }).hasResourceProperties('AWS::ECS::TaskDefinition', {
+      ContainerDefinitions: [Match.objectLike({
+        Environment: [{ Name: 'SPIKE_RECIPE_REVISION', Value: 'env-2' }],
+      })],
+    });
+    synthServiceTemplate({ infraRevision: 'tag-2' }).hasResourceProperties('AWS::ECS::Cluster', {
+      Tags: Match.arrayWith([{ Key: 'InfraRevision', Value: 'tag-2' }]),
+    });
+    const recipeOf = (infraRevision: string): string => JSON.stringify(
+      synthServiceTemplate({ infraRevision }).findResources('AWS::ECS::TaskDefinition'),
+    );
+    expect(recipeOf('tag-2')).toBe(recipeOf('1'));
+  });
+});
+
+describe('Session 3 release model: infra deploys carry the running revision', () => {
+  const RUNNING = 'arn:aws:ecs:eu-central-1:111111111111:task-definition/Family:7';
+
+  it('points the service at the recipe only for the bootstrap deploy', () => {
+    const template = synthServiceTemplate();
+    const [recipeId] = Object.keys(template.findResources('AWS::ECS::TaskDefinition'));
+    template.hasResourceProperties('AWS::ECS::Service', { TaskDefinition: { Ref: recipeId } });
+  });
+
+  it('pins the service to the running revision passed as context', () => {
+    synthServiceTemplate({ activeTaskDefinitionArn: RUNNING })
+      .hasResourceProperties('AWS::ECS::Service', { TaskDefinition: RUNNING });
+  });
+
+  it('has no CloudFormation parameter a raw deploy could reuse for the running revision', () => {
+    const parameters = Object.keys(synthServiceTemplate().toJSON().Parameters ?? {});
+    expect(parameters.sort()).toEqual(['BootstrapVersion', 'ImageDigest']);
+  });
+
+  it('fails validation without the running revision, so a raw deploy stops before AWS', () => {
+    Annotations.fromStack(synthServiceStack({ activeTaskDefinitionArn: undefined }))
+      .hasError('*', Match.stringLikeRegexp('Missing context activeTaskDefinitionArn'));
+    Annotations.fromStack(synthServiceStack({ activeTaskDefinitionArn: RUNNING }))
+      .hasNoError('*', Match.anyValue());
+  });
+
+  it('exports the recipe ARN for the release script and the infra-deploy wrapper', () => {
+    const template = synthServiceTemplate();
+    const [recipeId] = Object.keys(template.findResources('AWS::ECS::TaskDefinition'));
+    template.hasOutput('RecipeTaskDefinitionArn', { Value: { Ref: recipeId } });
+  });
+
+  it('can add a never-signalled wait condition after the service, for run R5c-4', () => {
+    expect(synthServiceTemplate().findResources('AWS::CloudFormation::WaitCondition')).toEqual({});
+    const template = synthServiceTemplate({ failInfraDeploy: true });
+    const [serviceId] = Object.keys(template.findResources('AWS::ECS::Service'));
+    template.hasResource('AWS::CloudFormation::WaitCondition', {
+      Properties: { Timeout: '30', Count: 1 },
+      DependsOn: Match.arrayWith([serviceId]),
     });
   });
 });
