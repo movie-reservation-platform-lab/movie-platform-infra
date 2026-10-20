@@ -3,8 +3,9 @@
 Status: **partial.** The runs that decide D4 and most #103 defaults are done
 (R0, R1, R5a, R5b, R7, R8a). R1 showed that the plan's "CloudFormation
 rollback disabled" mode cannot run for image changes, so the runs built on it
-(R2–R4, R6, R8b, R9) were not executed and wait for a re-plan. Recommendations
-below are **proposed** and wait for the D4 discussion.
+(R2–R4, R6, R8b, R9) were not executed. The decisions taken on this evidence
+(2026-10-20) and the Session 3 re-plan are in the plan's *Decisions* section
+and §6.8.
 
 Plan: [`../ecs-canary-deployment-alarm-spike.md`](../ecs-canary-deployment-alarm-spike.md).
 Runbook: [`../../operations/ecs-canary-deployment-alarm-spike.md`](../../operations/ecs-canary-deployment-alarm-spike.md).
@@ -194,35 +195,38 @@ and R7); the deployment records are complete.
 12. The fixture's Node default keep-alive (5 s) caused occasional ALB-generated
     502s, which the target-5xx alarm does not count (fixed in #114).
 
-## Proposed recommendations (pending the D4 discussion)
+## Decisions taken on this evidence (2026-10-20)
 
-For **D4**: under CloudFormation-managed image deploys, `halt` gives neither a
-lasting freeze nor a fast revert. The evidence supports **Option A with
-`revert`**: ECS abandons an in-flight canary by flipping traffic back, and
-CloudFormation stays consistent. A true "freeze, then roll forward" needs image
-deploys that bypass CloudFormation (not tested: candidate run R5c).
+Full text in the plan's *Decisions (consultation, 2026-10-20)*.
 
-For **#103** (construct defaults):
-
-- deployment alarms with **rollback on**; the composite can be listed;
-- **circuit breaker always on, with rollback on**;
-- an error signal faster than a 1-minute ALB metric (for example the 10 s
-  bridge alarm), or a smaller first canary step, to cut the ~3 min exposure;
-- an **explicit `DeploymentController`** from the first deploy;
-- the production listener rule depends on **both** target groups; its drift
-  is expected and documented;
-- deployment duration ≈ 15.5 min with 5/5 bakes; budget the pipeline timeout
-  accordingly.
-
-For **#101** (deploy mechanism): with `revert`, the CloudFormation rollback
-after an ECS revert is a no-op, so a standard CloudFormation deploy action is
-viable. `--disable-rollback` must not be used for image changes.
+- **D4 direction.** Image releases go through ECS directly; infrastructure
+  stays in CDK/CloudFormation. In-flight failures `revert` by default (finding
+  4); `halt` is chosen per release for releases that are not rollback-safe,
+  and it only stays frozen because CloudFormation is no longer in the release
+  path (findings 1–3). After completion, a human rolls forward.
+- **#101.** The release pipeline renders, registers, and deploys task
+  definitions through ECS. Infra deploys run through a wrapper that carries
+  the running task definition forward; `--disable-rollback` is not used.
+- **#103 construct defaults.**
+  - deployment alarms with rollback on by default; the composite can be listed;
+  - circuit breaker always on, with rollback on (finding 6);
+  - an explicit `DeploymentController` from the first deploy;
+  - the production listener rule depends on both target groups, and its drift
+    is expected (finding 8);
+  - deployment duration ≈ 15.5 min with 5/5 bakes (finding 7);
+  - a release verification building block: pre-traffic hook, synthetic load,
+    the rollback composite, a pre-release gate that requires every rollback
+    alarm to be `OK`, and fast per-revision metrics to cut the ~3 min
+    detection lag (finding 5).
+- **Session 3** tests the new release model (R5c), the alarm state at
+  release start (R6a, R6b), and optionally a pre-traffic hook (R10).
 
 ## Not run, and why
 
 | Run | Reason |
 |---|---|
-| R2, R3, R4, R6a, R6b, R9 | Built on CloudFormation rollback disabled, which cannot run (R1). Need a re-plan. |
+| R2, R3, R4, R9 | Built on CloudFormation rollback disabled, which cannot run (R1). Superseded by R5c (Session 3). |
+| R6a, R6b | Moved to Session 3 under the new release model. |
 | R8b | Without the breaker, CloudFormation would wait for the ECS stage timeout (hours); R8a already shows the breaker is required. |
 | R7b | Optional. |
 | ECS infrastructure role policy capture | Not captured in these sessions; still needed for #103's IAM review. |
