@@ -142,7 +142,8 @@ answer to the D4 question in §6.6.
   `allowedIngressPrefixListId` context value
   (`lib/config/platform-config.ts`, `docs/operations/aws-cdk-deployment.md`).
 - Account and Region gate: `npm run preflight:aws` validates the
-  `movie-platform-demo` SSO profile, `eu-central-1`, the account, and the role
+  `movie-platform-workload-development` SSO profile (via
+  `MOVIE_PLATFORM_AWS_TARGET_FILE`), `eu-central-1`, the account, and the role
   before every group of mutations.
 - `cdk.json` sets `@aws-cdk/aws-ecs:removeDefaultDeploymentAlarm` and
   `@aws-cdk/aws-ec2:restrictDefaultSecurityGroup`. The second flag adds a
@@ -500,7 +501,7 @@ R<n>":
 
 ```text
 Run: R<n>   Profile: <…>   CFN mode: <…>
-Account/Region: development workload account (movie-platform-demo), eu-central-1
+Account/Region: development workload account (movie-platform-workload-development), eu-central-1
 Preflight: npm run preflight:aws -> <pass/fail>
 Change: ImageDigest <label-from> -> <label-to>   Fault: <method, timing>
 Expected worst case: <e.g. 10% of probe traffic receives 5xx until T_halt>
@@ -665,8 +666,9 @@ For **#101** (deploy mechanism):
 
 ## Security And Operations
 
-- **Account and Region.** The existing development workload account
-  (`movie-platform-demo` SSO profile), `eu-central-1`.
+- **Account and Region.** The existing development workload member account
+  (`movie-platform-workload-development` SSO profile), `eu-central-1`. Never
+  the management account behind `movie-platform-demo`.
   - Run `npm run preflight:aws` before each run group and before teardown.
   - Nothing depends on or touches the workload stack, and stack names are
     disjoint.

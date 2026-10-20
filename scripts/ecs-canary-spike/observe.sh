@@ -11,6 +11,9 @@
 #   observe.sh --self-test
 #
 # Uses the ambient AWS_PROFILE and AWS_REGION. Run `npm run preflight:aws` first.
+# A poll whose AWS calls fail or time out is skipped with a warning on stderr,
+# so a flaky network leaves a gap in the timeline instead of stalling it.
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,8 +21,13 @@ FIXTURE_DIR="$SCRIPT_DIR/../../test/fixtures/ecs-canary-spike/observe"
 ALARM_PREFIX='EcsCanarySpike'
 
 usage() {
-  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,/^$/p' "$0" | sed -e '/^$/d' -e 's/^# \{0,1\}//'
   exit 2
+}
+
+# Bounded AWS CLI calls: the defaults wait up to 60s per read and then retry.
+aws_bounded() {
+  aws --cli-connect-timeout 5 --cli-read-timeout 15 "$@"
 }
 
 # Build one snapshot line from the raw responses saved in directory $1.
@@ -67,9 +75,50 @@ build_snapshot() {
 
 stack_output() {
   local stack="$1" key="$2"
-  aws cloudformation describe-stacks --stack-name "$stack" --output text \
+  aws_bounded cloudformation describe-stacks --stack-name "$stack" --output text \
     --query "Stacks[0].Outputs[?OutputKey=='$key'].OutputValue | [0]"
 }
+
+# Fetch every raw response for one snapshot into directory $1. The calls run
+# in parallel: each AWS CLI call costs seconds on a slow link, so serial calls
+# would stretch a 10s interval to most of a minute. Returns non-zero if any
+# call fails or times out.
+poll_once() {
+  local dir="$1" cluster="$2" service="$3" rule="$4" blue="$5" green="$6" stack="$7"
+  local pids=() pid failed=0
+
+  aws_bounded ecs describe-services --cluster "$cluster" --services "$service" \
+    >"$dir/describe-services.json" & pids+=($!)
+  # The deployment details need the ARNs from the list call, so these two run in order.
+  (
+    arns="$(aws_bounded ecs list-service-deployments --cluster "$cluster" --service "$service" \
+      --max-results 3 --query 'serviceDeployments[].serviceDeploymentArn' --output text)" || exit 1
+    if [[ -n "$arns" && "$arns" != 'None' ]]; then
+      # shellcheck disable=SC2086 # word splitting passes each ARN separately
+      aws_bounded ecs describe-service-deployments --service-deployment-arns $arns \
+        >"$dir/describe-service-deployments.json"
+    else
+      printf '{"serviceDeployments":[]}' >"$dir/describe-service-deployments.json"
+    fi
+  ) & pids+=($!)
+  aws_bounded elbv2 describe-rules --rule-arns "$rule" >"$dir/describe-rules.json" & pids+=($!)
+  aws_bounded elbv2 describe-target-health --target-group-arn "$blue" \
+    >"$dir/target-health-blue.json" & pids+=($!)
+  aws_bounded elbv2 describe-target-health --target-group-arn "$green" \
+    >"$dir/target-health-green.json" & pids+=($!)
+  aws_bounded cloudformation describe-stacks --stack-name "$stack" \
+    >"$dir/describe-stacks.json" & pids+=($!)
+  aws_bounded cloudformation describe-stack-events --stack-name "$stack" --max-items 5 \
+    >"$dir/describe-stack-events.json" & pids+=($!)
+  aws_bounded cloudwatch describe-alarms --alarm-name-prefix "$ALARM_PREFIX" \
+    --alarm-types MetricAlarm CompositeAlarm >"$dir/describe-alarms.json" & pids+=($!)
+
+  for pid in "${pids[@]}"; do
+    wait "$pid" || failed=1
+  done
+  return "$failed"
+}
+
 
 run_observer() {
   local stack='' out='' interval=10
@@ -90,31 +139,17 @@ run_observer() {
   blue="$(stack_output "$stack" BlueTargetGroupArn)"
   green="$(stack_output "$stack" GreenTargetGroupArn)"
 
-  local dir
-  dir="$(mktemp -d)"
-  trap 'rm -rf "$dir"' EXIT
+  # Global, not local: the EXIT trap runs after this function has returned.
+  OBSERVER_TMP_DIR="$(mktemp -d)"
+  trap 'rm -rf "$OBSERVER_TMP_DIR"' EXIT
+  local dir="$OBSERVER_TMP_DIR"
   printf 'observing %s every %ss into %s (Ctrl-C to stop)\n' "$stack" "$interval" "$out" >&2
   while true; do
-    aws ecs describe-services --cluster "$cluster" --services "$service" >"$dir/describe-services.json"
-    local arns
-    arns="$(aws ecs list-service-deployments --cluster "$cluster" --service "$service" \
-      --max-results 3 --query 'serviceDeployments[].serviceDeploymentArn' --output text)"
-    if [[ -n "$arns" && "$arns" != 'None' ]]; then
-      # shellcheck disable=SC2086 # word splitting passes each ARN separately
-      aws ecs describe-service-deployments --service-deployment-arns $arns \
-        >"$dir/describe-service-deployments.json"
+    if poll_once "$dir" "$cluster" "$service" "$rule" "$blue" "$green" "$stack"; then
+      build_snapshot "$dir" "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)" >>"$out"
     else
-      printf '{"serviceDeployments":[]}' >"$dir/describe-service-deployments.json"
+      printf '%s poll failed or timed out; skipped\n' "$(date -u +%H:%M:%S)" >&2
     fi
-    aws elbv2 describe-rules --rule-arns "$rule" >"$dir/describe-rules.json"
-    aws elbv2 describe-target-health --target-group-arn "$blue" >"$dir/target-health-blue.json"
-    aws elbv2 describe-target-health --target-group-arn "$green" >"$dir/target-health-green.json"
-    aws cloudformation describe-stacks --stack-name "$stack" >"$dir/describe-stacks.json"
-    aws cloudformation describe-stack-events --stack-name "$stack" --max-items 5 \
-      >"$dir/describe-stack-events.json"
-    aws cloudwatch describe-alarms --alarm-name-prefix "$ALARM_PREFIX" \
-      --alarm-types MetricAlarm CompositeAlarm >"$dir/describe-alarms.json"
-    build_snapshot "$dir" "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)" >>"$out"
     sleep "$interval"
   done
 }

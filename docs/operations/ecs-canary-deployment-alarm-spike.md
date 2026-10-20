@@ -17,7 +17,7 @@ over to a re-run, a changed profile, or teardown.
 
 | Item | Value |
 |---|---|
-| Account | Development workload account (`movie-platform-demo` SSO profile) |
+| Account | Development workload member account (`movie-platform-workload-development` SSO profile). Not the management account behind `movie-platform-demo`. |
 | Region | `eu-central-1` |
 | Stacks | `EcsCanarySpikeImageRepositoryStack`, `EcsCanarySpikeServiceStack` |
 | Tags | `Spike=infra-100`, `Lifecycle=disposable`, `ExpiresOn=<date>` |
@@ -53,65 +53,77 @@ The `AWS::ECS::Service` must have:
 
 ## Session setup
 
+The commands work in bash and zsh. Put the private values in a gitignored
+file once:
+
 ```bash
-aws sso login --profile movie-platform-demo
-export AWS_PROFILE=movie-platform-demo
-export AWS_REGION=eu-central-1
+mkdir -p .local/ecs-canary-spike
+cat >.local/ecs-canary-spike/session.env <<'ENV'
 export ALLOWED_INGRESS_PREFIX_LIST_ID='<pl-…>'   # existing operator prefix list
 export SPIKE_EXPIRES_ON='<YYYY-MM-DD>'          # teardown deadline for the tag
-export EVIDENCE_DIR="$PWD/.local/ecs-canary-spike/$(date +%F)"
-mkdir -p "$EVIDENCE_DIR"
-npm run preflight:aws
+ENV
 ```
 
-The preflight must pass before every group of mutations. Also check that the
-VPC quota leaves room for one more VPC (the default is 5 per Region):
+Then, in **every** terminal you use for the spike (main, probe, observer),
+from the repository root:
+
+```bash
+aws sso login --profile movie-platform-workload-development   # once per session
+source scripts/ecs-canary-spike/session.sh
+npm run preflight:aws
+spike_status
+```
+
+`scripts/ecs-canary-spike/session.sh` sets the profile, the Region,
+`AWS_PAGER=''`, the preflight target file
+(`MOVIE_PLATFORM_AWS_TARGET_FILE`), the stack names, `EVIDENCE_DIR` (one
+folder per day under `.local/ecs-canary-spike/`), and the digests from the
+latest `digests.env`. It defines these helpers:
+
+| Helper | Does |
+|---|---|
+| `marker "text"` | timestamped line in `$EVIDENCE_DIR/markers.txt` |
+| `spike_cdk <args>` | CDK for the spike app with the required context |
+| `stack_output <stack> <key>` | one CloudFormation output |
+| `spike_update_digest <digest> enable` | change only the image digest (the pipeline primitive); validates its arguments and writes a marker |
+| `spike_digest_label <digest>` | good-1, good-2, bad-5xx, or crash |
+| `current_service_deployment` | newest ECS service deployment ARN |
+| `spike_probe [R<n>]` | probe into `R<n>-probe.csv`; refuses to start without an ALB |
+| `spike_observe [R<n>]` | observer into `R<n>-observer.jsonl` |
+| `spike_status` | read-only stack, digest, and alarm summary |
+
+If you write your own commands in zsh, put braces around any variable that is
+followed by `:` (`"${SERVICE_STACK}:ImageDigest=${DIGEST_GOOD_1}"`): zsh reads
+`$var:x` as a modifier. Do not paste `bash` as the first line of a
+multi-line block: the new shell swallows the rest of the paste.
+
+The preflight must pass before every group of mutations, and it must report
+the workload-development account. If it validates against the management
+account, stop: `MOVIE_PLATFORM_AWS_TARGET_FILE` is not set in this terminal.
+
+The spike deploys with CDK, so the account needs a CDK bootstrap in
+`eu-central-1`. Check it read-only; if it is missing, stop and ask, because
+bootstrapping is outside the spike's approval:
+
+```bash
+aws cloudformation describe-stacks --stack-name CDKToolkit \
+  --query 'Stacks[0].StackStatus' --output text
+```
+
+Managed prefix lists belong to one account. Confirm the operator prefix
+list exists in this account and contains your current IP:
+
+```bash
+aws ec2 get-managed-prefix-list-entries \
+  --prefix-list-id "$ALLOWED_INGRESS_PREFIX_LIST_ID" --output table
+curl -s https://checkip.amazonaws.com
+```
+
+Also check that the VPC quota leaves room for one more VPC (the default is
+5 per Region):
 
 ```bash
 aws ec2 describe-vpcs --query 'length(Vpcs)'
-```
-
-Define the helpers used below:
-
-```bash
-SERVICE_STACK=EcsCanarySpikeServiceStack
-REPOSITORY_STACK=EcsCanarySpikeImageRepositoryStack
-
-# CDK with the required context. Extra -c flags select the run profile.
-spike_cdk() {
-  npm run cdk --workspace @movie-platform/ecs-canary-alarm-spike -- "$@" \
-    -c allowedIngressPrefixListId="$ALLOWED_INGRESS_PREFIX_LIST_ID" \
-    -c expiresOn="$SPIKE_EXPIRES_ON"
-}
-
-stack_output() {
-  aws cloudformation describe-stacks --stack-name "$1" --output text \
-    --query "Stacks[0].Outputs[?OutputKey=='$2'].OutputValue | [0]"
-}
-
-# Change only the image digest, using the same template. This is the
-# primitive a delivery pipeline would call. $2 is "disable" or "enable"
-# (CloudFormation stack rollback).
-spike_update_digest() {
-  local rollback_flag=()
-  [[ "$2" == disable ]] && rollback_flag=(--disable-rollback)
-  date -u +%FT%T.%3NZ | tee -a "$EVIDENCE_DIR/markers.txt"
-  aws cloudformation update-stack --stack-name "$SERVICE_STACK" \
-    --use-previous-template --capabilities CAPABILITY_IAM \
-    --parameters ParameterKey=ImageDigest,ParameterValue="$1" \
-                 ParameterKey=BootstrapVersion,UsePreviousValue=true \
-    "${rollback_flag[@]}"
-}
-
-# The service's current ECS service deployment ARN (newest first).
-current_service_deployment() {
-  aws ecs list-service-deployments \
-    --cluster "$(stack_output "$SERVICE_STACK" ClusterName)" \
-    --service "$(stack_output "$SERVICE_STACK" ServiceName)" \
-    --max-results 1 --query 'serviceDeployments[0].serviceDeploymentArn' --output text
-}
-
-marker() { printf '%s %s\n' "$(date -u +%FT%T.%3NZ)" "$*" | tee -a "$EVIDENCE_DIR/markers.txt"; }
 ```
 
 `update-stack` reuses the CloudFormation execution role that CDK attached
@@ -166,7 +178,7 @@ Abort if: preflight fails, cdk diff shows resources outside the two spike stacks
    ```bash
    spike_cdk diff "$SERVICE_STACK" -c spikeProfile=halt
    spike_cdk deploy "$SERVICE_STACK" -c spikeProfile=halt \
-     --parameters "$SERVICE_STACK:ImageDigest=$DIGEST_GOOD_1"
+     --parameters "${SERVICE_STACK}:ImageDigest=${DIGEST_GOOD_1}"
    ```
 
    **Observe:** does CloudFormation accept the composite alarm name in
@@ -178,14 +190,26 @@ Abort if: preflight fails, cdk diff shows resources outside the two spike stacks
    whole session.
 
    ```bash
-   scripts/ecs-canary-spike/probe.sh run \
-     --url "http://$(stack_output "$SERVICE_STACK" LoadBalancerDnsName)/" \
-     --out "$EVIDENCE_DIR/probe.csv" --rate 5
-   scripts/ecs-canary-spike/observe.sh run --stack "$SERVICE_STACK" \
-     --out "$EVIDENCE_DIR/observer.jsonl" --interval 10
+   source scripts/ecs-canary-spike/session.sh
+   spike_probe baseline       # terminal 2
+   spike_observe baseline     # terminal 3
    ```
 
-   The probe must show only `good-1` and status 200 before any run starts.
+   The probe must show only `good-1` and status 200 before any run starts:
+
+   ```bash
+   scripts/ecs-canary-spike/probe.sh summarize "$EVIDENCE_DIR/baseline-probe.csv"
+   jq -r .observedAt "$EVIDENCE_DIR/baseline-observer.jsonl"   # a line every 15-25 s
+   ```
+
+   For each run, restart both with the run ID (`spike_probe R<n>`,
+   `spike_observe R<n>`), so every run has its own files. Move a wrong file
+   aside with `mv`; do not delete it.
+
+   The summary splits failures by origin: `target_5xx` (the app answered
+   with an error, which the error-rate alarm counts), `elb_5xx` (the ALB
+   generated it, which the alarm does not see), and `no_response` (usually
+   the client's network).
 
 ## Common run procedure
 
@@ -209,7 +233,7 @@ Each run R1–R9 follows the same shape:
    ```
 
 4. Run `marker "R<n> start"`, then start the change with
-   `spike_update_digest <digest> <disable|enable>`.
+   `spike_update_digest <digest> enable`.
 5. **Inject the fault** at the time the run specifies. Use the observer's
    `serviceDeployments[0].lifecycleStage` and `ruleWeights` to find "canary
    step" (weights 90/10) and "deployment bake" (weights 0/100 with blue
@@ -286,7 +310,7 @@ Any mismatch is drift, and it is a finding.
 aws cloudformation rollback-stack --stack-name "$SERVICE_STACK"
 
 # Roll forward or redeploy a known-good digest from UPDATE_FAILED
-spike_update_digest "$DIGEST_GOOD_1" disable
+spike_update_digest "$DIGEST_GOOD_1" enable
 
 # Human-triggered in-flight revert (works even when rollback is not configured)
 aws ecs stop-service-deployment --service-deployment-arn "$(current_service_deployment)" \
@@ -294,6 +318,14 @@ aws ecs stop-service-deployment --service-deployment-arn "$(current_service_depl
 ```
 
 ## Runs
+
+> **R1 finding (2026-10-17): CFN mode `disable` cannot run.** Every digest
+> change replaces the task definition, and CloudFormation rejects
+> replacement updates on a stack with `--disable-rollback`
+> (`Replacement type updates not supported on stack with disable-rollback`).
+> The update fails in seconds, before any ECS deployment. Rows with
+> `disable` wait for a re-plan; R1 is rerun with `enable`, and R5a and R5b
+> are runnable as written.
 
 The digests alternate so that every update is a real change. "Known-good"
 means whichever good variant currently serves traffic. The other good
@@ -357,9 +389,20 @@ npm run preflight:aws
 # 1. No deployment may be in progress; stop it if the observer shows one.
 aws ecs stop-service-deployment --service-deployment-arn "$(current_service_deployment)" --stop-type ROLLBACK || true
 # 2. Service stack first. Deleting from UPDATE_FAILED is allowed.
-spike_cdk destroy "$SERVICE_STACK"
+spike_cdk destroy "$SERVICE_STACK" --force
 # 3. Then the repository (emptied on delete).
-spike_cdk destroy "$REPOSITORY_STACK"
+spike_cdk destroy "$REPOSITORY_STACK" --force
+```
+
+The first service-stack delete can end in `DELETE_FAILED` on a target group
+that is "in use by a listener or a rule". The template says the production
+rule forwards to blue, but ECS rewrites it to forward to whichever group is
+live, so CloudFormation may delete that group before the rule. Once the ALB
+is gone, retry:
+
+```bash
+aws cloudformation delete-stack --stack-name "$SERVICE_STACK"
+aws cloudformation wait stack-delete-complete --stack-name "$SERVICE_STACK"
 ```
 
 Stop the probe and observer, then verify:

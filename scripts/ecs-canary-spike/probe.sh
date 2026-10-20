@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FIXTURE_DIR="$SCRIPT_DIR/../../test/fixtures/ecs-canary-spike"
 
 usage() {
-  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,/^set -euo/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'
   exit 2
 }
 
@@ -40,6 +40,8 @@ run_probe() {
     esac
   done
   [[ -n "$url" && -n "$out" ]] || usage
+  # An empty $(stack_output ...) turns the URL into "http:///"; refuse it.
+  [[ "$url" =~ ^https?://[^/]+ ]] || { printf 'probe: --url needs a host, got %s\n' "$url" >&2; exit 2; }
   [[ "$rate" =~ ^[1-9][0-9]*$ && "$duration" =~ ^[0-9]+$ ]] || usage
 
   local interval end
@@ -55,25 +57,33 @@ run_probe() {
   wait
 }
 
-# Per-bucket request counts per variant and 5xx counts, relative to the first
-# request, followed by the first and last time each variant was seen.
+# Per-bucket request counts per variant and failure counts, relative to the
+# first request, followed by the first and last time each variant was seen.
+# Failures are split by where they come from:
+#   target_5xx   5xx with an x-spike-variant header: the app answered with an
+#                error (the ALB's HTTPCode_Target_5XX_Count, which the alarm uses);
+#   elb_5xx      5xx without the header: the ALB generated it, e.g. 502 on a
+#                dropped keep-alive connection (HTTPCode_ELB_5XX_Count);
+#   no_response  000: no HTTP response at all, usually the client's network.
 summarize() {
   local file="$1" bucket="${2:-10}" variants
   [[ -f "$file" ]] || { printf 'no such file: %s\n' "$file" >&2; exit 2; }
   # POSIX awk only (no gawk extensions): variant order comes from sort.
   variants="$(tail -n +2 "$file" | cut -d, -f3 | LC_ALL=C sort -u | paste -sd, -)"
-  printf 't_start_s,total,errors_5xx,%s\n' "$variants"
+  printf 't_start_s,total,target_5xx,elb_5xx,no_response,%s\n' "$variants"
   tail -n +2 "$file" | awk -F, -v bucket="$bucket" -v variants="$variants" '
     BEGIN { n = split(variants, names, ",") }
     {
       if (start == "") start = $1
       b = int(($1 - start) / 1000 / bucket) * bucket
       seen[b] = 1; total[b]++; count[b, $3]++
-      if ($2 >= 500 || $2 == "000") errors[b]++
+      if ($2 == "000") no_response[b]++
+      else if ($2 >= 500 && $3 == "none") elb_5xx[b]++
+      else if ($2 >= 500) target_5xx[b]++
     }
     END {
       for (b in seen) {
-        line = b "," total[b] "," (errors[b] + 0)
+        line = b "," total[b] "," (target_5xx[b] + 0) "," (elb_5xx[b] + 0) "," (no_response[b] + 0)
         for (i = 1; i <= n; i++) line = line "," (count[b, names[i]] + 0)
         print line
       }
