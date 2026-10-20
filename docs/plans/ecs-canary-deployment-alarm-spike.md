@@ -660,9 +660,11 @@ first matrix could not reach.
   at that revision instead of the recipe. An infra-deploy wrapper reads the
   running task definition ARN from ECS and passes it in, and refuses to
   deploy if it cannot. Raw `cdk deploy` of the service stack is not used.
-- **Recipe changes ship with the next release.** Because releases render from
-  the recipe, a CPU or environment change reaches production at the next
-  release; a "release the current digest" run applies it immediately.
+- **A recipe change triggers a release of the current image.** When an infra
+  deploy changes the recipe (CPU, memory, environment), the wrapper calls the
+  release step with the running digest, so the change rolls out at once
+  through the same canary, alarms, and revert. Infra deploys that leave the
+  recipe unchanged start no release.
 
 **Hypotheses.**
 
@@ -670,7 +672,7 @@ first matrix could not reach.
 |---|---|---|
 | H12 | A release through `update-service` with alarm rollback off (`halt`) stops on alarm and **stays** at the canary split: nothing reverts it, and the stack stays `UPDATE_COMPLETE`. | R5c-1 |
 | H13 | A roll-forward release started while a deployment alarm is still `ALARM` is accepted, but ECS does not monitor its alarms (H7/H11 in the new model). | R5c-2 |
-| H14 | An infra deploy through the wrapper (running task definition ARN passed in) changes the service stack without starting an ECS deployment and without changing the running image. | R5c-3 |
+| H14 | An infra deploy through the wrapper (running task definition ARN passed in) changes the service stack without starting an ECS deployment and without changing the running image; when the recipe changes, the wrapper's follow-up release rolls it out with the running image. | R5c-3 |
 | H7 | A deployment alarm already in `ALARM` at release start disables all alarm monitoring for that release. | R6a |
 | H8 | An alarm in `INSUFFICIENT_DATA` at release start does not disable monitoring, and later halts the release when it moves to `ALARM`. | R6b |
 | H15 | A lifecycle hook at `POST_TEST_TRAFFIC_SHIFT` that returns `FAILED` stops the release before any production traffic reaches the new revision. | R10 (optional) |
@@ -683,7 +685,7 @@ all alarms `OK` except where stated, and with the probe and observer running.
 | R0b | Redeploy the service stack with the Session 3 template (`revert` default) and `good-1` | — | — | Stack and service healthy | — |
 | R5c-1 | — | `good-1` → `good-2`, `halt` | Sticky bridge loop (`WatchVerdict` = 1) at the canary step | Deployment `STOPPED`; weights stay 90/10 for 10 min; stack untouched | Continue in R5c-2 |
 | R5c-2 | Bridge loop still running (alarm `ALARM`) | Roll forward: → `good-1`, `revert` | — | Accepted? Alarms monitored (`alarms.status`)? Weights converge? | Stop the loop; verify `OK` |
-| R5c-3 | After R5c-2 | Infra deploy through the wrapper (a harmless template change, e.g. a tag) | — | No new ECS deployment; running digest unchanged; stack `UPDATE_COMPLETE` | — |
+| R5c-3 | After R5c-2 | Infra deploy through the wrapper: first a non-recipe change (a tag), then a recipe change (an environment variable) | — | Tag: no ECS deployment, digest unchanged. Recipe: one release of the running digest with the new recipe | — |
 | R6a | `bridgeMissingData=breaching` via the wrapper; `WatchVerdict` `ALARM` (no data) | → other good, `revert` | Force `ErrorRate` at the canary step | Does ECS react at all? | Wrapper deploy back to `notBreaching` |
 | R6b | `bridgeMissingData=missing`; `WatchVerdict` `INSUFFICIENT_DATA` | → other good, `revert` | Sticky bridge loop at the canary step | Does ECS react? | Per profile |
 | R10 (optional) | Test listener and a `POST_TEST_TRAFFIC_SHIFT` Lambda hook | → `bad-5xx`, `revert` | The smoke runner hits the test listener and publishes a verdict | Release stops before production traffic; zero user errors | — |
@@ -992,11 +994,16 @@ Taken after Sessions 1–2; see the
 2. **The infrastructure owns the task definition (the recipe); a release
    swaps only the image.** The release pipeline is built as
    *render → register → deploy*, so app-owned task definitions (an app spec
-   plus platform rules) can come later by replacing only *render*.
+   plus platform rules) can come later by replacing only *render*. The
+   direction is a team-owned slice of runtime configuration in the service
+   repository, like a Helm chart next to the code, checked against platform
+   rules.
 3. **Infra deploys carry the running revision forward** through a wrapper
    that passes the running task definition ARN and refuses to deploy without
    it. Raw `cdk deploy` of service stacks is blocked. Releases render from the
-   recipe, so recipe changes ship with the next release.
+   recipe, and an infra deploy that changes the recipe triggers a release of
+   the running image, so every change to what runs (image or recipe) rolls
+   out at once through the same safe path, as a Kubernetes spec change does.
 4. **Release verification is a platform building block.** The platform owns
    the stages (pre-traffic hook, synthetic load during the canary, the
    rollback composite, a pre-release gate that refuses to start unless every
