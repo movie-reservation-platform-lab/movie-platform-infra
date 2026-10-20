@@ -14,6 +14,17 @@ export type BridgeMissingData = 'notBreaching' | 'breaching' | 'missing';
 /** Whether ECS watches the rollback composite as well as its member alarms. */
 export type DeploymentAlarmSet = 'all' | 'members';
 
+/**
+ * `activeTaskDefinitionArn` value for the very first deploy only: the service
+ * starts on the recipe. On an existing stack it would reset the service to
+ * the recipe's image, so only `infra-deploy.sh bootstrap` passes it.
+ */
+export const BOOTSTRAP_RECIPE = 'bootstrap-recipe';
+
+/** An ECS task definition ARN with a revision number. */
+export const TASK_DEFINITION_ARN_PATTERN =
+  /^arn:aws[a-z-]*:ecs:[a-z0-9-]+:[0-9]{12}:task-definition\/[A-Za-z0-9_-]+:[0-9]+$/;
+
 export interface EcsCanarySpikeConfig {
   readonly allowedIngressPrefixListId: string;
   readonly profile: SpikeProfile;
@@ -31,6 +42,18 @@ export interface EcsCanarySpikeConfig {
    * definition, which must trigger a release (run R5c-3, second half).
    */
   readonly recipeRevision: string;
+  /**
+   * The task definition the service must run: the revision ECS runs now, or
+   * `BOOTSTRAP_RECIPE`. Synth-time context, not a CloudFormation parameter,
+   * so no deploy can silently reuse a stale value. `undefined` makes the
+   * service stack fail validation (see EcsCanarySpikeServiceStack).
+   */
+  readonly activeTaskDefinitionArn: string | undefined;
+  /**
+   * Adds a resource that fails after the service update, so the stack rolls
+   * back (run R5c-4).
+   */
+  readonly failInfraDeploy: boolean;
 }
 
 /** Expected configuration failure, safe to show at the CDK CLI boundary. */
@@ -76,6 +99,8 @@ export function parseEcsCanarySpikeConfig(
     expiresOn: parseExpiresOn(readContext('expiresOn')),
     infraRevision: parseRevision(readContext('infraRevision'), 'infraRevision'),
     recipeRevision: parseRevision(readContext('recipeRevision'), 'recipeRevision'),
+    activeTaskDefinitionArn: parseActiveTaskDefinitionArn(readContext('activeTaskDefinitionArn')),
+    failInfraDeploy: parseFlag(readContext('failInfraDeploy'), 'failInfraDeploy'),
   };
 }
 
@@ -125,4 +150,28 @@ function parseRevision(value: unknown, key: string): string {
     );
   }
   return value;
+}
+
+function parseActiveTaskDefinitionArn(value: unknown): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string'
+    || (value !== BOOTSTRAP_RECIPE && !TASK_DEFINITION_ARN_PATTERN.test(value))) {
+    throw new EcsCanarySpikeConfigError(
+      `CDK context value "activeTaskDefinitionArn" must be a task definition ARN with a revision, or ${BOOTSTRAP_RECIPE}.`,
+    );
+  }
+  return value;
+}
+
+/** `-c key=true` arrives as a string; cdk.json can hold a real boolean. */
+function parseFlag(value: unknown, key: string): boolean {
+  if (value === undefined || value === false || value === 'false') {
+    return false;
+  }
+  if (value === true || value === 'true') {
+    return true;
+  }
+  throw new EcsCanarySpikeConfigError(`CDK context value "${key}" must be true or false.`);
 }

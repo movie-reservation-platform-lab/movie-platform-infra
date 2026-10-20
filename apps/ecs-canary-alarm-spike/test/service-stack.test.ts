@@ -1,6 +1,7 @@
 import { Match } from 'aws-cdk-lib/assertions';
-import { ACTIVE_TASK_DEFINITION_ARN_PATTERN, IMAGE_DIGEST_PATTERN } from '../lib/service-stack';
-import { synthRepositoryTemplate, synthServiceTemplate } from './spike-template';
+import { Annotations } from 'aws-cdk-lib/assertions';
+import { IMAGE_DIGEST_PATTERN } from '../lib/service-stack';
+import { synthRepositoryTemplate, synthServiceStack, synthServiceTemplate } from './spike-template';
 
 describe('fixture image repository', () => {
   it('is immutable, scanned, and removed with its images on teardown', () => {
@@ -182,35 +183,44 @@ describe('spike service stack infrastructure', () => {
 });
 
 describe('Session 3 release model: infra deploys carry the running revision', () => {
-  const template = synthServiceTemplate();
+  const RUNNING = 'arn:aws:ecs:eu-central-1:111111111111:task-definition/Family:7';
 
-  it('accepts an empty or revision-qualified task definition ARN', () => {
-    template.hasParameter('ActiveTaskDefinitionArn', {
-      Type: 'String',
-      Default: '',
-      AllowedPattern: ACTIVE_TASK_DEFINITION_ARN_PATTERN,
-    });
-    const pattern = new RegExp(ACTIVE_TASK_DEFINITION_ARN_PATTERN);
-    expect(pattern.test('')).toBe(true);
-    expect(pattern.test('arn:aws:ecs:eu-central-1:111111111111:task-definition/Family:7')).toBe(true);
-    expect(pattern.test('arn:aws:ecs:eu-central-1:111111111111:task-definition/Family')).toBe(false);
-    expect(pattern.test('Family:7')).toBe(false);
+  it('points the service at the recipe only for the bootstrap deploy', () => {
+    const template = synthServiceTemplate();
+    const [recipeId] = Object.keys(template.findResources('AWS::ECS::TaskDefinition'));
+    template.hasResourceProperties('AWS::ECS::Service', { TaskDefinition: { Ref: recipeId } });
   });
 
-  it('points the service at the running revision when one is passed, else at the recipe', () => {
-    template.hasCondition('HasActiveTaskDefinition', {
-      'Fn::Not': [{ 'Fn::Equals': [{ Ref: 'ActiveTaskDefinitionArn' }, ''] }],
-    });
-    const [recipeId] = Object.keys(template.findResources('AWS::ECS::TaskDefinition'));
-    template.hasResourceProperties('AWS::ECS::Service', {
-      TaskDefinition: {
-        'Fn::If': ['HasActiveTaskDefinition', { Ref: 'ActiveTaskDefinitionArn' }, { Ref: recipeId }],
-      },
-    });
+  it('pins the service to the running revision passed as context', () => {
+    synthServiceTemplate({ activeTaskDefinitionArn: RUNNING })
+      .hasResourceProperties('AWS::ECS::Service', { TaskDefinition: RUNNING });
+  });
+
+  it('has no CloudFormation parameter a raw deploy could reuse for the running revision', () => {
+    const parameters = Object.keys(synthServiceTemplate().toJSON().Parameters ?? {});
+    expect(parameters.sort()).toEqual(['BootstrapVersion', 'ImageDigest']);
+  });
+
+  it('fails validation without the running revision, so a raw deploy stops before AWS', () => {
+    Annotations.fromStack(synthServiceStack({ activeTaskDefinitionArn: undefined }))
+      .hasError('*', Match.stringLikeRegexp('Missing context activeTaskDefinitionArn'));
+    Annotations.fromStack(synthServiceStack({ activeTaskDefinitionArn: RUNNING }))
+      .hasNoError('*', Match.anyValue());
   });
 
   it('exports the recipe ARN for the release script and the infra-deploy wrapper', () => {
+    const template = synthServiceTemplate();
     const [recipeId] = Object.keys(template.findResources('AWS::ECS::TaskDefinition'));
     template.hasOutput('RecipeTaskDefinitionArn', { Value: { Ref: recipeId } });
+  });
+
+  it('can add a never-signalled wait condition after the service, for run R5c-4', () => {
+    expect(synthServiceTemplate().findResources('AWS::CloudFormation::WaitCondition')).toEqual({});
+    const template = synthServiceTemplate({ failInfraDeploy: true });
+    const [serviceId] = Object.keys(template.findResources('AWS::ECS::Service'));
+    template.hasResource('AWS::CloudFormation::WaitCondition', {
+      Properties: { Timeout: '30', Count: 1 },
+      DependsOn: Match.arrayWith([serviceId]),
+    });
   });
 });

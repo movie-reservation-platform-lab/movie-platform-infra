@@ -388,12 +388,25 @@ directly. Two commands are the only mutating paths:
 | Path | Command | What it does |
 |---|---|---|
 | Release | `spike_release <digest> <revert\|halt>` | render the recipe with the new digest, register it, `update-service` with alarm rollback on (`revert`) or off (`halt`) |
-| Infra deploy | `spike_infra_deploy deploy` | `cdk deploy` with `ActiveTaskDefinitionArn` = the running revision; if the recipe changed, release the running digest with the new recipe |
+| Infra deploy | `spike_infra_deploy deploy` | sync the deployed template to the running revision, `cdk deploy` with `-c activeTaskDefinitionArn=<running>`, and, if the recipe changed, release the running digest with the new recipe |
 
-Do **not** use `spike_update_digest` or a raw `spike_cdk deploy` of the
-service stack in Session 3. CDK reuses the previous parameter values, so a
-raw deploy would point the service at a stale `ActiveTaskDefinitionArn` (an
-old image) or, with an empty one, at the recipe's image.
+Two protections keep an infra deploy from putting an older image back:
+
+- **The running revision is required CDK context, not a parameter.** A raw
+  `spike_cdk deploy` or `diff` of the service stack fails with "Missing
+  context activeTaskDefinitionArn" before anything reaches AWS. (A
+  CloudFormation parameter would not protect: `cdk deploy` silently reuses
+  its previous, possibly stale, value.)
+- **The sync phase protects rollbacks.** If releases happened since the last
+  infra deploy, the deployed template still names an older revision, and a
+  failed deploy would roll the service back to it. The wrapper first updates
+  the stack with the deployed template and only the service's task
+  definition changed to the running one. A later rollback then returns to the
+  running revision.
+
+Releases and infra deploys must not overlap (the wrapper reads the running
+revision once, at the start): run both from one terminal, one at a time. Do
+not use `spike_update_digest` in Session 3.
 
 Both scripts write their own markers. `release.sh` refuses to start while a
 deployment is in flight, or unless every alarm the service watches is `OK`
@@ -408,6 +421,7 @@ Infra context comes from variables, so every wrapper call repeats it:
 | `SPIKE_BRIDGE_MISSING_DATA` | `notBreaching` | R6a (`breaching`), R6b (`missing`) |
 | `SPIKE_INFRA_REVISION` | `1` | R5c-3 (a cluster tag: infra only) |
 | `SPIKE_RECIPE_REVISION` | `1` | R5c-3 (a container environment value: recipe) |
+| `SPIKE_FAIL_INFRA_DEPLOY` | `false` | R5c-4 (a resource that fails after the service update) |
 
 Set them with `export` in the terminal that runs the wrapper, and keep them
 until the session ends.
@@ -418,7 +432,7 @@ The repository stack and `digests.env` from R0 are reused.
 
 ```bash
 spike_status                                   # service stack: DOES NOT EXIST
-spike_cdk diff "$SERVICE_STACK" -c spikeProfile=revert
+spike_cdk diff "$SERVICE_STACK" -c spikeProfile=revert -c activeTaskDefinitionArn=bootstrap-recipe
 spike_infra_deploy bootstrap --digest "$DIGEST_GOOD_1"
 spike_status                                   # running: <family>:1 image good-1 steady=true
 ```
@@ -486,6 +500,53 @@ Observe: exactly one ECS deployment (the wrapper's release), with the running
 digest and `SPIKE_RECIPE_REVISION=env-2`; and no ECS deployment started by
 CloudFormation itself during the stack update.
 
+### R5c-4: a failed infra deploy after releases (H16)
+
+Precondition: the deployed template names an older revision than the one
+running. That is true right after R5c-3, because its recipe release ran after
+the stack update. Check it:
+
+```bash
+spike_status    # note the running revision, e.g. <family>:5
+aws cloudformation get-template --stack-name "$SERVICE_STACK" --query TemplateBody --output json \
+  | jq -r '.Resources[] | select(.Type == "AWS::ECS::Service") | .Properties.TaskDefinition'
+# expect an older revision than spike_status shows
+```
+
+**R5c-4a, without the sync phase (shows the hole):**
+
+```bash
+marker "R5c-4a start"
+export SPIKE_FAIL_INFRA_DEPLOY=true
+spike_infra_deploy deploy --no-sync
+```
+
+Expected: CloudFormation updates the service to the running revision (no
+ECS deployment), the wait condition fails after 30 s, and the rollback sets
+the service back to the older revision. Observe: does ECS start a deployment
+to the **older image**? Record the probe variants and the stack events. Let
+it finish (it is a normal canary), then roll forward:
+
+```bash
+export SPIKE_FAIL_INFRA_DEPLOY=false
+spike_release <the digest that ran before R5c-4a> revert
+```
+
+**R5c-4b, with the sync phase (shows the fix):** first make the template
+stale again with one more release, then:
+
+```bash
+spike_release <other good digest> revert       # wait for SUCCESSFUL
+marker "R5c-4b start"
+export SPIKE_FAIL_INFRA_DEPLOY=true
+spike_infra_deploy deploy                      # sync, then the failing deploy
+export SPIKE_FAIL_INFRA_DEPLOY=false
+```
+
+Expected: the sync update completes with no ECS deployment; the second
+update fails and rolls back; the service stays on the running revision and
+no ECS deployment starts.
+
 ### R6a: an alarm already in ALARM at release start (H7)
 
 ```bash
@@ -539,8 +600,10 @@ family="$(aws ecs describe-task-definition \
   --query taskDefinition.family --output text)"
 # 1. No deployment may be in progress; stop it if the observer shows one.
 aws ecs stop-service-deployment --service-deployment-arn "$(current_service_deployment)" --stop-type ROLLBACK || true
-# 2. Service stack first. Deleting from UPDATE_FAILED is allowed.
-spike_cdk destroy "$SERVICE_STACK" --force
+# 2. Service stack first. Deleting from UPDATE_FAILED is allowed. Plain
+#    CloudFormation: since Session 3 the service stack needs extra context to synth.
+aws cloudformation delete-stack --stack-name "$SERVICE_STACK"
+aws cloudformation wait stack-delete-complete --stack-name "$SERVICE_STACK"
 # 3. Then the repository (emptied on delete).
 spike_cdk destroy "$REPOSITORY_STACK" --force
 ```

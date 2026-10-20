@@ -9,7 +9,7 @@
     "build": "tsc --project tsconfig.json",
     "test": "jest --config jest.config.cjs --runInBand",
     "cdk": "cdk --app \"npx ts-node --project tsconfig.json --prefer-ts-exts bin/ecs-canary-alarm-spike.ts\"",
-    "synth": "AWS_REGION=eu-central-1 CDK_DEFAULT_ACCOUNT=111111111111 CDK_DEFAULT_REGION=eu-central-1 npm run cdk -- synth --no-lookups --output ../../cdk.out/ecs-canary-alarm-spike -c allowedIngressPrefixListId=pl-0123456789abcdef0 -c expiresOn=2026-12-31"
+    "synth": "AWS_REGION=eu-central-1 CDK_DEFAULT_ACCOUNT=111111111111 CDK_DEFAULT_REGION=eu-central-1 npm run cdk -- synth --no-lookups --output ../../cdk.out/ecs-canary-alarm-spike -c allowedIngressPrefixListId=pl-0123456789abcdef0 -c expiresOn=2026-12-31 -c activeTaskDefinitionArn=bootstrap-recipe"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.273.0",

@@ -113,17 +113,20 @@ spike_release() {
 # these variables, so every deploy in a session repeats the same values and a
 # forgotten flag cannot silently change the recipe:
 #   SPIKE_PROFILE (revert), SPIKE_BRIDGE_MISSING_DATA (notBreaching),
-#   SPIKE_INFRA_REVISION (1), SPIKE_RECIPE_REVISION (1)
+#   SPIKE_INFRA_REVISION (1), SPIKE_RECIPE_REVISION (1),
+#   SPIKE_FAIL_INFRA_DEPLOY (false; true only for run R5c-4)
 # Examples (do not pass `--`; the helper adds it):
 #   spike_infra_deploy diff
 #   spike_infra_deploy deploy
+#   spike_infra_deploy deploy --no-sync     # run R5c-4a only
 #   spike_infra_deploy bootstrap --digest "$DIGEST_GOOD_1"
 spike_infra_deploy() {
   "${SPIKE_REPO_ROOT}/scripts/ecs-canary-spike/infra-deploy.sh" "$@" -- \
     -c spikeProfile="${SPIKE_PROFILE:-revert}" \
     -c bridgeMissingData="${SPIKE_BRIDGE_MISSING_DATA:-notBreaching}" \
     -c infraRevision="${SPIKE_INFRA_REVISION:-1}" \
-    -c recipeRevision="${SPIKE_RECIPE_REVISION:-1}"
+    -c recipeRevision="${SPIKE_RECIPE_REVISION:-1}" \
+    -c failInfraDeploy="${SPIKE_FAIL_INFRA_DEPLOY:-false}"
 }
 
 # good-1 / good-2 / bad-5xx / crash for a digest.

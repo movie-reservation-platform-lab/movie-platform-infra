@@ -1,0 +1,38 @@
+{
+  "Parameters": {
+    "ImageDigest": {
+      "Type": "String"
+    },
+    "BootstrapVersion": {
+      "Type": "AWS::SSM::Parameter::Value<String>",
+      "Default": "/cdk-bootstrap/hnb659fds/version"
+    }
+  },
+  "Resources": {
+    "TaskDefinitionB36D86D9": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": "SpikeFamily",
+        "Cpu": "256",
+        "Memory": "512"
+      }
+    },
+    "Service": {
+      "Type": "AWS::ECS::Service",
+      "Properties": {
+        "DesiredCount": 1,
+        "TaskDefinition": "arn:aws:ecs:eu-central-1:111111111111:task-definition/SpikeFamily:7",
+        "DeploymentConfiguration": {
+          "Strategy": "CANARY"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "RecipeTaskDefinitionArn": {
+      "Value": {
+        "Ref": "TaskDefinitionB36D86D9"
+      }
+    }
+  }
+}

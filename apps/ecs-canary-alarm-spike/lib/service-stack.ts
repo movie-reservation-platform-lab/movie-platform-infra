@@ -1,4 +1,4 @@
-import { Annotations, CfnCondition, CfnOutput, CfnParameter, Duration, Fn, RemovalPolicy, Stack, Tags, Token, type StackProps } from 'aws-cdk-lib';
+import { Annotations, CfnOutput, CfnParameter, CfnWaitCondition, CfnWaitConditionHandle, Duration, Fn, RemovalPolicy, Stack, Tags, type StackProps } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import type * as ecr from 'aws-cdk-lib/aws-ecr';
@@ -9,7 +9,7 @@ import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import type { Construct } from 'constructs';
 import { createCanaryService } from './canary-service';
-import type { BridgeMissingData, EcsCanarySpikeConfig } from './spike-config';
+import { BOOTSTRAP_RECIPE, type BridgeMissingData, type EcsCanarySpikeConfig } from './spike-config';
 
 /** Prefix for explicit alarm names, so operators can force them by name. */
 export const ALARM_NAME_PREFIX = 'EcsCanarySpike';
@@ -20,10 +20,6 @@ export const BRIDGE_METRIC_NAME = 'WatchVerdict';
 
 /** Matches `sha256:` followed by exactly 64 lowercase hexadecimal characters. */
 export const IMAGE_DIGEST_PATTERN = '^sha256:[0-9a-f]{64}$';
-
-/** Empty, or an ECS task definition ARN with a revision number. */
-export const ACTIVE_TASK_DEFINITION_ARN_PATTERN =
-  '^$|^arn:aws[a-z-]*:ecs:[a-z0-9-]+:[0-9]{12}:task-definition/[A-Za-z0-9_-]+:[0-9]+$';
 
 export interface EcsCanarySpikeServiceStackProps extends StackProps {
   readonly config: EcsCanarySpikeConfig;
@@ -66,20 +62,6 @@ export class EcsCanarySpikeServiceStack extends Stack {
       type: 'String',
       allowedPattern: IMAGE_DIGEST_PATTERN,
       description: 'Fixture image digest in the spike repository (sha256:<64 hex>)',
-    });
-
-    // Session 3 ("pattern 2"): releases register task definitions outside
-    // CloudFormation. infra-deploy.sh passes the revision ECS is running, so
-    // an infra deploy keeps the service on it instead of resetting the
-    // service to the recipe. Empty means "use the recipe" (bootstrap only).
-    const activeTaskDefinitionArn = new CfnParameter(this, 'ActiveTaskDefinitionArn', {
-      type: 'String',
-      default: '',
-      allowedPattern: ACTIVE_TASK_DEFINITION_ARN_PATTERN,
-      description: 'Task definition the service runs now; empty only for the first deploy',
-    });
-    const hasActiveTaskDefinition = new CfnCondition(this, 'HasActiveTaskDefinition', {
-      expression: Fn.conditionNot(Fn.conditionEquals(activeTaskDefinitionArn.valueAsString, '')),
     });
 
     // Public subnets only and no NAT: tasks pull from ECR through the
@@ -178,17 +160,10 @@ export class EcsCanarySpikeServiceStack extends Stack {
       productionListenerRule,
     });
 
-    // Escape hatch: the L2 service always points at the recipe. Override the
-    // synthesized AWS::ECS::Service property with
-    // Fn::If(HasActiveTaskDefinition, <running ARN>, Ref TaskDefinition).
-    // If the running ARN equals what CloudFormation last set, the property
-    // does not change and CloudFormation does not call UpdateService for it.
-    const cfnService = service.node.defaultChild as ecs.CfnService;
-    cfnService.taskDefinition = Token.asString(Fn.conditionIf(
-      hasActiveTaskDefinition.logicalId,
-      activeTaskDefinitionArn.valueAsString,
-      taskDefinition.taskDefinitionArn,
-    ));
+    this.pinServiceTaskDefinition(service, config.activeTaskDefinitionArn);
+    if (config.failInfraDeploy) {
+      this.failAfterServiceUpdate(service);
+    }
 
     // Strong cross-stack references are intended: CloudFormation then refuses
     // to delete the image repository while this stack still uses it, which
@@ -232,6 +207,49 @@ export class EcsCanarySpikeServiceStack extends Stack {
     // release.sh renders from this; infra-deploy.sh compares it before and
     // after a deploy to detect a recipe change.
     new CfnOutput(this, 'RecipeTaskDefinitionArn', { value: taskDefinition.taskDefinitionArn });
+  }
+
+  /**
+   * Session 3 ("pattern 2"): releases register task definitions outside
+   * CloudFormation, so the service must point at the revision ECS runs now,
+   * not at the recipe. infra-deploy.sh passes it as synth-time context.
+   *
+   * Why context and not a CloudFormation parameter: `cdk deploy` reuses a
+   * parameter's previous value when it is not passed, so a raw deploy would
+   * quietly point the service at an older revision. Context has no previous
+   * value: without it, this stack fails validation and `cdk deploy`/`diff`
+   * stop before anything reaches AWS.
+   *
+   * The override is an escape hatch: the L2 FargateService always sets the
+   * synthesized AWS::ECS::Service TaskDefinition to its taskDefinition prop.
+   */
+  private pinServiceTaskDefinition(service: ecs.FargateService, active: string | undefined): void {
+    if (active === undefined) {
+      Annotations.of(this).addError(
+        'Missing context activeTaskDefinitionArn. Deploy this stack through '
+        + 'scripts/ecs-canary-spike/infra-deploy.sh, which passes the running revision; '
+        + 'a raw cdk deploy could reset the service to an older image.',
+      );
+      return;
+    }
+    if (active !== BOOTSTRAP_RECIPE) {
+      (service.node.defaultChild as ecs.CfnService).taskDefinition = active;
+    }
+  }
+
+  /**
+   * Run R5c-4: a wait condition that is never signalled. It depends on the
+   * service, so CloudFormation updates the service first, then fails here
+   * after 30 seconds and rolls the whole stack back.
+   */
+  private failAfterServiceUpdate(service: ecs.FargateService): void {
+    const handle = new CfnWaitConditionHandle(this, 'FailInfraDeployHandle');
+    const waitCondition = new CfnWaitCondition(this, 'FailInfraDeploy', {
+      handle: handle.ref,
+      timeout: '30',
+      count: 1,
+    });
+    waitCondition.node.addDependency(service);
   }
 
   private fixtureTargetGroup(id: string, vpc: ec2.IVpc): elbv2.ApplicationTargetGroup {
