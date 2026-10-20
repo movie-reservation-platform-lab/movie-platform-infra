@@ -84,7 +84,8 @@ Unit tests, CDK assertions, synth contracts, script checks, and smoke tests.
 - [ECS canary deployment alarm spike (S1)](./ecs-canary-deployment-alarm-spike.md):
   disposable experiment for ECS-native canary halt semantics under
   CloudFormation, deployment alarms, and the circuit breaker; feeds #103 and
-  #101.
+  #101. Live results (partial):
+  [evidence](./evidence/ecs-canary-deployment-alarm-spike-2026-10.md).
 - [Reservation audit publish failure alarms](./reservation-audit-publish-failure-alarms.md):
   workload-account detection for primary audit publication failures, unaudited
   successful logins, and publish latency near the service timeout.
