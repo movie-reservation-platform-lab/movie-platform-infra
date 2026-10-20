@@ -21,6 +21,16 @@ export interface EcsCanarySpikeConfig {
   readonly deploymentAlarmSet: DeploymentAlarmSet;
   /** Calendar date (YYYY-MM-DD) recorded in the `ExpiresOn` teardown tag. */
   readonly expiresOn: string;
+  /**
+   * Cluster tag value. Changing it is an infra change that leaves the recipe
+   * task definition alone (run R5c-3, first half).
+   */
+  readonly infraRevision: string;
+  /**
+   * Container environment value. Changing it changes the recipe task
+   * definition, which must trigger a release (run R5c-3, second half).
+   */
+  readonly recipeRevision: string;
 }
 
 /** Expected configuration failure, safe to show at the CDK CLI boundary. */
@@ -64,6 +74,8 @@ export function parseEcsCanarySpikeConfig(
       'all',
     ),
     expiresOn: parseExpiresOn(readContext('expiresOn')),
+    infraRevision: parseRevision(readContext('infraRevision'), 'infraRevision'),
+    recipeRevision: parseRevision(readContext('recipeRevision'), 'recipeRevision'),
   };
 }
 
@@ -98,6 +110,18 @@ function parseExpiresOn(value: unknown): string {
     || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
     throw new EcsCanarySpikeConfigError(
       'CDK context value "expiresOn" must be a YYYY-MM-DD date for the teardown tag.',
+    );
+  }
+  return value;
+}
+
+function parseRevision(value: unknown, key: string): string {
+  if (value === undefined) {
+    return '1';
+  }
+  if (typeof value !== 'string' || !/^[A-Za-z0-9-]{1,32}$/.test(value)) {
+    throw new EcsCanarySpikeConfigError(
+      `CDK context value "${key}" must be 1-32 letters, digits, or hyphens.`,
     );
   }
   return value;

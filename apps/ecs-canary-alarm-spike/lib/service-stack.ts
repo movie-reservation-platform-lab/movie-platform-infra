@@ -1,4 +1,4 @@
-import { Annotations, CfnOutput, CfnParameter, Duration, Fn, RemovalPolicy, Stack, Tags, type StackProps } from 'aws-cdk-lib';
+import { Annotations, CfnCondition, CfnOutput, CfnParameter, Duration, Fn, RemovalPolicy, Stack, Tags, Token, type StackProps } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import type * as ecr from 'aws-cdk-lib/aws-ecr';
@@ -20,6 +20,10 @@ export const BRIDGE_METRIC_NAME = 'WatchVerdict';
 
 /** Matches `sha256:` followed by exactly 64 lowercase hexadecimal characters. */
 export const IMAGE_DIGEST_PATTERN = '^sha256:[0-9a-f]{64}$';
+
+/** Empty, or an ECS task definition ARN with a revision number. */
+export const ACTIVE_TASK_DEFINITION_ARN_PATTERN =
+  '^$|^arn:aws[a-z-]*:ecs:[a-z0-9-]+:[0-9]{12}:task-definition/[A-Za-z0-9_-]+:[0-9]+$';
 
 export interface EcsCanarySpikeServiceStackProps extends StackProps {
   readonly config: EcsCanarySpikeConfig;
@@ -55,12 +59,27 @@ export class EcsCanarySpikeServiceStack extends Stack {
     Tags.of(this).add('Lifecycle', 'disposable');
     Tags.of(this).add('ExpiresOn', config.expiresOn);
 
-    // The digest is a parameter so fault runs change only this value with
-    // `update-stack --use-previous-template`, as a delivery pipeline would.
+    // Sessions 1-2 released by changing only this value with
+    // `update-stack --use-previous-template`. In Session 3 it is set once at
+    // bootstrap: releases swap the digest outside CloudFormation (release.sh).
     const imageDigest = new CfnParameter(this, 'ImageDigest', {
       type: 'String',
       allowedPattern: IMAGE_DIGEST_PATTERN,
       description: 'Fixture image digest in the spike repository (sha256:<64 hex>)',
+    });
+
+    // Session 3 ("pattern 2"): releases register task definitions outside
+    // CloudFormation. infra-deploy.sh passes the revision ECS is running, so
+    // an infra deploy keeps the service on it instead of resetting the
+    // service to the recipe. Empty means "use the recipe" (bootstrap only).
+    const activeTaskDefinitionArn = new CfnParameter(this, 'ActiveTaskDefinitionArn', {
+      type: 'String',
+      default: '',
+      allowedPattern: ACTIVE_TASK_DEFINITION_ARN_PATTERN,
+      description: 'Task definition the service runs now; empty only for the first deploy',
+    });
+    const hasActiveTaskDefinition = new CfnCondition(this, 'HasActiveTaskDefinition', {
+      expression: Fn.conditionNot(Fn.conditionEquals(activeTaskDefinitionArn.valueAsString, '')),
     });
 
     // Public subnets only and no NAT: tasks pull from ECR through the
@@ -117,10 +136,14 @@ export class EcsCanarySpikeServiceStack extends Stack {
     });
 
     const cluster = new ecs.Cluster(this, 'Cluster', { vpc });
+    // An infra-only change for run R5c-3: it touches the cluster, not the recipe.
+    Tags.of(cluster).add('InfraRevision', config.infraRevision);
     const containerLogGroup = new logs.LogGroup(this, 'ContainerLogGroup', {
       retention: logs.RetentionDays.ONE_DAY,
       removalPolicy: RemovalPolicy.DESTROY,
     });
+    // The recipe: everything about the task except which image runs. Releases
+    // copy it and swap only the digest (release.sh render step).
     const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
       cpu: 256,
       memoryLimitMiB: 512,
@@ -130,6 +153,8 @@ export class EcsCanarySpikeServiceStack extends Stack {
         `${props.repository.repositoryUri}@${imageDigest.valueAsString}`,
       ),
       portMappings: [{ containerPort: CONTAINER_PORT }],
+      // A recipe change for run R5c-3; the fixture ignores the value.
+      environment: { SPIKE_RECIPE_REVISION: config.recipeRevision },
       logging: ecs.LogDrivers.awsLogs({ logGroup: containerLogGroup, streamPrefix: 'fixture' }),
     });
     props.repository.grantPull(taskDefinition.obtainExecutionRole());
@@ -152,6 +177,18 @@ export class EcsCanarySpikeServiceStack extends Stack {
       greenTargetGroup,
       productionListenerRule,
     });
+
+    // Escape hatch: the L2 service always points at the recipe. Override the
+    // synthesized AWS::ECS::Service property with
+    // Fn::If(HasActiveTaskDefinition, <running ARN>, Ref TaskDefinition).
+    // If the running ARN equals what CloudFormation last set, the property
+    // does not change and CloudFormation does not call UpdateService for it.
+    const cfnService = service.node.defaultChild as ecs.CfnService;
+    cfnService.taskDefinition = Token.asString(Fn.conditionIf(
+      hasActiveTaskDefinition.logicalId,
+      activeTaskDefinitionArn.valueAsString,
+      taskDefinition.taskDefinitionArn,
+    ));
 
     // Strong cross-stack references are intended: CloudFormation then refuses
     // to delete the image repository while this stack still uses it, which
@@ -192,6 +229,9 @@ export class EcsCanarySpikeServiceStack extends Stack {
     new CfnOutput(this, 'BlueTargetGroupArn', { value: blueTargetGroup.targetGroupArn });
     new CfnOutput(this, 'GreenTargetGroupArn', { value: greenTargetGroup.targetGroupArn });
     new CfnOutput(this, 'EcsEventsLogGroupName', { value: ecsEventsLogGroup.logGroupName });
+    // release.sh renders from this; infra-deploy.sh compares it before and
+    // after a deploy to detect a recipe change.
+    new CfnOutput(this, 'RecipeTaskDefinitionArn', { value: taskDefinition.taskDefinitionArn });
   }
 
   private fixtureTargetGroup(id: string, vpc: ec2.IVpc): elbv2.ApplicationTargetGroup {

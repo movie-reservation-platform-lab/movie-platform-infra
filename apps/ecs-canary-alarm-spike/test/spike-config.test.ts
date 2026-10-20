@@ -16,6 +16,8 @@ test('applies defaults for the optional run toggles', () => {
     bridgeMissingData: 'notBreaching',
     deploymentAlarmSet: 'all',
     expiresOn: '2026-12-31',
+    infraRevision: '1',
+    recipeRevision: '1',
   });
 });
 
@@ -25,7 +27,11 @@ test('accepts every documented run toggle', () => {
     spikeProfile: 'breaker',
     bridgeMissingData: 'missing',
     deploymentAlarmSet: 'members',
+    infraRevision: 'tag-2',
+    recipeRevision: 'env-2',
   }))).toMatchObject({
+    infraRevision: 'tag-2',
+    recipeRevision: 'env-2',
     profile: 'breaker',
     bridgeMissingData: 'missing',
     deploymentAlarmSet: 'members',
@@ -41,6 +47,8 @@ test.each([
   ['an unknown alarm set', { ...REQUIRED, deploymentAlarmSet: 'composite' }],
   ['a missing expiry date', { allowedIngressPrefixListId: 'pl-0123456789abcdef0' }],
   ['an invalid expiry date', { ...REQUIRED, expiresOn: '2026-13-45' }],
+  ['a revision with spaces', { ...REQUIRED, infraRevision: 'tag 2' }],
+  ['a non-string revision', { ...REQUIRED, recipeRevision: 2 }],
 ])('rejects %s', (_description, values) => {
   expect(() => parseEcsCanarySpikeConfig(contextOf(values))).toThrow(EcsCanarySpikeConfigError);
 });

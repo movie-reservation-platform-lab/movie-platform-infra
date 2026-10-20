@@ -1,0 +1,23 @@
+{
+  "deploymentCircuitBreaker": {
+    "enable": false,
+    "rollback": false
+  },
+  "maximumPercent": 200,
+  "minimumHealthyPercent": 100,
+  "alarms": {
+    "alarmNames": [
+      "EcsCanarySpike-ErrorRate",
+      "EcsCanarySpike-WatchVerdict",
+      "EcsCanarySpike-Rollback"
+    ],
+    "rollback": false,
+    "enable": true
+  },
+  "strategy": "CANARY",
+  "bakeTimeInMinutes": 5,
+  "canaryConfiguration": {
+    "canaryPercent": 10.0,
+    "canaryBakeTimeInMinutes": 5
+  }
+}

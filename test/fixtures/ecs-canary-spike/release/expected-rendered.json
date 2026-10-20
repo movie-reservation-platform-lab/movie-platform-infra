@@ -1,0 +1,25 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "fixture",
+      "image": "111111111111.dkr.ecr.eu-central-1.amazonaws.com/ecs-canary-spike-fixture@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cpu": 0,
+      "portMappings": [{"containerPort": 8080, "hostPort": 8080, "protocol": "tcp"}],
+      "essential": true,
+      "environment": [{"name": "SPIKE_RECIPE_REVISION", "value": "1"}],
+      "logConfiguration": {"logDriver": "awslogs", "options": {"awslogs-group": "spike-log-group", "awslogs-stream-prefix": "fixture", "awslogs-region": "eu-central-1"}}
+    }
+  ],
+  "family": "SpikeFamily",
+  "executionRoleArn": "arn:aws:iam::111111111111:role/SpikeExecutionRole",
+  "networkMode": "awsvpc",
+  "volumes": [],
+  "placementConstraints": [],
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "tags": [
+    {"key": "Spike", "value": "infra-100"},
+    {"key": "ReleasedBy", "value": "release.sh"}
+  ]
+}

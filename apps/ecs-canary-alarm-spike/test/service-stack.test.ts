@@ -1,5 +1,5 @@
 import { Match } from 'aws-cdk-lib/assertions';
-import { IMAGE_DIGEST_PATTERN } from '../lib/service-stack';
+import { ACTIVE_TASK_DEFINITION_ARN_PATTERN, IMAGE_DIGEST_PATTERN } from '../lib/service-stack';
 import { synthRepositoryTemplate, synthServiceTemplate } from './spike-template';
 
 describe('fixture image repository', () => {
@@ -163,5 +163,54 @@ describe('spike service stack infrastructure', () => {
         { Key: 'Spike', Value: 'infra-100' },
       ]),
     });
+  });
+
+  it('changes the recipe, not the cluster, when recipeRevision changes', () => {
+    synthServiceTemplate({ recipeRevision: 'env-2' }).hasResourceProperties('AWS::ECS::TaskDefinition', {
+      ContainerDefinitions: [Match.objectLike({
+        Environment: [{ Name: 'SPIKE_RECIPE_REVISION', Value: 'env-2' }],
+      })],
+    });
+    synthServiceTemplate({ infraRevision: 'tag-2' }).hasResourceProperties('AWS::ECS::Cluster', {
+      Tags: Match.arrayWith([{ Key: 'InfraRevision', Value: 'tag-2' }]),
+    });
+    const recipeOf = (infraRevision: string): string => JSON.stringify(
+      synthServiceTemplate({ infraRevision }).findResources('AWS::ECS::TaskDefinition'),
+    );
+    expect(recipeOf('tag-2')).toBe(recipeOf('1'));
+  });
+});
+
+describe('Session 3 release model: infra deploys carry the running revision', () => {
+  const template = synthServiceTemplate();
+
+  it('accepts an empty or revision-qualified task definition ARN', () => {
+    template.hasParameter('ActiveTaskDefinitionArn', {
+      Type: 'String',
+      Default: '',
+      AllowedPattern: ACTIVE_TASK_DEFINITION_ARN_PATTERN,
+    });
+    const pattern = new RegExp(ACTIVE_TASK_DEFINITION_ARN_PATTERN);
+    expect(pattern.test('')).toBe(true);
+    expect(pattern.test('arn:aws:ecs:eu-central-1:111111111111:task-definition/Family:7')).toBe(true);
+    expect(pattern.test('arn:aws:ecs:eu-central-1:111111111111:task-definition/Family')).toBe(false);
+    expect(pattern.test('Family:7')).toBe(false);
+  });
+
+  it('points the service at the running revision when one is passed, else at the recipe', () => {
+    template.hasCondition('HasActiveTaskDefinition', {
+      'Fn::Not': [{ 'Fn::Equals': [{ Ref: 'ActiveTaskDefinitionArn' }, ''] }],
+    });
+    const [recipeId] = Object.keys(template.findResources('AWS::ECS::TaskDefinition'));
+    template.hasResourceProperties('AWS::ECS::Service', {
+      TaskDefinition: {
+        'Fn::If': ['HasActiveTaskDefinition', { Ref: 'ActiveTaskDefinitionArn' }, { Ref: recipeId }],
+      },
+    });
+  });
+
+  it('exports the recipe ARN for the release script and the infra-deploy wrapper', () => {
+    const [recipeId] = Object.keys(template.findResources('AWS::ECS::TaskDefinition'));
+    template.hasOutput('RecipeTaskDefinitionArn', { Value: { Ref: recipeId } });
   });
 });

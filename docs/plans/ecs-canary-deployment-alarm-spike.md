@@ -703,6 +703,14 @@ checks. If the hook costs more than a session to build, R10 moves to #103.
 disabled and superseded by R5c. R8b: the circuit breaker is always on (R8a).
 R7b: optional and not needed.
 
+**Tooling.** `scripts/ecs-canary-spike/release.sh` (render → register →
+deploy, the pre-release gate, `--mode revert|halt`) and
+`scripts/ecs-canary-spike/infra-deploy.sh` (the wrapper). The service stack
+has an `ActiveTaskDefinitionArn` parameter (`Fn::If` over the recipe) and a
+`RecipeTaskDefinitionArn` output; `infraRevision` and `recipeRevision`
+context values give R5c-3 its two kinds of change. The runbook's Session 3
+section has the commands.
+
 **Safety.** Each run is still a separate approval. The release script and the
 wrapper are the only mutating paths; teardown expects one target-group
 `DELETE_FAILED` and a retry.

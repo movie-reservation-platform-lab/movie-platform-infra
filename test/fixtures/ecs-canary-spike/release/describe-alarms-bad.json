@@ -1,0 +1,7 @@
+{
+  "MetricAlarms": [
+    {"AlarmName": "EcsCanarySpike-ErrorRate", "StateValue": "OK"},
+    {"AlarmName": "EcsCanarySpike-WatchVerdict", "StateValue": "INSUFFICIENT_DATA"}
+  ],
+  "CompositeAlarms": []
+}

@@ -9,7 +9,7 @@ Design, hypotheses, and the run matrix live in
 This document is the operator procedure.
 
 **Every live step is a separate approval.** That covers stack creation, each
-run R0–R9, and teardown. Do not run a live block unless the operator has
+run R0–R9 and R0b–R10, and teardown. Do not run a live block unless the operator has
 approved that exact run ID in the current session. An approval never carries
 over to a re-run, a changed profile, or teardown.
 
@@ -90,7 +90,9 @@ latest `digests.env`. It defines these helpers:
 | `current_service_deployment` | newest ECS service deployment ARN |
 | `spike_probe [R<n>]` | probe into `R<n>-probe.csv`; refuses to start without an ALB |
 | `spike_observe [R<n>]` | observer into `R<n>-observer.jsonl` |
-| `spike_status` | read-only stack, digest, and alarm summary |
+| `spike_status` | read-only stack, digest, running revision, and alarm summary |
+| `spike_release <digest> <revert\|halt> [flags]` | Session 3: release an image through ECS (`release.sh`) |
+| `spike_infra_deploy <diff\|deploy\|bootstrap> [flags]` | Session 3: infra deploy that carries the running revision (`infra-deploy.sh`) |
 
 If you write your own commands in zsh, put braces around any variable that is
 followed by `:` (`"${SERVICE_STACK}:ImageDigest=${DIGEST_GOOD_1}"`): zsh reads
@@ -377,6 +379,151 @@ before the next run.
 - a change set contains anything except the expected resources;
 - spend approaches the cap.
 
+## Session 3: releases through ECS ("pattern 2")
+
+Plan §6.8 explains why. In short: from now on CloudFormation owns the
+infrastructure and the *recipe* task definition, and releases go to ECS
+directly. Two commands are the only mutating paths:
+
+| Path | Command | What it does |
+|---|---|---|
+| Release | `spike_release <digest> <revert\|halt>` | render the recipe with the new digest, register it, `update-service` with alarm rollback on (`revert`) or off (`halt`) |
+| Infra deploy | `spike_infra_deploy deploy` | `cdk deploy` with `ActiveTaskDefinitionArn` = the running revision; if the recipe changed, release the running digest with the new recipe |
+
+Do **not** use `spike_update_digest` or a raw `spike_cdk deploy` of the
+service stack in Session 3. CDK reuses the previous parameter values, so a
+raw deploy would point the service at a stale `ActiveTaskDefinitionArn` (an
+old image) or, with an empty one, at the recipe's image.
+
+Both scripts write their own markers. `release.sh` refuses to start while a
+deployment is in flight, or unless every alarm the service watches is `OK`
+(the pre-release gate). `--skip-alarm-gate` is for R5c-2, R6a, and R6b only.
+Try `--dry-run` first whenever you want to see what a release would do.
+
+Infra context comes from variables, so every wrapper call repeats it:
+
+| Variable | Default | Used by |
+|---|---|---|
+| `SPIKE_PROFILE` | `revert` | the template's default alarm behaviour |
+| `SPIKE_BRIDGE_MISSING_DATA` | `notBreaching` | R6a (`breaching`), R6b (`missing`) |
+| `SPIKE_INFRA_REVISION` | `1` | R5c-3 (a cluster tag: infra only) |
+| `SPIKE_RECIPE_REVISION` | `1` | R5c-3 (a container environment value: recipe) |
+
+Set them with `export` in the terminal that runs the wrapper, and keep them
+until the session ends.
+
+### R0b: bootstrap the Session 3 stack
+
+The repository stack and `digests.env` from R0 are reused.
+
+```bash
+spike_status                                   # service stack: DOES NOT EXIST
+spike_cdk diff "$SERVICE_STACK" -c spikeProfile=revert
+spike_infra_deploy bootstrap --digest "$DIGEST_GOOD_1"
+spike_status                                   # running: <family>:1 image good-1 steady=true
+```
+
+Then start the instruments (`spike_probe R5c`, `spike_observe R5c`) as in R0
+step 4. The probe must show only `good-1`.
+
+### R5c-1: halt, outside CloudFormation (H12)
+
+```bash
+marker "R5c-1 start"
+spike_release "$DIGEST_GOOD_2" halt --dry-run   # check: only the image changes; alarms.rollback false
+spike_release "$DIGEST_GOOD_2" halt
+```
+
+When the observer shows the canary step (both weights above 0,
+`PRODUCTION_TRAFFIC_SHIFT`), start the sticky bridge loop from
+[Fault commands](#fault-commands) in its own terminal, and **leave it
+running**. Observe:
+
+- the service deployment goes to `STOPPED`;
+- the listener weights stay at the split (90/10) for 10 minutes;
+- the stack stays in its previous complete state; no stack events.
+
+### R5c-2: roll forward under an alarm (H13)
+
+The bridge loop is still running, so `WatchVerdict` is `ALARM`.
+
+```bash
+marker "R5c-2 start"
+spike_release "$DIGEST_GOOD_1" revert                    # expected: the gate refuses (record it)
+spike_release "$DIGEST_GOOD_1" revert --skip-alarm-gate
+```
+
+Observe: is the release accepted? What does the deployment's `alarms.status`
+say? Does it roll back at once, or do the weights converge on `good-1`?
+Then stop the loop (Ctrl-C), wait for `WatchVerdict` to return to `OK`, and
+check `spike_status` shows `steady=true`.
+
+### R5c-3: infra deploys through the wrapper (H14)
+
+First an infra-only change:
+
+```bash
+marker "R5c-3 tag change"
+export SPIKE_INFRA_REVISION=tag-2
+spike_infra_deploy diff        # expect: the cluster tag only
+spike_infra_deploy deploy      # expect: "recipe unchanged ... no release"
+spike_status                   # same running revision as before
+```
+
+Check that no new ECS service deployment started (`current_service_deployment`
+is the same ARN as before the deploy).
+
+Then a recipe change:
+
+```bash
+marker "R5c-3 recipe change"
+export SPIKE_RECIPE_REVISION=env-2
+spike_infra_deploy diff        # expect: TaskDefinition replaced; the service may show as modified
+spike_infra_deploy deploy      # expect: "recipe changed ... releasing the running digest"
+```
+
+Observe: exactly one ECS deployment (the wrapper's release), with the running
+digest and `SPIKE_RECIPE_REVISION=env-2`; and no ECS deployment started by
+CloudFormation itself during the stack update.
+
+### R6a: an alarm already in ALARM at release start (H7)
+
+```bash
+marker "R6a setup"
+export SPIKE_BRIDGE_MISSING_DATA=breaching
+spike_infra_deploy deploy      # alarm change only; no release
+# wait until WatchVerdict is ALARM (no data counts as breaching)
+marker "R6a start"
+spike_release <other good digest> revert --skip-alarm-gate
+```
+
+At the canary step, force `ErrorRate` ([Fault commands](#fault-commands)).
+Observe: does ECS react to anything? Recovery:
+
+```bash
+export SPIKE_BRIDGE_MISSING_DATA=notBreaching
+spike_infra_deploy deploy
+```
+
+### R6b: an alarm in INSUFFICIENT_DATA at release start (H8)
+
+```bash
+marker "R6b setup"
+export SPIKE_BRIDGE_MISSING_DATA=missing
+spike_infra_deploy deploy      # WatchVerdict goes to INSUFFICIENT_DATA
+marker "R6b start"
+spike_release <other good digest> revert --skip-alarm-gate
+```
+
+At the canary step, start the sticky bridge loop. Observe: does ECS halt and
+revert? Stop the loop, then recover with
+`export SPIKE_BRIDGE_MISSING_DATA=notBreaching` and `spike_infra_deploy deploy`.
+
+### R10 (optional)
+
+The lifecycle-hook run is not built yet (plan §6.8). Decide at the start of
+the session whether to build it or move it to #103.
+
 ## Teardown (separate approval)
 
 ```text
@@ -386,6 +533,10 @@ Change: delete EcsCanarySpikeServiceStack, then EcsCanarySpikeImageRepositorySta
 
 ```bash
 npm run preflight:aws
+# 0. Session 3 only: note the task-definition family before the stack goes.
+family="$(aws ecs describe-task-definition \
+  --task-definition "$(stack_output "$SERVICE_STACK" RecipeTaskDefinitionArn)" \
+  --query taskDefinition.family --output text)"
 # 1. No deployment may be in progress; stop it if the observer shows one.
 aws ecs stop-service-deployment --service-deployment-arn "$(current_service_deployment)" --stop-type ROLLBACK || true
 # 2. Service stack first. Deleting from UPDATE_FAILED is allowed.
@@ -421,9 +572,23 @@ aws elbv2 describe-load-balancers --query 'LoadBalancers[].LoadBalancerName' | g
 aws ecr describe-repositories --query 'repositories[].repositoryName' | grep -i fixture || echo 'no fixture repository'
 ```
 
-Optional: deregistered task-definition revisions remain `INACTIVE`, at no
-cost. Delete them with `aws ecs delete-task-definitions` if wanted. Remove
-the local images with `docker rmi`.
+Session 3: `release.sh` registers revisions outside CloudFormation, so the
+stack delete leaves them `ACTIVE`, tagged `Spike=infra-100`, and the tag check
+above lists them. Deregister and delete them (free, but they fail the check):
+
+```bash
+for arn in $(aws ecs list-task-definitions --family-prefix "$family" --status ACTIVE \
+    --query 'taskDefinitionArns[]' --output text); do
+  aws ecs deregister-task-definition --task-definition "$arn" --query 'taskDefinition.revision'
+done
+for arn in $(aws ecs list-task-definitions --family-prefix "$family" --status INACTIVE \
+    --query 'taskDefinitionArns[]' --output text); do
+  aws ecs delete-task-definitions --task-definitions "$arn" --query 'failures'
+done
+```
+
+Deregistered revisions otherwise remain `INACTIVE`, at no cost. Remove the
+local images with `docker rmi`.
 
 Record the redacted verification output in the evidence file.
 

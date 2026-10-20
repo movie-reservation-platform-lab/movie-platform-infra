@@ -12,6 +12,8 @@ export const DEFAULT_CONFIG: EcsCanarySpikeConfig = {
   bridgeMissingData: 'notBreaching',
   deploymentAlarmSet: 'all',
   expiresOn: '2026-12-31',
+  infraRevision: '1',
+  recipeRevision: '1',
 };
 
 /** Synthesize both spike stacks and return the service stack template. */
