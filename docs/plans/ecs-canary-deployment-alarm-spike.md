@@ -1,13 +1,50 @@
 # Implementation Plan: ECS Canary Deployment Alarm Spike (S1)
 
-Status: **plan only, awaiting review.** Consultation decisions from
-2026-10-16 are applied (see Decisions). Nothing in this plan authorizes an AWS
-mutation. Every live run in §6.4 needs its own operator approval when it runs.
+Status: **experiment complete; evidence PR #118 awaiting merge.** All approved
+live runs are finished, teardown is verified, and no runnable or billable
+spike resources remain. Do not resume the run matrix or recreate its AWS
+resources. See the continuation guide below.
 
 Issue: #100. Parent epic:
 movie-reservation-platform-lab/movie-platform-environments#140 (walking
 skeleton, milestone M0). The findings feed #103 (the per-component ECS
 construct) and #101 (Spike S2, CodePipeline V2 CloudFormation deploy).
+
+## Current continuation guide (2026-10-20)
+
+This document preserves S1's original hypotheses, implementation plan, and
+run matrix. Use these sources when continuing the wider delivery work:
+
+1. **Overall programme and ordering:**
+   [`movie-platform-environments#140`](https://github.com/movie-reservation-platform-lab/movie-platform-environments/issues/140)
+   and `movie-platform-environments/docs/plans/automated-delivery-and-quality-gates.md`.
+   That is the authoritative walking-skeleton plan.
+2. **S1 execution and rationale:** this document.
+3. **Observed results:**
+   [`evidence/ecs-canary-deployment-alarm-spike-2026-10.md`](./evidence/ecs-canary-deployment-alarm-spike-2026-10.md).
+4. **Repeatable operator commands:**
+   [`../operations/ecs-canary-deployment-alarm-spike.md`](../operations/ecs-canary-deployment-alarm-spike.md).
+
+Current repository state:
+
+- PR [#118](https://github.com/movie-reservation-platform-lab/movie-platform-infra/pull/118)
+  records Session 3 and closes #100 when merged. Its CI is green.
+- The D4 design amendment already merged in
+  [`movie-platform-environments#147`](https://github.com/movie-reservation-platform-lab/movie-platform-environments/pull/147).
+  Session 3 confirmed its remaining open assumptions: ECS-direct `halt` holds,
+  an alarm-red roll-forward is an explicit unmonitored break-glass operation,
+  and the infrastructure wrapper prevents stale-image rollback.
+- R10 was not run. Its lifecycle-hook harness moved to #103.
+- The only S1 administration left after #118 merges is to propagate the final
+  recommendations to #101 and #103 and update the parent plan's Phase 0 S1 row
+  from "Session 3 pending" to complete.
+
+The next Phase 0 engineering spike is
+[#101](https://github.com/movie-reservation-platform-lab/movie-platform-infra/issues/101)
+(S2, CodePipeline V2 cross-account deployment and alarm stage conditions).
+[#103](https://github.com/movie-reservation-platform-lab/movie-platform-infra/issues/103)
+is Phase 1 work: the reusable per-component ECS construct that consumes S1's
+defaults, including the deferred lifecycle-hook verification.
 
 ## Summary
 
@@ -1041,50 +1078,55 @@ Taken after Sessions 1–2; see the
 
 ## Done Criteria
 
-- [ ] The implementation PR merges, with the spike app, tests, offline synth
+- [x] The implementation PR merges, with the spike app, tests, offline synth
       in CI, tools with self-tests, and the runbook.
-- [ ] Every run in §6.2 and §6.8 is executed with its own approval, or
+- [x] Every run in §6.2 and §6.8 is executed with its own approval, or
       explicitly skipped with a reason.
-- [ ] The evidence file records, for each run: timings, the traffic split at
+- [x] The evidence file records, for each run: timings, the traffic split at
       halt, the ECS and CloudFormation state sequences, and the final digest
       read-back.
-- [ ] H1–H16 are each marked confirmed, refuted, inconclusive, or not run
+- [x] H1–H16 are each marked confirmed, refuted, inconclusive, or not run
       (with the reason), with evidence.
-- [ ] Teardown is verified and recorded. No `Spike=infra-100` resources
-      remain.
+- [x] Teardown is verified and recorded. No runnable or billable
+      `Spike=infra-100` resources remain; retained ECS records are explicitly
+      `INACTIVE` or `DELETE_IN_PROGRESS`.
 - [ ] #100 has a summary comment. #103 and #101 have the §6.7
       recommendations.
-- [ ] The D4 recommendation (§6.6) is raised in `movie-platform-environments`
-      for decision.
+- [x] The D4 recommendation (§6.6) was accepted and merged in
+      `movie-platform-environments` PR #147.
 
-## Handoff Prompt for Implementation Agent
+## Handoff Prompt for a Standalone Continuation Agent
 
 ```text
-Implement steps 1–8 of docs/plans/ecs-canary-deployment-alarm-spike.md
-(offline only; no AWS calls, no deploy) in hybrid teaching mode, using the
-ownership card in Implementation Steps. Do not write the engineer-owned
-deployment wiring in step 4; write its assertion tests first and stop for the
-engineer's attempt.
+Resume the walking-skeleton delivery work after ECS canary spike S1.
 
-Constraints:
-- Stay inside apps/ecs-canary-alarm-spike, scripts/ecs-canary-spike,
-  test/fixtures/ecs-canary-spike, docs/operations, apps/README.md, root
-  package.json scripts, and .github/workflows/ci.yml.
-- Do not touch lib/infra-stack.ts or any other app or package.
-- No new npm dependencies; aws-cdk-lib and constructs only.
-- Context is validated once in lib/spike-config.ts; the image is a
-  CfnParameter with a digest-only AllowedPattern.
-- Use the installed aws-cdk-lib ECS-native canary API
-  (deploymentStrategy CANARY, canaryConfiguration, bakeTime,
-  deploymentAlarms, AlternateTarget + ListenerRuleConfiguration).
-- If the installed API cannot express something in the plan, stop and
-  report instead of improvising.
+Start here:
+1. Read docs/plans/ecs-canary-deployment-alarm-spike.md, especially
+   "Current continuation guide (2026-10-20)" and "Decisions
+   (consultation, 2026-10-20)".
+2. Read docs/plans/evidence/ecs-canary-deployment-alarm-spike-2026-10.md.
+3. Check movie-platform-infra PR #118. Merge is a human decision; do not
+   recreate the spike or make AWS calls. All live runs and teardown are done.
+4. Read the authoritative cross-repository roadmap in
+   movie-platform-environments/docs/plans/automated-delivery-and-quality-gates.md
+   and parent epic movie-platform-environments#140.
 
-Verification:
-- npm run build:apps
-- npm test --workspace @movie-platform/ecs-canary-alarm-spike
-- npm run synth:ecs-canary-alarm-spike
-- npm run validate:ecs-canary-spike-tools
-- npm run validate:workspace-boundaries
-- npm run ci
+After #118 merges:
+- propagate S1's final recommendations to movie-platform-infra issues #101
+  and #103;
+- update the parent plan's Phase 0 S1 row and D4 amendment note so Session 3
+  is complete rather than pending;
+- continue with Phase 0 spike S2 (#101) unless the parent epic's dependency
+  state has changed.
+
+Key constraints carried forward:
+- releases use ECS directly: render recipe, register task definition,
+  update-service;
+- CloudFormation owns infrastructure and the task-definition recipe;
+- infra deploys synchronize the running task-definition revision first;
+- normal releases require every rollback alarm to be OK;
+- an alarm-red release is an explicit break-glass operation and is not
+  protected by ECS deployment alarms;
+- revert is the default; halt is selected when rollbackSafe is false;
+- R10 lifecycle-hook verification belongs to #103.
 ```
