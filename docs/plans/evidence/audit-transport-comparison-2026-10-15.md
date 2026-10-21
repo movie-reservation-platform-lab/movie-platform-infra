@@ -6,6 +6,8 @@ for security audit events, subject to the limitations and follow-up work below.
 Do not add account IDs, role ARNs, bucket names, query locations, credentials,
 raw audit events, or private evidence paths to this file.
 
+Load follow-up: [load test of both transports, 2026-10-21](audit-transport-load-test-2026-10-21.md).
+
 ## Executive decision
 
 Use the cross-account EventBridge to Security Lake architecture as the platform's
