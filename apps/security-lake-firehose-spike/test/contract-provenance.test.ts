@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const contractRoot = join(__dirname, '..', 'contract');
+
 const expectedHashes: Readonly<Record<string, string>> = {
   'examples/authentication-accepted-v1.json':
     '05143118b47f34871693e7b893a309d7e234dbe2ef4048391522f722497e61f8',
@@ -16,6 +17,7 @@ const expectedHashes: Readonly<Record<string, string>> = {
 test('pins the platform-audit/1 bundle copied from service revision 6a1fdd3', () => {
   for (const [relativePath, expectedHash] of Object.entries(expectedHashes)) {
     const contents = readFileSync(join(contractRoot, relativePath));
+
     expect(createHash('sha256').update(contents).digest('hex')).toBe(expectedHash);
   }
 });

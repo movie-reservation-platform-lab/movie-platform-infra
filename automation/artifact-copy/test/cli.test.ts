@@ -23,6 +23,7 @@ import { CONFIG_DIGEST, LAYER_DIGEST_A, LAYER_DIGEST_B, createCopyFixture } from
 
 const REQUEST_FILE = '/tmp/movie-platform/artifact-copy-request.json';
 const SKOPEO_EXECUTABLE = '/usr/bin/skopeo';
+
 const EXECUTION_ARGUMENTS = [
   '--request-file',
   REQUEST_FILE,
@@ -70,6 +71,7 @@ async function run(
 ): Promise<CliResult> {
   let stdout = '';
   let stderr = '';
+
   const status = await runCli(
     arguments_,
     {
@@ -135,12 +137,14 @@ function successfulDependencies(
     },
     copyArtifact: async (request, receivedClient) => {
       events.push(`copy:${request.sourceReference}:${request.destinationRepository}`);
+
       expect(receivedClient).toBe(client);
 
       return successfulVerification();
     },
     transferArtifact: async (request, receivedClient) => {
       events.push(`transfer:${request.operation}:${request.sourceReference}`);
+
       expect(receivedClient).toBe(client);
 
       return successfulTransferVerification(
@@ -156,6 +160,7 @@ test.each([['--help'], ['-h']])(
   'prints help without reading a request for %s',
   async (argument) => {
     const successful = successfulDependencies();
+
     const dependencies: ArtifactCopyCliDependencies = {
       readRequestFile: jest.fn(successful.readRequestFile),
       createRegistryClient: jest.fn(successful.createRegistryClient),
@@ -194,6 +199,7 @@ test('dispatches v2 verify-existing and emits only its sanitized outcome', async
   expect(result.stdout).not.toContain('/tmp/movie-platform');
   expect(result.stdout).not.toContain('111111111111');
   expect(result.stdout).not.toContain('ghcr.io');
+
   expect(events).toEqual([
     `read:${REQUEST_FILE}`,
     `client:${SKOPEO_EXECUTABLE}`,
@@ -204,6 +210,7 @@ test('dispatches v2 verify-existing and emits only its sanitized outcome', async
 test('routes v2 verify-existing through the mutation-free library branch', async () => {
   const fixture = createCopyFixture();
   const copy = jest.fn(async () => undefined);
+
   const dependencies: ArtifactCopyCliDependencies = {
     ...successfulDependencies([], v2RequestDocument(ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING)),
     createRegistryClient: () => ({
@@ -216,10 +223,12 @@ test('routes v2 verify-existing through the mutation-free library branch', async
   const result = await run(EXECUTION_ARGUMENTS, dependencies);
 
   expect(result.status).toBe(ARTIFACT_COPY_CLI_EXIT_CODE.SUCCESS);
+
   expect(JSON.parse(result.stdout)).toMatchObject({
     verificationMethod: ARTIFACT_TRANSFER_VERIFICATION_METHOD,
     outcome: ARTIFACT_TRANSFER_OUTCOME.ALREADY_PRESENT,
   });
+
   expect(copy).not.toHaveBeenCalled();
 });
 
@@ -243,6 +252,7 @@ test('emits only the existing sanitized immutable verification result as JSON', 
   expect(result.stdout).not.toContain('/tmp/movie-platform');
   expect(result.stdout).not.toContain('111111111111');
   expect(result.stdout).not.toContain('ghcr.io');
+
   expect(events).toEqual([
     `read:${REQUEST_FILE}`,
     `client:${SKOPEO_EXECUTABLE}`,
@@ -277,6 +287,7 @@ test.each([
   ],
 ])('returns stable invalid-input status for %s', async (_name, arguments_, rawRequest) => {
   const successful = successfulDependencies([], rawRequest);
+
   const dependencies: ArtifactCopyCliDependencies = {
     ...successful,
     copyArtifact: copyAndVerifyArtifact,
@@ -289,6 +300,7 @@ test.each([
     stdout: '',
     stderr: `Artifact copy failed: ${ARTIFACT_COPY_CLI_FAILURE.INVALID_INPUT}\n`,
   });
+
   expect(result.stderr).not.toContain('inline-secret');
   expect(result.stderr).not.toContain('/private/auth.json');
 });
@@ -309,16 +321,19 @@ test('classifies invalid Skopeo selection without exposing the executable path',
     stdout: '',
     stderr: `Artifact copy failed: ${ARTIFACT_COPY_CLI_FAILURE.INVALID_INPUT}\n`,
   });
+
   expect(result.stderr).not.toContain('relative/untrusted-skopeo');
 });
 
 test('returns stable source-rejection status and never copies an invalid source', async () => {
   const fixture = createCopyFixture();
   const copy = jest.fn(async () => undefined);
+
   const client: RegistryImageClient = {
     readRawManifest: async () => Buffer.from('{}'),
     copy,
   };
+
   const dependencies: ArtifactCopyCliDependencies = {
     ...successfulDependencies(),
     createRegistryClient: () => client,
@@ -332,6 +347,7 @@ test('returns stable source-rejection status and never copies an invalid source'
     stdout: '',
     stderr: `Artifact copy failed: ${ARTIFACT_COPY_CLI_FAILURE.SOURCE_REJECTED}\n`,
   });
+
   expect(copy).not.toHaveBeenCalled();
   expect(fixture.rawManifest).not.toEqual(Buffer.from('{}'));
 });
@@ -339,6 +355,7 @@ test('returns stable source-rejection status and never copies an invalid source'
 test('returns stable copy-failure status without destination inspection', async () => {
   const fixture = createCopyFixture();
   const readRawManifest = jest.fn(async () => fixture.rawManifest);
+
   const dependencies: ArtifactCopyCliDependencies = {
     ...successfulDependencies(),
     createRegistryClient: () => ({
@@ -357,6 +374,7 @@ test('returns stable copy-failure status without destination inspection', async 
     stdout: '',
     stderr: `Artifact copy failed: ${ARTIFACT_COPY_CLI_FAILURE.COPY_FAILED}\n`,
   });
+
   expect(readRawManifest).toHaveBeenCalledTimes(1);
   expect(result.stderr).not.toContain('private registry response');
 });
@@ -364,6 +382,7 @@ test('returns stable copy-failure status without destination inspection', async 
 test('returns stable destination-verification status after copied content drifts', async () => {
   const fixture = createCopyFixture();
   let reads = 0;
+
   const dependencies: ArtifactCopyCliDependencies = {
     ...successfulDependencies(),
     createRegistryClient: () => ({
@@ -384,6 +403,7 @@ test('returns stable destination-verification status after copied content drifts
     stdout: '',
     stderr: `Artifact copy failed: ${ARTIFACT_COPY_CLI_FAILURE.DESTINATION_VERIFICATION_FAILED}\n`,
   });
+
   expect(reads).toBe(2);
 });
 
@@ -402,5 +422,6 @@ test('sanitizes unexpected failures under a distinct internal-error classificati
     stdout: '',
     stderr: `Artifact copy failed: ${ARTIFACT_COPY_CLI_FAILURE.INTERNAL_ERROR}\n`,
   });
+
   expect(result.stderr).not.toContain('private internal diagnostic');
 });

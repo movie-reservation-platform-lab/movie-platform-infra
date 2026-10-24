@@ -21,11 +21,13 @@ export async function inspectArtifactFoundation(
   await reader.verifyIdentity();
 
   const repositoryDefinitions = catalog.listArtifactRepositories();
+
   const [workloadStack, foundationStack, repositories] = await Promise.all([
     reader.inspectStack(WORKLOAD_STACK_NAME),
     reader.inspectStack(ARTIFACT_FOUNDATION_STACK_NAME),
     inspectConfiguredRepositories(reader, repositoryDefinitions),
   ]);
+
   const assessment = evaluateCleanupReadiness({
     workloadStack,
     foundationStack,
@@ -54,6 +56,7 @@ async function inspectConfiguredRepositories(
   const inspectionPromises = definitions.map((definition) =>
     inspectConfiguredRepository(reader, definition),
   );
+
   const inspections = await Promise.all(inspectionPromises);
 
   return Object.freeze(inspections);

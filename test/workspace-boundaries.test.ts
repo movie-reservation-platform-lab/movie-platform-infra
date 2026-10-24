@@ -65,6 +65,7 @@ describe('workspace dependency direction', () => {
       ...auditApp,
       dependencyNames: [auditOperator.name],
     };
+
     const automationDependingOnApp: WorkspaceNode = {
       ...auditOperator,
       dependencyNames: [auditApp.name],
@@ -93,6 +94,7 @@ describe('workspace dependency direction', () => {
       ...observabilityPackage,
       dependencyNames: [observabilityApp.name, auditApp.name],
     };
+
     const reversedInput: readonly WorkspaceNode[] = [
       reversedObsDependingOnApp,
       packageDependingOnApp,
@@ -108,6 +110,7 @@ describe('workspace dependency direction', () => {
     const reversedEdges = toEdges(findForbiddenWorkspaceDependencies(reversedInput));
 
     expect(forwardEdges).toEqual(reversedEdges);
+
     expect(forwardEdges).toEqual([
       ['@movie-platform/audit-ingestion', '@movie-platform/audit-account'],
       ['@movie-platform/observability-ingestion', '@movie-platform/audit-account'],
@@ -129,10 +132,12 @@ describe('workspace dependency direction', () => {
     expect(violations).toHaveLength(1);
 
     const auditViolation = violations[0];
+
     expect(auditViolation).toMatchObject({
       source: packageWithAppAndExternalDependencies,
       target: auditApp,
     });
+
     expect(auditViolation?.message).toContain(packageWithAppAndExternalDependencies.name);
     expect(auditViolation?.message).toContain(auditApp.name);
   });

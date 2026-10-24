@@ -41,11 +41,14 @@ export class AuditDeliveryAlarms extends Construct {
       // Keyed by account like the package's producer resources, so removing or
       // reordering an account never replaces another account's alarms.
       const producerScope = new Construct(this, `Producer${workloadAccountId}`);
+
       Tags.of(producerScope).add(WORKLOAD_ACCOUNT_TAG, workloadAccountId);
+
       const alarmProps = {
         comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       };
+
       const alarms = [
         new cloudwatch.Alarm(producerScope, 'FailedInvocationsAlarm', {
           ...alarmProps,
@@ -100,6 +103,7 @@ export class AuditDeliveryAlarms extends Construct {
           datapointsToAlarm: 3,
         }),
       ];
+
       alarms.forEach((alarm) => alarm.addAlarmAction(alarmAction));
     });
   }

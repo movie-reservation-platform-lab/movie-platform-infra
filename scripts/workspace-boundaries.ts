@@ -39,6 +39,7 @@ function requirePackageName(value: unknown, packageJsonPath: string): string {
 /** Collect unique dependency names from every npm dependency section in stable order. */
 function collectDependencyNames(manifest: JsonObject, packageJsonPath: string): readonly string[] {
   const names = new Set<string>();
+
   for (const field of [
     'dependencies',
     'devDependencies',
@@ -46,6 +47,7 @@ function collectDependencyNames(manifest: JsonObject, packageJsonPath: string): 
     'optionalDependencies',
   ] as const) {
     const value = manifest[field];
+
     if (value === undefined) {
       continue;
     }
@@ -64,6 +66,7 @@ function discoverWorkspacesByKind(
   directory: 'apps' | 'automation' | 'packages',
 ): readonly WorkspaceNode[] {
   const workspaceRoot = join(repositoryRoot, directory);
+
   if (!existsSync(workspaceRoot)) {
     return [];
   }
@@ -73,6 +76,7 @@ function discoverWorkspacesByKind(
     .flatMap((entry) => {
       const workspacePath = join(workspaceRoot, entry.name);
       const packageJsonPath = join(workspacePath, 'package.json');
+
       if (!existsSync(packageJsonPath)) {
         return [];
       }
@@ -107,7 +111,9 @@ export function discoverWorkspaceGraph(repositoryRoot: string): readonly Workspa
     ...discoverWorkspacesByKind(repositoryRoot, 'automation'),
     ...discoverWorkspacesByKind(repositoryRoot, 'packages'),
   ];
+
   const names = new Set<string>();
+
   for (const workspace of graph) {
     if (names.has(workspace.name)) {
       throw new Error(`Duplicate workspace name: ${workspace.name}.`);
@@ -145,6 +151,7 @@ export function findForbiddenWorkspaceDependencies(
           target,
           message: `${workspaceSource.kind} workspace ${workspaceSource.name} must not depend on ${target.kind} workspace ${target.name}`,
         } satisfies WorkspaceDependencyViolation;
+
         violations.push(violation);
       }
     }

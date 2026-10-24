@@ -63,6 +63,7 @@ test('requires an exact account- and Region-specific confirmation', async () => 
     'DELETE ArtifactFoundationStack AND RETAINED ECR FROM ' +
       'movie-platform-demo/eu-central-1/account-1111',
   );
+
   expect(() => planArtifactFoundationCleanup(inspection, 'almost correct')).toThrow(CleanupFailure);
 });
 
@@ -72,6 +73,7 @@ test('recomputes blockers from resource state instead of trusting serialized rea
     foundationStack: FOUNDATION_STACK,
     repositories: [REPOSITORY],
   });
+
   const inconsistentInspection = {
     ...blockedInspection,
     readiness: 'READY' as const,
@@ -88,6 +90,7 @@ test('executes normal cleanup in fail-closed order and verifies final absence', 
     foundationStack: FOUNDATION_STACK,
     repositories: [REPOSITORY],
   });
+
   const plan = planArtifactFoundationCleanup(inspection, buildCleanupConfirmation(TEST_TARGET));
   const events: string[] = [];
 
@@ -108,6 +111,7 @@ test('executes normal cleanup in fail-closed order and verifies final absence', 
       },
     ],
   });
+
   expect(events).toEqual([
     'cleanup-identity',
     'disable-protection:ArtifactFoundationStack',
@@ -127,6 +131,7 @@ test('inspects and cleans multiple repositories in catalog order before final ab
     }),
     TEST_MULTI_REPOSITORY_CATALOG,
   );
+
   expect(inspection.repositories.map(({ definition }) => definition.componentId)).toEqual([
     'reservation-service',
     'reservation-web',
@@ -134,6 +139,7 @@ test('inspects and cleans multiple repositories in catalog order before final ab
 
   const plan = planArtifactFoundationCleanup(inspection, buildCleanupConfirmation(TEST_TARGET));
   const events: string[] = [];
+
   const result = await executeArtifactFoundationCleanup(plan, createCleaner(events), async () => {
     events.push('final-inspection');
 
@@ -148,6 +154,7 @@ test('inspects and cleans multiple repositories in catalog order before final ab
     'reservation-service',
     'reservation-web',
   ]);
+
   expect(events).toEqual([
     'cleanup-identity',
     'disable-protection:ArtifactFoundationStack',
@@ -164,6 +171,7 @@ test('skips the protection update when protection is already disabled', async ()
     foundationStack: { ...FOUNDATION_STACK, terminationProtection: false },
     repositories: [REPOSITORY],
   });
+
   const plan = planArtifactFoundationCleanup(inspection, buildCleanupConfirmation(TEST_TARGET));
   const events: string[] = [];
 
@@ -184,9 +192,11 @@ test.each([
       foundationStack: FOUNDATION_STACK,
       repositories: [REPOSITORY],
     });
+
     const plan = planArtifactFoundationCleanup(inspection, buildCleanupConfirmation(TEST_TARGET));
     const events: string[] = [];
     const baseCleaner = createCleaner(events);
+
     const cleaner: ArtifactFoundationCleaner = {
       ...baseCleaner,
       [failingMethod]: async (stackName: string) => {
@@ -208,10 +218,12 @@ test('repository deletion failure leaves a retryable orphaned-repository path', 
     foundationStack: FOUNDATION_STACK,
     repositories: [REPOSITORY],
   });
+
   const initialPlan = planArtifactFoundationCleanup(
     initialInspection,
     buildCleanupConfirmation(TEST_TARGET),
   );
+
   const failingCleaner: ArtifactFoundationCleaner = {
     ...createCleaner(),
     deleteRepository: async () => {
@@ -224,11 +236,14 @@ test('repository deletion failure leaves a retryable orphaned-repository path', 
   ).rejects.toThrow('repository deletion failed');
 
   const retryInspection = await inspect({ repositories: [REPOSITORY] });
+
   const retryPlan = planArtifactFoundationCleanup(
     retryInspection,
     buildCleanupConfirmation(TEST_TARGET),
   );
+
   const retryEvents: string[] = [];
+
   await expect(
     executeArtifactFoundationCleanup(retryPlan, createCleaner(retryEvents), async () =>
       inspect({}),
@@ -252,6 +267,7 @@ test('already-absent state returns without constructing AWS-side effects or rein
     foundationStackDeleted: false,
     deletedRepositories: [],
   });
+
   expect(finalInspection).not.toHaveBeenCalled();
 });
 

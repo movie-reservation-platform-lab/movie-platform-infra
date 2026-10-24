@@ -19,6 +19,7 @@ describe('AwsDeliveryHealthReader', () => {
         ],
       ],
     ]);
+
     const cloudWatch = fakeSdkClient([
       [DescribeAlarmsCommand, [{ MetricAlarms: [{ AlarmName: 'a' }] }]],
     ]);
@@ -31,6 +32,7 @@ describe('AwsDeliveryHealthReader', () => {
         'prefix',
       ).read(),
     ).resolves.toEqual({ deadLetterMessages: 3, alarmsInAlarm: ['a'] });
+
     expect(cloudWatch.sent[0]?.input).toEqual({ AlarmNamePrefix: 'prefix', StateValue: 'ALARM' });
   });
 

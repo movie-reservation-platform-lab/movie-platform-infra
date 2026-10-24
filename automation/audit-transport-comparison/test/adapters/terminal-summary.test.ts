@@ -37,6 +37,7 @@ describe('renderSummary', () => {
 
   it('marks missing events and counts unaudited logins', async () => {
     const clock = new FakeClock();
+
     const result = await runComparison(
       TEST_SETTINGS,
       TEST_CONTEXT,

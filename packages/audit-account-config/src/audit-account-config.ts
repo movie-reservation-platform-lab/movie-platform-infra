@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 
 export const AUDIT_ACCOUNT_REGION = 'eu-central-1' as const;
+
 export const AUDIT_ACCOUNT_CONFIG_ENVIRONMENT_VARIABLE =
   'MOVIE_PLATFORM_AUDIT_ACCOUNT_CONFIG_FILE' as const;
 
@@ -11,6 +12,7 @@ const CONFIG_KEYS = [
   'workloadAccountIds',
   'region',
 ] as const;
+
 const AWS_ACCOUNT_ID_PATTERN = /^[0-9]{12}$/;
 
 /** Expected configuration failure safe to show at the CLI boundary. */
@@ -40,12 +42,14 @@ export function parseAuditAccountConfigJson(contents: string): AuditAccountConfi
   const parsedJson = requireJsonObject(rawJson);
 
   const allRequiredKeysPresent = CONFIG_KEYS.every((key) => key in parsedJson);
+
   if (!allRequiredKeysPresent) {
     throw new AuditAccountConfigError('some of the required keys are missing!');
   }
 
   const allowedKeys = new Set<string>(CONFIG_KEYS);
   const containsUnknownKey = Object.keys(parsedJson).some((key) => !allowedKeys.has(key));
+
   if (containsUnknownKey) {
     throw new AuditAccountConfigError('Config contains extra keys outside of the required ones.');
   }
@@ -54,6 +58,7 @@ export function parseAuditAccountConfigJson(contents: string): AuditAccountConfi
     parsedJson.managementAccountId,
     'managementAccountId',
   );
+
   const auditAccountId = requireAccountId(parsedJson.auditAccountId, 'auditAccountId');
   const workloadAccountIds = requireWorkloadAccountIds(parsedJson.workloadAccountIds);
   const region = requireRegion(parsedJson.region);
@@ -73,6 +78,7 @@ export function parseAuditAccountConfigJson(contents: string): AuditAccountConfi
 /** Load and validate audit-account configuration from an explicit absolute path. */
 export function loadAuditAccountConfig(environment: NodeJS.ProcessEnv): AuditAccountConfig {
   const configFilepath = environment[AUDIT_ACCOUNT_CONFIG_ENVIRONMENT_VARIABLE];
+
   if (configFilepath === undefined || configFilepath.length === 0) {
     throw new AuditAccountConfigError(
       `${AUDIT_ACCOUNT_CONFIG_ENVIRONMENT_VARIABLE} must name the config file.`,

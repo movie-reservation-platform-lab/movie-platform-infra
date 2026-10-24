@@ -22,6 +22,7 @@ export function resolveAuditConfig(context: {
   auditRetentionDays?: unknown;
 }): AuditConfig {
   const retentionInput = context.auditRetentionDays === undefined ? 30 : context.auditRetentionDays;
+
   if (
     (typeof retentionInput !== 'number' && typeof retentionInput !== 'string') ||
     (typeof retentionInput === 'string' && retentionInput.trim().length === 0)
@@ -30,6 +31,7 @@ export function resolveAuditConfig(context: {
   }
 
   const days = Number(retentionInput);
+
   if (!Number.isInteger(days) || days < 1 || days > 3650) {
     throw new Error('auditRetentionDays must be an integer from 1 through 3650.');
   }

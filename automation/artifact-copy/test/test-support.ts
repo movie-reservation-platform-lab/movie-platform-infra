@@ -2,7 +2,9 @@ import { OCI_IMAGE_MANIFEST_MEDIA_TYPE, calculateSha256Digest } from '../src/ima
 import type { ArtifactCopyRequest } from '../src/model';
 
 export const CONFIG_DIGEST = `sha256:${'a'.repeat(64)}`;
+
 export const LAYER_DIGEST_A = `sha256:${'b'.repeat(64)}`;
+
 export const LAYER_DIGEST_B = `sha256:${'c'.repeat(64)}`;
 
 export function createImageManifest(overrides: Readonly<Record<string, unknown>> = {}): Buffer {

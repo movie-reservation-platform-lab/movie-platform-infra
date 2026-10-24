@@ -29,9 +29,13 @@ import {
 
 /** Prefix for explicit alarm names, so operators can force them by name. */
 export const ALARM_NAME_PREFIX = 'EcsCanarySpike';
+
 export const CONTAINER_NAME = 'fixture';
+
 export const CONTAINER_PORT = 8080;
+
 export const BRIDGE_METRIC_NAMESPACE = 'EcsCanarySpike';
+
 export const BRIDGE_METRIC_NAME = 'WatchVerdict';
 
 /** Matches `sha256:` followed by exactly 64 lowercase hexadecimal characters. */
@@ -87,6 +91,7 @@ export class EcsCanarySpikeServiceStack extends Stack {
       natGateways: 0,
       subnetConfiguration: [{ name: 'public', subnetType: ec2.SubnetType.PUBLIC, cidrMask: 24 }],
     });
+
     const publicSubnets: ec2.SubnetSelection = { subnetType: ec2.SubnetType.PUBLIC };
 
     const albSecurityGroup = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
@@ -94,21 +99,25 @@ export class EcsCanarySpikeServiceStack extends Stack {
       allowAllOutbound: false,
       description: 'Spike ALB: HTTP from the operator prefix list only',
     });
+
     albSecurityGroup.addIngressRule(
       ec2.Peer.prefixList(config.allowedIngressPrefixListId),
       ec2.Port.tcp(80),
       'Operator prefix list',
     );
+
     const taskSecurityGroup = new ec2.SecurityGroup(this, 'TaskSecurityGroup', {
       vpc,
       allowAllOutbound: true,
       description: 'Spike tasks: container port from the ALB only',
     });
+
     taskSecurityGroup.addIngressRule(
       albSecurityGroup,
       ec2.Port.tcp(CONTAINER_PORT),
       'ALB to tasks',
     );
+
     albSecurityGroup.addEgressRule(taskSecurityGroup, ec2.Port.tcp(CONTAINER_PORT), 'ALB to tasks');
 
     const loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'LoadBalancer', {
@@ -117,6 +126,7 @@ export class EcsCanarySpikeServiceStack extends Stack {
       securityGroup: albSecurityGroup,
       vpcSubnets: publicSubnets,
     });
+
     // ECS-native canary needs a listener *rule* to rewrite, so the default
     // action is a fixed 404 and production traffic goes through the rule.
     const listener = loadBalancer.addListener('HttpListener', {
@@ -130,6 +140,7 @@ export class EcsCanarySpikeServiceStack extends Stack {
 
     const blueTargetGroup = this.fixtureTargetGroup('BlueTargetGroup', vpc);
     const greenTargetGroup = this.fixtureTargetGroup('GreenTargetGroup', vpc);
+
     const productionListenerRule = new elbv2.ApplicationListenerRule(
       this,
       'ProductionListenerRule',
@@ -142,18 +153,22 @@ export class EcsCanarySpikeServiceStack extends Stack {
     );
 
     const cluster = new ecs.Cluster(this, 'Cluster', { vpc });
+
     // An infra-only change for run R5c-3: it touches the cluster, not the recipe.
     Tags.of(cluster).add('InfraRevision', config.infraRevision);
+
     const containerLogGroup = new logs.LogGroup(this, 'ContainerLogGroup', {
       retention: logs.RetentionDays.ONE_DAY,
       removalPolicy: RemovalPolicy.DESTROY,
     });
+
     // The recipe: everything about the task except which image runs. Releases
     // copy it and swap only the digest (release.sh render step).
     const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
       cpu: 256,
       memoryLimitMiB: 512,
     });
+
     taskDefinition.addContainer(CONTAINER_NAME, {
       image: ecs.ContainerImage.fromRegistry(
         `${props.repository.repositoryUri}@${imageDigest.valueAsString}`,
@@ -163,9 +178,11 @@ export class EcsCanarySpikeServiceStack extends Stack {
       environment: { SPIKE_RECIPE_REVISION: config.recipeRevision },
       logging: ecs.LogDrivers.awsLogs({ logGroup: containerLogGroup, streamPrefix: 'fixture' }),
     });
+
     props.repository.grantPull(taskDefinition.obtainExecutionRole());
 
     const alarms = this.deploymentAlarms(loadBalancer, config.bridgeMissingData);
+
     const deploymentAlarmNames =
       config.deploymentAlarmSet === 'all'
         ? [
@@ -190,6 +207,7 @@ export class EcsCanarySpikeServiceStack extends Stack {
     });
 
     this.pinServiceTaskDefinition(service, config.activeTaskDefinitionArn);
+
     if (config.failInfraDeploy) {
       this.failAfterServiceUpdate(service);
     }
@@ -201,6 +219,7 @@ export class EcsCanarySpikeServiceStack extends Stack {
       '@aws-cdk/core:crossStackReferencesDefaultStrong',
       'Strong reference protects the fixture repository until the service stack is deleted.',
     );
+
     if (config.profile !== 'breaker') {
       // halt and revert run without the circuit breaker on purpose: run R8b
       // measures how long a never-stabilizing deployment holds CloudFormation.
@@ -215,6 +234,7 @@ export class EcsCanarySpikeServiceStack extends Stack {
       retention: logs.RetentionDays.ONE_DAY,
       removalPolicy: RemovalPolicy.DESTROY,
     });
+
     new events.Rule(this, 'EcsDeploymentEventsRule', {
       eventPattern: {
         source: ['aws.ecs'],
@@ -229,9 +249,11 @@ export class EcsCanarySpikeServiceStack extends Stack {
     new CfnOutput(this, 'LoadBalancerDnsName', { value: loadBalancer.loadBalancerDnsName });
     new CfnOutput(this, 'ClusterName', { value: cluster.clusterName });
     new CfnOutput(this, 'ServiceName', { value: service.serviceName });
+
     new CfnOutput(this, 'ProductionListenerRuleArn', {
       value: productionListenerRule.listenerRuleArn,
     });
+
     new CfnOutput(this, 'BlueTargetGroupArn', { value: blueTargetGroup.targetGroupArn });
     new CfnOutput(this, 'GreenTargetGroupArn', { value: greenTargetGroup.targetGroupArn });
     new CfnOutput(this, 'EcsEventsLogGroupName', { value: ecsEventsLogGroup.logGroupName });
@@ -277,11 +299,13 @@ export class EcsCanarySpikeServiceStack extends Stack {
    */
   private failAfterServiceUpdate(service: ecs.FargateService): void {
     const handle = new CfnWaitConditionHandle(this, 'FailInfraDeployHandle');
+
     const waitCondition = new CfnWaitCondition(this, 'FailInfraDeploy', {
       handle: handle.ref,
       timeout: '30',
       count: 1,
     });
+
     waitCondition.node.addDependency(service);
   }
 
@@ -328,6 +352,7 @@ export class EcsCanarySpikeServiceStack extends Stack {
       period: Duration.minutes(1),
       label: 'Target 5xx percent',
     });
+
     const errorRate = errorRatePercent.createAlarm(this, 'ErrorRateAlarm', {
       alarmName: `${ALARM_NAME_PREFIX}-ErrorRate`,
       alarmDescription: 'Spike: target 5xx above 2% of requests',

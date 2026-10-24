@@ -23,6 +23,7 @@ export function loadAwsTarget(environment: NodeJS.ProcessEnv): AwsTarget {
   }
 
   const currentUid = process.getuid?.();
+
   if (currentUid === undefined) {
     fail('the target file owner cannot be verified on this operating system');
   }
@@ -36,6 +37,7 @@ export function loadAwsTarget(environment: NodeJS.ProcessEnv): AwsTarget {
   }
 
   let contents: string;
+
   try {
     contents = readFileSync(targetFile, 'utf8');
   } catch {
@@ -48,6 +50,7 @@ export function loadAwsTarget(environment: NodeJS.ProcessEnv): AwsTarget {
 /** Resolve the private target location without printing operator-owned paths. */
 function resolveTargetFile(environment: NodeJS.ProcessEnv): string {
   const override = environment.MOVIE_PLATFORM_AWS_TARGET_FILE;
+
   if (override !== undefined && override.length > 0) {
     if (!isAbsolute(override)) {
       fail('MOVIE_PLATFORM_AWS_TARGET_FILE must be an absolute path');
@@ -57,6 +60,7 @@ function resolveTargetFile(environment: NodeJS.ProcessEnv): string {
   }
 
   const xdgConfigHome = environment.XDG_CONFIG_HOME;
+
   if (xdgConfigHome !== undefined && xdgConfigHome.length > 0) {
     if (!isAbsolute(xdgConfigHome)) {
       fail('XDG_CONFIG_HOME must be an absolute path');
@@ -66,6 +70,7 @@ function resolveTargetFile(environment: NodeJS.ProcessEnv): string {
   }
 
   const home = environment.HOME;
+
   if (home === undefined || !isAbsolute(home)) {
     fail('HOME must be an absolute path when XDG_CONFIG_HOME is unset');
   }

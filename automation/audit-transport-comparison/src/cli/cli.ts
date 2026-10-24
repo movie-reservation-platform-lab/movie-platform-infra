@@ -63,8 +63,10 @@ export async function runCli(
   dependencies: CliDependencies,
 ): Promise<number> {
   let prepared: PreparedRun;
+
   try {
     const runFile = parseRunFileArgument(arguments_);
+
     if (runFile === null) {
       streams.stdout(USAGE);
 
@@ -84,7 +86,9 @@ export async function runCli(
 
   const { config, context, comparisonDependencies } = prepared;
   const result = await runComparison(config.settings, context, comparisonDependencies);
+
   streams.stdout(renderSummary(result));
+
   try {
     dependencies.writeEvidence(config.output, `${JSON.stringify(result, null, 2)}\n`);
   } catch (error) {
@@ -108,6 +112,7 @@ interface PreparedRun {
 /** @returns the run file path, or `null` when help was requested. */
 function parseRunFileArgument(arguments_: readonly string[]): string | null {
   let values: { 'run-file'?: string; help?: boolean };
+
   try {
     ({ values } = parseArgs({
       args: [...arguments_],
@@ -139,15 +144,18 @@ async function prepareRun(
 ): Promise<PreparedRun> {
   rejectEndpointOverrides(environment);
   const config = dependencies.loadRunConfig(runFile);
+
   rejectOutputInside(config.output, dependencies.repositoryRoot);
   const credentials = dependencies.loadCredentials(config.credentialsFile);
   const workload = dependencies.validateAccess(config.workloadTargetFile, environment);
   const audit = dependencies.validateAccess(config.auditTargetFile, environment);
+
   if (workload.target.accountId === audit.target.accountId) {
     throw new UsageError('the workload and audit targets must be different accounts');
   }
 
   const queue = queueUrlLocation(config.deliveryHealth.deadLetterQueueUrl);
+
   if (queue.accountId !== audit.target.accountId || queue.region !== audit.target.region) {
     throw new UsageError(
       'deliveryHealth.deadLetterQueueUrl must belong to the audit target account and Region',
@@ -177,6 +185,7 @@ function rejectEndpointOverrides(environment: NodeJS.ProcessEnv): void {
 
 function rejectOutputInside(output: string, repositoryRoot: string): void {
   const path = relative(repositoryRoot, output);
+
   if (path === '' || (!path.startsWith('..') && !isAbsolute(path))) {
     throw new UsageError('output must be outside this public repository');
   }

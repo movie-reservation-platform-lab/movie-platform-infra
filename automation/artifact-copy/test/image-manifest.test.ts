@@ -36,6 +36,7 @@ test('accepts a Docker v2 single-image manifest without converting it', () => {
       },
     ],
   });
+
   const digest = calculateSha256Digest(rawManifest);
 
   expect(inspectRawImageManifest(rawManifest, digest, 'source')).toMatchObject({
@@ -103,6 +104,7 @@ test.each([
 
 test('hashes exact raw bytes rather than normalized JSON', () => {
   const compact = createImageManifest();
+
   const reformatted = Buffer.from(
     JSON.stringify(JSON.parse(compact.toString('utf8')) as unknown, undefined, 2),
   );
@@ -128,6 +130,7 @@ test.each([
     configDigest: CONFIG_DIGEST,
     layerDigests: [LAYER_DIGEST_A, LAYER_DIGEST_B],
   };
+
   const destination: ImageManifestIdentity = { ...source, ...overrides };
 
   expect(() => assertEquivalentImageManifests(source, destination)).toThrow(

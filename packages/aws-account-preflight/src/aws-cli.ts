@@ -3,6 +3,7 @@ import { fail } from './preflight-error';
 import type { AwsTarget } from './target-schema';
 
 const AWS_CLI_TIMEOUT_MILLISECONDS = 30_000;
+
 const CREDENTIAL_ENVIRONMENT_VARIABLES = [
   'AWS_ACCESS_KEY_ID',
   'AWS_SECRET_ACCESS_KEY',
@@ -13,6 +14,7 @@ const CREDENTIAL_ENVIRONMENT_VARIABLES = [
   'AWS_CONTAINER_CREDENTIALS_FULL_URI',
   'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI',
 ] as const;
+
 const NON_SSO_PROFILE_KEYS = [
   'credential_process',
   'credential_source',
@@ -50,6 +52,7 @@ export function validateAwsCliIdentity(target: AwsTarget, environment: NodeJS.Pr
   requireAwsCliV2(environment);
 
   const profile = readAndValidateProfile(target, environment);
+
   readAndValidateCaller(target, environment);
 
   return profile.permissionSet;
@@ -67,6 +70,7 @@ export function validateAwsCallerIdentity(
   arn: string,
 ): ValidatedAwsCallerIdentity {
   const caller = roleIdentityFromStsArn(arn);
+
   if (caller === undefined) {
     fail('the caller is not an IAM Identity Center assumed-role session');
   }
@@ -90,7 +94,9 @@ export function validateAwsCallerIdentity(
 export function runAwsIdentitySelfTest(): void {
   const arn =
     'arn:aws:sts::111111111111:assumed-role/AWSReservedSSO_AdministratorAccess_0123456789abcdef/test-session';
+
   const identity = roleIdentityFromStsArn(arn);
+
   if (
     identity?.accountId !== '111111111111' ||
     identity.roleName !== 'AWSReservedSSO_AdministratorAccess_0123456789abcdef' ||
@@ -120,6 +126,7 @@ function rejectCredentialEnvironment(environment: NodeJS.ProcessEnv): void {
 function requireAwsCliV2(environment: NodeJS.ProcessEnv): void {
   const result = runAws(['--version'], environment);
   const version = `${result.stdout}${result.stderr}`.trim();
+
   if (result.status !== 0) {
     fail('unable to read the AWS CLI version');
   }
@@ -155,6 +162,7 @@ function readAndValidateProfile(
   }
 
   const ssoRegion = readSsoSessionValue('sso_region', ssoSession, environment);
+
   if (ssoRegion.length === 0) {
     fail('the SSO session has no sso_region');
   }
@@ -164,6 +172,7 @@ function readAndValidateProfile(
     readProfileValue('aws_secret_access_key', target, environment),
     readProfileValue('aws_session_token', target, environment),
   ];
+
   if (staticCredentialValues.some((value) => value.length > 0)) {
     fail('the profile contains static or cached credentials');
   }
@@ -171,6 +180,7 @@ function readAndValidateProfile(
   const alternativeProviderValues = NON_SSO_PROFILE_KEYS.map((key) =>
     readProfileValue(key, target, environment),
   );
+
   if (alternativeProviderValues.some((value) => value.length > 0)) {
     fail('the profile contains a non-SSO credential provider');
   }
@@ -214,16 +224,19 @@ function readAndValidateCaller(
     ],
     environment,
   );
+
   if (result.status !== 0) {
     fail('STS GetCallerIdentity failed; refresh the configured SSO login');
   }
 
   const identityLine = withoutOneTrailingLineEnding(result.stdout);
+
   if (identityLine.includes('\n') || identityLine.includes('\r')) {
     fail('STS returned an unexpected caller identity shape');
   }
 
   const fields = identityLine.split('\t');
+
   if (fields.length !== 2 || !/^[0-9]{12}$/.test(fields[0]) || fields[1].length === 0) {
     fail('STS returned an unexpected caller identity shape');
   }
@@ -233,6 +246,7 @@ function readAndValidateCaller(
 
 function roleIdentityFromStsArn(arn: string): ValidatedAwsCallerIdentity | undefined {
   const match = /^arn:aws:sts::([0-9]{12}):assumed-role\/([^/]+)\/([^/]+)$/.exec(arn);
+
   if (match === null) {
     return undefined;
   }
@@ -246,6 +260,7 @@ function roleMatchesPermissionSet(roleName: string, permissionSet: string): bool
   }
 
   const expectedPrefix = `AWSReservedSSO_${permissionSet}_`;
+
   if (!roleName.startsWith(expectedPrefix)) {
     return false;
   }

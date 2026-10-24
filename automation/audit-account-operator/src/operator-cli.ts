@@ -72,6 +72,7 @@ export function runOperatorCli(
 ): number {
   try {
     const options = parseOperatorArguments(arguments_);
+
     const target = validateAuditAccountTarget(
       dependencies.loadConfig(environment),
       dependencies.validateAccess(environment),
@@ -105,6 +106,7 @@ export function runOperatorCli(
         : error instanceof Error && error.message.startsWith('invalid arguments')
           ? error.message
           : 'unexpected internal error';
+
     streams.stderr(`Audit-account operation failed: ${message}\n`);
 
     return 1;
@@ -121,6 +123,7 @@ function parseOperatorArguments(arguments_: readonly string[]): ParsedOperatorAr
       strict: true,
       allowPositionals: true,
     });
+
     if (positionals.length !== 1 || !isOperatorCommand(positionals[0])) {
       throw new Error('invalid arguments; expected preflight, status, or bootstrap');
     }
@@ -167,7 +170,9 @@ function runStatus(
     ],
     validatedProcessEnvironment(environment, target.access),
   );
+
   const status = result.stdout.trim();
+
   if (result.status !== 0 || !/^[A-Z][A-Z_]+$/.test(status)) {
     streams.stderr('Audit-account CDK bootstrap status is unavailable.\n');
 
@@ -195,6 +200,7 @@ function runBootstrap(
     ],
     validatedProcessEnvironment(environment, target.access),
   );
+
   if (result.status !== 0) {
     streams.stderr('Audit-account CDK bootstrap failed; inspect the private operator terminal.\n');
 

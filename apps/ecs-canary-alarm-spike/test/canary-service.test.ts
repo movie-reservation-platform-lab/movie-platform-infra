@@ -12,9 +12,11 @@ import { synthServiceTemplate } from './spike-template';
 function targetGroupIds(template: Template): { blue: string; green: string } {
   const rules = Object.values(template.findResources('AWS::ElasticLoadBalancingV2::ListenerRule'));
   const blue: string = rules[0].Properties.Actions[0].TargetGroupArn.Ref;
+
   const green = Object.keys(
     template.findResources('AWS::ElasticLoadBalancingV2::TargetGroup'),
   ).find((id) => id !== blue);
+
   if (green === undefined) {
     throw new Error('expected a second target group');
   }
@@ -30,6 +32,7 @@ function alarmRef(template: Template, alarmName: string): { Ref: string } {
   const type = alarmName.endsWith('-Rollback')
     ? 'AWS::CloudWatch::CompositeAlarm'
     : 'AWS::CloudWatch::Alarm';
+
   const [id] = Object.keys(template.findResources(type, { Properties: { AlarmName: alarmName } }));
 
   return { Ref: id };
@@ -64,6 +67,7 @@ describe('canary service deployment wiring (engineer-owned)', () => {
     'watches all deployment alarms with profile %s (Rollback=%s)',
     (profile, rollback) => {
       const template = synthServiceTemplate({ profile });
+
       template.hasResourceProperties('AWS::ECS::Service', {
         DeploymentConfiguration: Match.objectLike({
           Alarms: {
@@ -82,6 +86,7 @@ describe('canary service deployment wiring (engineer-owned)', () => {
 
   it('watches only the member alarms when the composite is excluded', () => {
     const template = synthServiceTemplate({ deploymentAlarmSet: 'members' });
+
     template.hasResourceProperties('AWS::ECS::Service', {
       DeploymentConfiguration: Match.objectLike({
         Alarms: Match.objectLike({
@@ -114,6 +119,7 @@ describe('canary service deployment wiring (engineer-owned)', () => {
   it('binds blue as the production target group and green as the alternate', () => {
     const template = synthServiceTemplate();
     const { blue, green } = targetGroupIds(template);
+
     template.hasResourceProperties('AWS::ECS::Service', {
       LoadBalancers: [
         {

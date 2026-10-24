@@ -31,6 +31,7 @@ export function planArtifactFoundationCleanup(
   confirmation: string,
 ): CleanupExecutionPlan {
   const expectedConfirmation = buildCleanupConfirmation(inspection.target);
+
   if (confirmation !== expectedConfirmation) {
     failCleanup(`confirmation must exactly match ${JSON.stringify(expectedConfirmation)}`);
   }
@@ -40,12 +41,15 @@ export function planArtifactFoundationCleanup(
     foundationStack: inspection.foundationStack,
     repositories: inspection.repositories,
   });
+
   if (assessment.blockers.length > 0) {
     const blockerCodes = assessment.blockers.map(({ code }) => code).join(', ');
+
     failCleanup(`cleanup is blocked by current AWS state: ${blockerCodes}`);
   }
 
   const foundationStack = inspection.foundationStack;
+
   if (foundationStack !== undefined && foundationStack.name !== ARTIFACT_FOUNDATION_STACK_NAME) {
     failCleanup('refusing to delete an unexpected CloudFormation stack');
   }
@@ -122,14 +126,17 @@ export async function executeArtifactFoundationCleanup(
 
   const finalInspection = await inspectFinalState();
   const foundationStillExists = finalInspection.foundationStack !== undefined;
+
   const remainingRepositories = finalInspection.repositories
     .filter(({ repository }) => repository !== undefined)
     .map(({ definition }) => definition.componentId);
+
   if (foundationStillExists || remainingRepositories.length > 0) {
     const remaining = [
       ...(foundationStillExists ? [ARTIFACT_FOUNDATION_STACK_NAME] : []),
       ...remainingRepositories,
     ].join(', ');
+
     failCleanup(`final absence verification failed for: ${remaining}`);
   }
 

@@ -3,6 +3,7 @@ import type { ComparisonResult, EventPresence } from '../core/comparison-result'
 /** Short human summary for the terminal; the JSON evidence file is the record. */
 export function renderSummary(result: ComparisonResult): string {
   const { securityLake, legacy } = result.stores;
+
   const lines = [
     `Audit transport comparison ${result.runId}: ${result.status.toUpperCase()}`,
     '',

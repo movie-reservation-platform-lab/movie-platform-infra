@@ -125,15 +125,18 @@ export const APPLICATION_COMPONENT_INPUTS = [
 
 const PRIVATE_ECR_IMAGE_REFERENCE_PATTERN =
   /^(?<registryAccount>\d{12})\.dkr\.ecr\.(?<registryRegion>[a-z]{2}(?:-[a-z0-9]+)+-\d)\.amazonaws\.com\/(?<repositoryName>(?:[a-z0-9]+(?:[._-][a-z0-9]+)*\/)*[a-z0-9]+(?:[._-][a-z0-9]+)*)@(?<imageDigest>sha256:[0-9a-fA-F]{64})$/;
+
 const AWS_ACCOUNT_PATTERN = /^\d{12}$/;
 const AWS_REGION_PATTERN = /^[a-z]{2}(?:-[a-z0-9]+)+-\d$/;
 const EC2_PREFIX_LIST_ID_PATTERN = /^pl-(?:[0-9a-f]{8}|[0-9a-f]{17})$/;
+
 const EVENT_BUS_ARN_PATTERN =
   /^arn:(?:aws|aws-cn|aws-us-gov):events:([a-z0-9-]+):(\d{12}):event-bus\/([A-Za-z0-9._-]{1,256})$/;
 
 function parseRequiredString(value: unknown, key: string, exampleValue?: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     const example = exampleValue === undefined ? '' : ` Example: -c ${key}=${exampleValue}`;
+
     throw new Error(`CDK context value "${key}" is required.${example}`);
   }
 
@@ -146,6 +149,7 @@ function parseAllowedIngressPrefixListId(value: unknown): string {
     'allowedIngressPrefixListId',
     'pl-0123456789abcdef0',
   );
+
   if (!EC2_PREFIX_LIST_ID_PATTERN.test(prefixListId)) {
     throw new Error(
       'CDK context value "allowedIngressPrefixListId" must start with pl- and contain exactly 8 or 17 lowercase hexadecimal characters.',
@@ -184,11 +188,14 @@ function parseApplicationImageConfig(
     context[definition.imageReferenceKey],
     definition.imageReferenceKey,
   );
+
   const serviceVersion = parseRequiredString(
     context[definition.serviceVersionKey],
     definition.serviceVersionKey,
   );
+
   const match = PRIVATE_ECR_IMAGE_REFERENCE_PATTERN.exec(imageReference);
+
   if (match?.groups === undefined) {
     throw new Error(
       `CDK context value "${definition.imageReferenceKey}" must be a complete private ECR image URI pinned by a sha256 digest.`,
@@ -196,6 +203,7 @@ function parseApplicationImageConfig(
   }
 
   const { registryAccount, registryRegion, repositoryName, imageDigest } = match.groups;
+
   if (repositoryName !== definition.repositoryName) {
     throw new Error(
       `CDK context value "${definition.imageReferenceKey}" must select ECR repository "${definition.repositoryName}", received "${repositoryName}".`,
@@ -277,6 +285,7 @@ function parseIntegerInRange(
       : typeof value === 'string' && value.trim().length > 0
         ? Number(value)
         : Number.NaN;
+
   if (!Number.isInteger(parsedValue) || parsedValue < minimum || parsedValue > maximum) {
     throw new Error(
       `CDK context value "${key}" must be an integer from ${minimum} through ${maximum}.`,
@@ -295,7 +304,9 @@ function parseAuditPublisherConfig(
     'auditEventBusArn',
     `arn:aws:events:${deploymentTarget.region}:222222222222:event-bus/movie-platform-audit`,
   );
+
   const match = EVENT_BUS_ARN_PATTERN.exec(eventBusArn);
+
   if (match === null) {
     throw new Error(
       'CDK context value "auditEventBusArn" must be a complete custom EventBridge event-bus ARN without wildcards.',
@@ -303,6 +314,7 @@ function parseAuditPublisherConfig(
   }
 
   const [, region, account, busName] = match;
+
   if (region !== deploymentTarget.region) {
     throw new Error('auditEventBusArn must use the workload deployment Region.');
   }
@@ -337,16 +349,20 @@ export function resolvePlatformConfig(
   const allowedIngressPrefixListId = parseAllowedIngressPrefixListId(
     context.allowedIngressPrefixListId,
   );
+
   assertConcreteDeploymentTarget(deploymentTarget);
   const applicationImages = parseApplicationImages(context, deploymentTarget);
   const demoAuthEnabled = parseBoolean(context.demoAuthEnabled, 'demoAuthEnabled');
   let demoAuthSecretArn: string | undefined;
+
   if (demoAuthEnabled) {
     demoAuthSecretArn = parseRequiredString(context.demoAuthSecretArn, 'demoAuthSecretArn');
+
     const match =
       /^arn:aws:secretsmanager:([a-z0-9-]+):(\d{12}):secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}$/.exec(
         demoAuthSecretArn,
       );
+
     if (!match || match[1] !== deploymentTarget.region || match[2] !== deploymentTarget.account) {
       throw new Error(
         'demoAuthSecretArn must be a complete Secrets Manager ARN in the deployment account and Region.',

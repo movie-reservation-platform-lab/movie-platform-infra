@@ -27,25 +27,31 @@ export class PrivateTempo extends Construct {
 
   constructor(scope: Construct, id: string, props: PrivateTempoProps) {
     super(scope, id);
+
     this.grafanaSecurityGroup = new ec2.SecurityGroup(this, 'GrafanaConnection', {
       vpc: props.vpc,
       description: 'AMG outbound private data-source connection; no inbound rules',
     });
+
     const securityGroup = new ec2.SecurityGroup(this, 'SecurityGroup', {
       vpc: props.vpc,
       description: 'Tempo: collector ingestion and Grafana query only',
     });
+
     securityGroup.addIngressRule(
       props.applicationSecurityGroup,
       ec2.Port.tcp(4317),
       'ADOT OTLP ingestion',
     );
+
     securityGroup.addIngressRule(this.grafanaSecurityGroup, ec2.Port.tcp(3200), 'AMG query API');
+
     props.endpointSecurityGroup.addIngressRule(
       securityGroup,
       ec2.Port.tcp(443),
       'Tempo image pulls and logs',
     );
+
     props.endpointSecurityGroup.addIngressRule(
       this.grafanaSecurityGroup,
       ec2.Port.tcp(443),
@@ -56,10 +62,12 @@ export class PrivateTempo extends Construct {
       name: 'aws-demo.internal',
       vpc: props.vpc,
     });
+
     const image = new ecrAssets.DockerImageAsset(this, 'Image', {
       directory: path.join(props.repositoryRoot, 'tempo'),
       platform: ecrAssets.Platform.LINUX_AMD64,
     });
+
     const task = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
       family: 'aws-demo-tempo',
       cpu: 512,
@@ -69,13 +77,16 @@ export class PrivateTempo extends Construct {
         operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
       },
     });
+
     (task.node.defaultChild as ecs.CfnTaskDefinition).overrideLogicalId('TempoTaskDefinition');
+
     task.addToTaskRolePolicy(
       new iam.PolicyStatement({
         actions: ['aps:RemoteWrite'],
         resources: [props.ampWorkspaceArn],
       }),
     );
+
     task.addContainer('Tempo', {
       containerName: 'tempo',
       image: ecs.ContainerImage.fromDockerImageAsset(image),
@@ -114,6 +125,7 @@ export class PrivateTempo extends Construct {
         startPeriod: cdk.Duration.seconds(60),
       },
     });
+
     const service = new ecs.FargateService(this, 'Service', {
       serviceName: 'aws-demo-tempo',
       cluster: props.cluster,
@@ -132,15 +144,19 @@ export class PrivateTempo extends Construct {
         dnsTtl: cdk.Duration.seconds(10),
       },
     });
+
     (service.node.defaultChild as ecs.CfnService).overrideLogicalId('TempoService');
 
     const stack = cdk.Stack.of(this);
+
     new cdk.CfnOutput(stack, 'TempoQueryUrl', { value: this.queryUrl });
     new cdk.CfnOutput(stack, 'TempoOtlpEndpoint', { value: this.otlpEndpoint });
     new cdk.CfnOutput(stack, 'GrafanaVpcId', { value: props.vpc.vpcId });
+
     new cdk.CfnOutput(stack, 'GrafanaVpcSubnetIds', {
       value: cdk.Fn.join(',', props.vpc.selectSubnets({ subnetGroupName: 'workload' }).subnetIds),
     });
+
     new cdk.CfnOutput(stack, 'GrafanaVpcSecurityGroupId', {
       value: this.grafanaSecurityGroup.securityGroupId,
     });

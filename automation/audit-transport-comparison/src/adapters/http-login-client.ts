@@ -32,11 +32,13 @@ export class HttpLoginClient implements LoginClient {
 /** The receipt is optional: authentication fails open without it. */
 async function readAuditEventId(response: Response): Promise<string | null> {
   const text = await response.text();
+
   if (text.length > MAX_RESPONSE_BYTES) {
     return null;
   }
 
   let body: unknown;
+
   try {
     body = JSON.parse(text) as unknown;
   } catch {

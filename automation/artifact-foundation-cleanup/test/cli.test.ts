@@ -25,6 +25,7 @@ async function run(
 ): Promise<CliResult> {
   let stdout = '';
   let stderr = '';
+
   const status = await runCli(
     arguments_,
     {},
@@ -54,6 +55,7 @@ function successfulDependencies(events: string[] = []): CliDependencies {
         `reader:${access.target.profile}:${access.target.region}:` +
           `${access.configFiles.configFilepath}:${access.configFiles.credentialsFilepath}`,
       );
+
       let inspectionNumber = 0;
 
       return {
@@ -63,6 +65,7 @@ function successfulDependencies(events: string[] = []): CliDependencies {
         },
         inspectStack: async (stackName) => {
           events.push(`stack:${inspectionNumber}:${stackName}`);
+
           if (inspectionNumber > 1) {
             return undefined;
           }
@@ -126,6 +129,7 @@ test('requires confirmation before preflight or client creation', async () => {
     stderr:
       'Artifact foundation cleanup failed: --execute requires an exact --confirm value; run the read-only check first\n',
   });
+
   expect(validateAccess).not.toHaveBeenCalled();
   expect(createReaderMock).not.toHaveBeenCalled();
   expect(createCleanerMock).not.toHaveBeenCalled();
@@ -146,6 +150,7 @@ test('runs preflight and read-only inspection without constructing a mutation cl
   expect(result.stdout).toContain('<account ending 1111>');
   expect(result.stdout).not.toContain(TEST_TARGET.accountId);
   expect(result.stdout).not.toContain(TEST_TARGET.expectedRoleName);
+
   expect(events).toEqual([
     'preflight',
     'reader:movie-platform-demo:eu-central-1:/test-home/.aws/config:/test-home/.aws/credentials',
@@ -185,6 +190,7 @@ test('executes in guarded order and reports success only after final absence ver
   expect(result.stdout).toContain('Force-delete ECR repository movie-reservation-service');
   expect(result.stdout).toContain('Cleanup result: CLEANED');
   expect(result.stdout).toContain('final absence verification: passed');
+
   expect(events).toEqual([
     'preflight',
     'reader:movie-platform-demo:eu-central-1:/test-home/.aws/config:/test-home/.aws/credentials',

@@ -14,12 +14,17 @@ const TEST_TARGET = {
   account: '111111111111',
   region: 'eu-central-1',
 } as const satisfies DeploymentTarget;
+
 const TEST_DIGEST = `sha256:${'a'.repeat(64)}`;
+
 const TEST_AUDIT_EVENT_BUS_ARN =
   'arn:aws:events:eu-central-1:222222222222:event-bus/movie-platform-audit';
+
 const TEST_DEMO_AUTH_SECRET_ARN = `arn:aws:secretsmanager:${TEST_TARGET.region}:${TEST_TARGET.account}:secret:movie-platform/aws-demo/auth-Ab12Cd`;
+
 const reference = (repository: string) =>
   `${TEST_TARGET.account}.dkr.ecr.${TEST_TARGET.region}.amazonaws.com/${repository}@${TEST_DIGEST}`;
+
 const TEST_CONTEXT = {
   auditEventBusArn: TEST_AUDIT_EVENT_BUS_ARN,
   applicationImageReference: reference('movie-reservation-service'),
@@ -99,6 +104,7 @@ function containers(template: Template): Container[] {
 
 function container(template: Template, name: string): Container {
   const found = containers(template).find(({ Name }) => Name === name);
+
   if (found === undefined) {
     throw new Error(`missing container ${name}`);
   }
@@ -126,6 +132,7 @@ describe('workload platform configuration (CDK context boundary)', () => {
       expect(Object.keys(config.applicationImages).sort()).toEqual(
         APPLICATION_COMPONENT_INPUTS.map(({ componentId }) => componentId).sort(),
       );
+
       for (const input of APPLICATION_COMPONENT_INPUTS) {
         expect(config.applicationImages[input.componentId]).toMatchObject({
           kind: 'ecr-image',
@@ -165,6 +172,7 @@ describe('workload platform configuration (CDK context boundary)', () => {
             TEST_TARGET,
           ),
         ).toThrow(String(imageReferenceKey));
+
         expect(() =>
           resolvePlatformConfig(
             {
@@ -189,6 +197,7 @@ describe('workload platform configuration (CDK context boundary)', () => {
           TEST_TARGET,
         ),
       ).toThrow('pinned by a sha256 digest');
+
       expect(() =>
         resolvePlatformConfig(
           {
@@ -199,12 +208,14 @@ describe('workload platform configuration (CDK context boundary)', () => {
           TEST_TARGET,
         ),
       ).toThrow('must select ECR repository "movie-reservation-web"');
+
       expect(() =>
         resolvePlatformConfig(
           { allowedIngressPrefixListId: 'pl-0123456789abcdef0', ...TEST_CONTEXT },
           { account: '222222222222', region: TEST_TARGET.region },
         ),
       ).toThrow('must match deployment account');
+
       expect(() =>
         resolvePlatformConfig(
           { allowedIngressPrefixListId: 'pl-0123456789abcdef0', ...TEST_CONTEXT },
@@ -217,12 +228,14 @@ describe('workload platform configuration (CDK context boundary)', () => {
   describe('ingress, ECS Exec and metrics cadence', () => {
     it('validates ingress, ECS Exec, and metrics cadence at the context boundary', () => {
       expect(() => resolvePlatformConfig({})).toThrow('allowedIngressPrefixListId');
+
       expect(() =>
         resolvePlatformConfig(
           { allowedIngressPrefixListId: '0.0.0.0/0', ...TEST_CONTEXT },
           TEST_TARGET,
         ),
       ).toThrow('allowedIngressPrefixListId');
+
       expect(() =>
         resolvePlatformConfig(
           {
@@ -233,6 +246,7 @@ describe('workload platform configuration (CDK context boundary)', () => {
           TEST_TARGET,
         ),
       ).toThrow('enableEcsExec');
+
       expect(() =>
         resolvePlatformConfig(
           {
@@ -243,6 +257,7 @@ describe('workload platform configuration (CDK context boundary)', () => {
           TEST_TARGET,
         ),
       ).toThrow('metricsExportIntervalSeconds');
+
       expect(
         resolvePlatformConfig(
           {
@@ -263,12 +278,15 @@ describe('workload platform configuration (CDK context boundary)', () => {
         allowedIngressPrefixListId: 'pl-0123456789abcdef0',
         ...TEST_CONTEXT,
       };
+
       expect(() =>
         resolvePlatformConfig({ ...context, auditEventBusArn: undefined }, TEST_TARGET),
       ).toThrow('auditEventBusArn');
+
       expect(() =>
         resolvePlatformConfig({ ...context, auditEventBusArn: 'not-an-arn' }, TEST_TARGET),
       ).toThrow('custom EventBridge event-bus ARN');
+
       expect(() =>
         resolvePlatformConfig(
           {
@@ -278,6 +296,7 @@ describe('workload platform configuration (CDK context boundary)', () => {
           TEST_TARGET,
         ),
       ).toThrow('deployment Region');
+
       expect(() =>
         resolvePlatformConfig(
           {
@@ -287,6 +306,7 @@ describe('workload platform configuration (CDK context boundary)', () => {
           TEST_TARGET,
         ),
       ).toThrow('separate audit account');
+
       expect(() =>
         resolvePlatformConfig(
           {
@@ -296,6 +316,7 @@ describe('workload platform configuration (CDK context boundary)', () => {
           TEST_TARGET,
         ),
       ).toThrow('default bus');
+
       expect(() =>
         resolvePlatformConfig(
           {
@@ -305,9 +326,11 @@ describe('workload platform configuration (CDK context boundary)', () => {
           TEST_TARGET,
         ),
       ).toThrow('without wildcards');
+
       expect(() =>
         resolvePlatformConfig({ ...context, auditPublishTimeoutMs: 99 }, TEST_TARGET),
       ).toThrow('auditPublishTimeoutMs');
+
       expect(
         resolvePlatformConfig(
           {
@@ -323,9 +346,11 @@ describe('workload platform configuration (CDK context boundary)', () => {
   describe('demo authentication', () => {
     it('rejects incomplete or cross-account demo credential secrets', () => {
       expect(() => synthesized({ demoAuthEnabled: true })).toThrow('demoAuthSecretArn');
+
       expect(() => synthesized({ demoAuthSecretArn: TEST_DEMO_AUTH_SECRET_ARN })).toThrow(
         'demoAuthEnabled=true',
       );
+
       expect(() =>
         synthesized({
           demoAuthEnabled: true,
@@ -339,6 +364,7 @@ describe('workload platform configuration (CDK context boundary)', () => {
 describe('MovieReservationWorkloadStack', () => {
   // Synthesized once for this block; variant configurations synthesize their own template.
   let template: Template;
+
   beforeAll(() => {
     template = synthesized();
   });
@@ -346,15 +372,19 @@ describe('MovieReservationWorkloadStack', () => {
   describe('container images', () => {
     it('imports all six ECR images by exact digest and builds only owned collector/router assets', () => {
       const stack = createStack();
+
       expect(stack.node.tryFindChild('AdotImage')).toBeInstanceOf(ecrAssets.DockerImageAsset);
+
       expect(stack.node.tryFindChild('AuditRouterImage')).toBeInstanceOf(
         ecrAssets.DockerImageAsset,
       );
+
       template.resourceCountIs('AWS::ECR::Repository', 0);
 
       for (const input of APPLICATION_COMPONENT_INPUTS) {
         const definition = container(template, `movie-${input.componentId}`);
         const renderedImage = JSON.stringify(definition.Image);
+
         expect(renderedImage).toContain(input.repositoryName);
         expect(renderedImage).toContain(TEST_DIGEST);
       }
@@ -366,9 +396,11 @@ describe('MovieReservationWorkloadStack', () => {
       template.resourceCountIs('AWS::EC2::NatGateway', 0);
       template.resourceCountIs('AWS::EC2::Subnet', 4);
       template.resourceCountIs('AWS::EC2::InternetGateway', 1);
+
       const endpointServices = resources(template, 'AWS::EC2::VPCEndpoint').map(
         ({ Properties }) => Properties?.ServiceName,
       );
+
       for (const suffix of [
         'ecr.api',
         'ecr.dkr',
@@ -385,6 +417,7 @@ describe('MovieReservationWorkloadStack', () => {
 
     it('restricts the EventBridge endpoint policy to PutEvents on the exact central audit bus', () => {
       const endpoints = resources(template, 'AWS::EC2::VPCEndpoint');
+
       const eventBridgeEndpoint = endpoints.find(({ Properties }) =>
         JSON.stringify(Properties?.ServiceName).includes('.events'),
       );
@@ -393,9 +426,11 @@ describe('MovieReservationWorkloadStack', () => {
 
       const eventBridgePolicy = eventBridgeEndpoint?.Properties
         ?.PolicyDocument as EndpointPolicyDocument;
+
       expect(eventBridgePolicy.Statement).toHaveLength(1);
 
       const statement = eventBridgePolicy.Statement[0];
+
       expect(statement.Effect).toBe('Allow');
       expect(actions(statement)).toEqual(['events:PutEvents']);
       expect(statement.Resource).toBe(TEST_AUDIT_EVENT_BUS_ARN);
@@ -403,6 +438,7 @@ describe('MovieReservationWorkloadStack', () => {
 
     it('does not request availability-zone lookups for an account without cached context', () => {
       const app = new cdk.App({ context: {} });
+
       new MovieReservationWorkloadStack(app, 'UncachedWorkload', {
         env: TEST_TARGET,
         platformConfig: resolvePlatformConfig(
@@ -410,6 +446,7 @@ describe('MovieReservationWorkloadStack', () => {
           TEST_TARGET,
         ),
       });
+
       expect(app.synth().manifest.missing ?? []).toEqual([]);
     });
   });
@@ -422,8 +459,11 @@ describe('MovieReservationWorkloadStack', () => {
         Memory: '4096',
         NetworkMode: 'awsvpc',
       });
+
       const definitions = containers(template);
+
       expect(definitions).toHaveLength(8);
+
       expect(definitions.map(({ Name }) => Name).sort()).toEqual(
         [
           'adot-collector',
@@ -436,17 +476,22 @@ describe('MovieReservationWorkloadStack', () => {
           'movie-reservation-web',
         ].sort(),
       );
+
       expect(definitions.filter(({ Essential }) => Essential).length).toBe(7);
+
       expect(
         definitions.reduce((total, definition) => total + definition.Cpu, 0),
       ).toBeLessThanOrEqual(2048);
+
       expect(
         definitions.reduce((total, definition) => total + definition.Memory, 0),
       ).toBeLessThanOrEqual(4096);
+
       expect(container(template, 'adot-collector')).toMatchObject({
         Essential: false,
         RestartPolicy: { Enabled: true, RestartAttemptPeriod: 60 },
       });
+
       for (const name of definitions
         .filter(({ Name }) => Name.startsWith('movie-'))
         .map(({ Name }) => Name)) {
@@ -466,32 +511,38 @@ describe('MovieReservationWorkloadStack', () => {
         '-e',
         "fetch('http://127.0.0.1:3000/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
       ]);
+
       expect(container(template, 'movie-recommendation-service').HealthCheck?.Command).toEqual([
         'CMD-SHELL',
         'curl -fsS http://127.0.0.1:8082/ready || exit 1',
       ]);
+
       expect(container(template, 'movie-reservation-mcp').HealthCheck?.Command).toEqual([
         'CMD',
         'python',
         '-c',
         "from urllib.request import urlopen; urlopen('http://127.0.0.1:8091/health', timeout=2).close()",
       ]);
+
       expect(container(template, 'movie-recommendation-mcp').HealthCheck?.Command).toEqual([
         'CMD',
         'python',
         '-c',
         "from urllib.request import urlopen; urlopen('http://127.0.0.1:8092/health', timeout=2).close()",
       ]);
+
       expect(container(template, 'movie-reservation-agent').HealthCheck?.Command).toEqual([
         'CMD',
         'python',
         '-c',
         "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/health', timeout=2).close()",
       ]);
+
       expect(container(template, 'movie-reservation-web').HealthCheck?.Command).toEqual([
         'CMD-SHELL',
         'wget -qO- http://127.0.0.1:8088/health >/dev/null || exit 1',
       ]);
+
       expect(container(template, 'adot-collector').HealthCheck?.Command).toEqual([
         'CMD',
         '/healthcheck',
@@ -508,6 +559,7 @@ describe('MovieReservationWorkloadStack', () => {
         SERVICE_VERSION: 'reservation-v1',
         OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4318',
       });
+
       expect(environment(container(template, 'movie-recommendation-service'))).toMatchObject({
         PORT: '8082',
         USE_DUMMY: 'true',
@@ -516,6 +568,7 @@ describe('MovieReservationWorkloadStack', () => {
         SERVICE_VERSION: 'recommendation-v1',
         OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4321',
       });
+
       expect(environment(container(template, 'movie-reservation-mcp'))).toMatchObject({
         MOVIE_RESERVATION_GRAPHQL_URL: 'http://127.0.0.1:3000/graphql',
         MOVIE_RESERVATION_HEALTH_URL: 'http://127.0.0.1:3000/health',
@@ -525,10 +578,12 @@ describe('MovieReservationWorkloadStack', () => {
         SERVICE_VERSION: 'reservation-mcp-v1',
         OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4322',
       });
+
       expect(environment(container(template, 'movie-recommendation-mcp'))).toMatchObject({
         MOVIE_RECOMMENDATION_API_URL: 'http://127.0.0.1:8082',
         OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4320',
       });
+
       expect(environment(container(template, 'movie-reservation-agent'))).toMatchObject({
         MOVIE_RESERVATION_MCP_URL: 'http://127.0.0.1:8091/mcp',
         MOVIE_RECOMMENDATION_MCP_URL: 'http://127.0.0.1:8092/mcp',
@@ -536,6 +591,7 @@ describe('MovieReservationWorkloadStack', () => {
         DEMO_RESERVATION_POLL_ATTEMPTS: '6',
         OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4319',
       });
+
       expect(environment(container(template, 'movie-reservation-agent'))).not.toHaveProperty(
         'NO_LLM',
       );
@@ -547,14 +603,18 @@ describe('MovieReservationWorkloadStack', () => {
         ['movie-recommendation-service', 'recommendation-v1', 4321],
         ['movie-reservation-mcp', 'reservation-mcp-v1', 4322],
       ] as const;
+
       expect(new Set(telemetryContracts.map(([, , port]) => port)).size).toBe(
         telemetryContracts.length,
       );
+
       const mappedContainerPorts = containers(template)
         .flatMap((definition) => definition.PortMappings ?? [])
         .map(({ ContainerPort }) => ContainerPort);
+
       for (const [serviceName, serviceVersion, port] of telemetryContracts) {
         expect(mappedContainerPorts).not.toContain(port);
+
         expect(environment(container(template, serviceName))).toMatchObject({
           DEPLOYMENT_ENVIRONMENT: 'aws-demo',
           SERVICE_VERSION: serviceVersion,
@@ -579,6 +639,7 @@ describe('MovieReservationWorkloadStack', () => {
         });
 
       expect(container(template, 'adot-collector').Essential).toBe(false);
+
       dependency('movie-reservation-service', 'adot-collector');
       dependency('movie-recommendation-service', 'adot-collector');
       dependency('movie-reservation-mcp', 'movie-reservation-service');
@@ -600,12 +661,15 @@ describe('MovieReservationWorkloadStack', () => {
         StopTimeout: 120,
         FirelensConfiguration: { Type: 'fluentbit' },
       });
+
       for (const input of APPLICATION_COMPONENT_INPUTS) {
         const definition = container(template, `movie-${input.componentId}`);
+
         expect(definition.LogConfiguration).toEqual({
           LogDriver: 'awsfirelens',
           Options: { 'log-driver-buffer-limit': '1024' },
         });
+
         expect(definition.DependsOn).toContainEqual({
           ContainerName: 'audit-router',
           Condition: 'START',
@@ -618,6 +682,7 @@ describe('MovieReservationWorkloadStack', () => {
     it('leaves log groups and Grafana to the observability stack', () => {
       template.resourceCountIs('AWS::Logs::LogGroup', 0);
       template.resourceCountIs('AWS::Grafana::Workspace', 0);
+
       expect(
         containers(template).filter(
           ({ LogConfiguration }) => LogConfiguration?.Options?.['awslogs-group'],
@@ -634,25 +699,32 @@ describe('MovieReservationWorkloadStack', () => {
         Protocol: 'HTTP',
         TargetType: 'ip',
       });
+
       const service = resources(template, 'AWS::ECS::Service')[0];
+
       expect(service.Properties?.HealthCheckGracePeriodSeconds).toBe(180);
       expect(JSON.stringify(service.Properties?.LoadBalancers)).toContain('movie-reservation-web');
+
       expect(JSON.stringify(service.Properties?.LoadBalancers)).not.toContain(
         'movie-reservation-service',
       );
+
       template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
         FromPort: 80,
         ToPort: 80,
         IpProtocol: 'tcp',
         SourcePrefixListId: 'pl-0123456789abcdef0',
       });
+
       template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
         FromPort: 8088,
         ToPort: 8088,
         IpProtocol: 'tcp',
         SourceSecurityGroupId: Match.anyValue(),
       });
+
       const ingress = resources(template, 'AWS::EC2::SecurityGroupIngress');
+
       expect(ingress.map(({ Properties }) => Properties?.CidrIp)).not.toContain('0.0.0.0/0');
     });
 
@@ -667,6 +739,7 @@ describe('MovieReservationWorkloadStack', () => {
           { Key: 'access_logs.s3.prefix', Value: 'alb' },
         ]),
       });
+
       template.resourceCountIs('AWS::S3::Bucket', 0);
       template.resourceCountIs('AWS::APS::Workspace', 0);
     });
@@ -689,15 +762,20 @@ describe('MovieReservationWorkloadStack', () => {
   describe('IAM', () => {
     it('shared task role allows telemetry and audit writes but not image publishing or workload deployment', () => {
       const policies = resources(template, 'AWS::IAM::Policy');
+
       const taskPolicy = policies.find(({ Properties }) =>
         String(Properties?.PolicyName).includes('TaskRoleDefaultPolicy'),
       );
+
       expect(taskPolicy).toBeDefined();
+
       const document = taskPolicy?.Properties?.PolicyDocument as {
         readonly Statement: Array<{ readonly Action: string | string[] }>;
       };
+
       // Every container in the task shares this role, including the applications.
       const allowedActions = document.Statement.flatMap(actions);
+
       expect(allowedActions).toEqual(
         expect.arrayContaining([
           'xray:PutTraceSegments',
@@ -707,6 +785,7 @@ describe('MovieReservationWorkloadStack', () => {
           'events:PutEvents',
         ]),
       );
+
       expect(document.Statement).toContainEqual(
         expect.objectContaining({
           Action: 'events:PutEvents',
@@ -714,6 +793,7 @@ describe('MovieReservationWorkloadStack', () => {
           Resource: TEST_AUDIT_EVENT_BUS_ARN,
         }),
       );
+
       expect(allowedActions).not.toContain('ecr:PutImage');
       expect(allowedActions).not.toContain('ecs:UpdateService');
     });
@@ -727,6 +807,7 @@ describe('MovieReservationWorkloadStack', () => {
         AUDIT_PUBLISH_TIMEOUT_MS: '1000',
         AUDIT_STDOUT_COMPARISON_MIRROR: 'true',
       });
+
       for (const definition of containers(template)) {
         if (definition.Name === 'movie-reservation-service') {
           continue;
@@ -744,6 +825,7 @@ describe('MovieReservationWorkloadStack', () => {
     it('routes alarm transitions to one TLS-only topic without a subscription', () => {
       template.resourceCountIs('AWS::SNS::Topic', 1);
       template.resourceCountIs('AWS::SNS::Subscription', 0);
+
       template.hasResourceProperties('AWS::SNS::TopicPolicy', {
         PolicyDocument: {
           Statement: Match.arrayWith([
@@ -754,6 +836,7 @@ describe('MovieReservationWorkloadStack', () => {
           ]),
         },
       });
+
       expect(template.toJSON().Outputs.AuditAlarmTopicArn.Value).toEqual({ Ref: topicLogicalId() });
     });
 
@@ -761,12 +844,14 @@ describe('MovieReservationWorkloadStack', () => {
       const failureAlarms = resources(template, 'AWS::CloudWatch::Alarm').filter(
         ({ Properties }) => Properties?.MetricName === 'audit_publish_total',
       );
+
       const reasons = failureAlarms.map(
         ({ Properties }) =>
           (Properties?.Dimensions as { Name: string; Value: string }[]).find(
             ({ Name }) => Name === 'failure_reason',
           )?.Value,
       );
+
       expect(reasons.sort()).toEqual([
         'aborted',
         'configuration',
@@ -787,8 +872,10 @@ describe('MovieReservationWorkloadStack', () => {
           // The service pre-creates zero series, so absence is a broken pipeline, not health.
           TreatMissingData: 'breaching',
         });
+
         // Children only explain the cause; the composite is the single notifier.
         expect(Properties).not.toHaveProperty('AlarmActions');
+
         // Role, not transport: the selector survives an EventBridge-to-stdout rollback.
         expect(Properties?.Dimensions).toEqual(
           expect.arrayContaining([
@@ -798,6 +885,7 @@ describe('MovieReservationWorkloadStack', () => {
             { Name: 'result', Value: 'failed' },
           ]),
         );
+
         expect(Properties?.Dimensions).toHaveLength(5);
       }
     });
@@ -808,13 +896,17 @@ describe('MovieReservationWorkloadStack', () => {
           Properties: { MetricName: 'audit_publish_total' },
         }),
       );
+
       const [composite] = resources(template, 'AWS::CloudWatch::CompositeAlarm');
+
       expect(resources(template, 'AWS::CloudWatch::CompositeAlarm')).toHaveLength(1);
       expect(composite.Properties?.AlarmActions).toEqual([{ Ref: topicLogicalId() }]);
 
       // AlarmRule synthesizes as ALARM("<arn>") OR ALARM("<arn>") ... with ARNs via Fn::GetAtt.
       const rule = JSON.stringify(composite.Properties?.AlarmRule);
+
       expect(failureAlarmIds).toHaveLength(6);
+
       for (const alarmId of failureAlarmIds) {
         expect(rule).toContain(`{"Fn::GetAtt":["${alarmId}","Arn"]}`);
       }
@@ -824,16 +916,22 @@ describe('MovieReservationWorkloadStack', () => {
 
     it('alarms when a successful login is not audited', () => {
       const filters = Object.values(template.findResources('AWS::Logs::MetricFilter'));
+
       expect(filters).toHaveLength(1);
+
       const [{ Properties: filter }] = filters;
+
       // Both conditions must hold, and the status is matched as a number.
       expect(filter.FilterPattern).toBe(
         '{ ($.event = "audit.emit.failed") && ($.auth_status_id = 1) }',
       );
+
       expect(filter.LogGroupName).toEqual({
         'Fn::ImportValue': expect.stringContaining(':ReservationServiceLogGroupName'),
       });
+
       const [transformation] = filter.MetricTransformations;
+
       expect(transformation).toMatchObject({
         MetricNamespace: 'MoviePlatform/aws-demo/audit-gaps',
         MetricValue: '1',
@@ -857,8 +955,11 @@ describe('MovieReservationWorkloadStack', () => {
   describe('ECS Exec', () => {
     it('enables ECS Exec and its endpoint only when explicitly requested', () => {
       expect(JSON.stringify(template.toJSON())).not.toContain('ssmmessages:CreateControlChannel');
+
       const enabled = synthesized({ enableEcsExec: true });
+
       enabled.hasResourceProperties('AWS::ECS::Service', { EnableExecuteCommand: true });
+
       expect(JSON.stringify(enabled.toJSON())).toContain('ssmmessages:CreateControlChannel');
       expect(JSON.stringify(enabled.toJSON())).toContain('ssmmessages');
     });
@@ -883,17 +984,21 @@ describe('MovieReservationWorkloadStack', () => {
           demoAuthEnabled: true,
           demoAuthSecretArn: TEST_DEMO_AUTH_SECRET_ARN,
         });
+
         for (const producer of [
           'reservation-service',
           'reservation-agent',
           'recommendation-service',
         ]) {
           const definition = container(enabled, `movie-${producer}`);
+
           expect(environment(definition)).toMatchObject({
             DEMO_AUTH_ENABLED: 'true',
             DEPLOYMENT_ENVIRONMENT: 'aws-demo',
           });
+
           expect(environment(definition)).not.toHaveProperty('DEMO_AUTH_PASSWORD');
+
           expect(definition).toMatchObject({
             Secrets: [
               { Name: 'DEMO_AUTH_USERNAME', ValueFrom: `${TEST_DEMO_AUTH_SECRET_ARN}:username::` },
@@ -904,9 +1009,11 @@ describe('MovieReservationWorkloadStack', () => {
 
         expect(JSON.stringify(enabled.toJSON())).toContain('secretsmanager:GetSecretValue');
         expect(JSON.stringify(enabled.toJSON())).toContain('secretsmanager');
+
         const taskPolicy = resources(enabled, 'AWS::IAM::Policy').find(({ Properties }) =>
           String(Properties?.PolicyName).includes('TaskRoleDefaultPolicy'),
         );
+
         expect(JSON.stringify(taskPolicy)).not.toContain('secretsmanager:GetSecretValue');
       });
     });
@@ -915,6 +1022,7 @@ describe('MovieReservationWorkloadStack', () => {
   describe('stack outputs', () => {
     it('publishes deployment, telemetry, and per-component log discovery outputs', () => {
       const outputs = template.toJSON().Outputs as Record<string, unknown>;
+
       for (const output of [
         'DemoBaseUrl',
         'LoadBalancerDnsName',

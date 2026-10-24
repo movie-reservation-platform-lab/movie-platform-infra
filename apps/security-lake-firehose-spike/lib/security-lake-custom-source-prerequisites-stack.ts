@@ -24,6 +24,7 @@ export class SecurityLakeCustomSourcePrerequisitesStack extends Stack {
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSGlueServiceRole'),
       ],
     });
+
     crawlerRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['s3:GetBucketLocation', 's3:ListBucket'],
@@ -38,6 +39,7 @@ export class SecurityLakeCustomSourcePrerequisitesStack extends Stack {
         },
       }),
     );
+
     crawlerRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['s3:GetObject', 's3:PutObject'],

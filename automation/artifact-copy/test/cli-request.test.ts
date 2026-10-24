@@ -49,7 +49,9 @@ test('parses the exact versioned transport fields into the library request', () 
       sourceAuthFile: '/tmp/movie-platform/ghcr-auth.json',
     },
   });
+
   expect(request.requestVersion).toBe(ARTIFACT_COPY_CLI_REQUEST_VERSION);
+
   if (request.requestVersion !== ARTIFACT_COPY_CLI_REQUEST_VERSION) {
     throw new Error('expected v1 request');
   }
@@ -73,7 +75,9 @@ test.each([
       operation,
     },
   });
+
   expect(Object.isFrozen(request)).toBe(true);
+
   expect(
     request.requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION_V2 &&
       Object.isFrozen(request.transferRequest),
@@ -152,6 +156,7 @@ test('does not confuse braces or escaped quotes inside string values with JSON s
   );
 
   expect(request.requestVersion).toBe(ARTIFACT_COPY_CLI_REQUEST_VERSION);
+
   if (request.requestVersion !== ARTIFACT_COPY_CLI_REQUEST_VERSION) {
     throw new Error('expected v1 request');
   }

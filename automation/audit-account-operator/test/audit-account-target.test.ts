@@ -36,10 +36,12 @@ test('rejects a validated SSO target for another account without printing either
   expect(() => validateAuditAccountTarget(config, wrongAccess)).toThrow(
     'the validated AWS target does not match the configured audit account',
   );
+
   try {
     validateAuditAccountTarget(config, wrongAccess);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
+
     expect(message).not.toContain(config.auditAccountId);
     expect(message).not.toContain(wrongAccess.target.accountId);
   }

@@ -20,6 +20,7 @@ const WEB_CONTAINER_PORT = 8088;
 const AMP_REMOTE_WRITE_ACTIONS = ['aps:RemoteWrite'];
 const STS_IDENTITY_ACTIONS = ['sts:GetCallerIdentity'];
 const XRAY_WRITE_ACTIONS = ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'];
+
 const APPLICATION_COMPONENTS = [
   'reservation-web',
   'reservation-agent',
@@ -95,7 +96,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       vpc,
       description: 'Allows restricted HTTP ingress to the public demo ALB',
     });
+
     tagServiceResource(albSecurityGroup);
+
     albSecurityGroup.addIngressRule(
       ec2.Peer.prefixList(platformConfig.allowedIngressPrefixListId),
       ec2.Port.tcp(80),
@@ -106,7 +109,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       vpc,
       description: 'Allows ALB traffic to the private ECS tasks',
     });
+
     tagServiceResource(serviceSecurityGroup);
+
     serviceSecurityGroup.addIngressRule(
       albSecurityGroup,
       ec2.Port.tcp(WEB_CONTAINER_PORT),
@@ -117,6 +122,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       vpc,
       description: 'Allows private ECS tasks to reach interface VPC endpoints',
     });
+
     endpointSecurityGroup.addIngressRule(
       serviceSecurityGroup,
       ec2.Port.tcp(443),
@@ -128,6 +134,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       attrWorkspaceId: importFoundationOutput('AmpWorkspaceId'),
       attrPrometheusEndpoint: importFoundationOutput('AmpPrometheusEndpoint'),
     };
+
     const grafanaWorkspaceId = importFoundationOutput('GrafanaWorkspaceId');
     const grafanaWorkspaceUrl = importFoundationOutput('GrafanaWorkspaceUrl');
     const auditStreamArn = importFoundationOutput('AuditDeliveryStreamArn');
@@ -149,18 +156,22 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       ...interfaceEndpointProps,
       service: ec2.InterfaceVpcEndpointAwsService.ECR,
     });
+
     vpc.addInterfaceEndpoint('EcrDockerEndpoint', {
       ...interfaceEndpointProps,
       service: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
     });
+
     vpc.addInterfaceEndpoint('CloudWatchLogsEndpoint', {
       ...interfaceEndpointProps,
       service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
     });
+
     const xrayEndpoint = vpc.addInterfaceEndpoint('XRayEndpoint', {
       ...interfaceEndpointProps,
       service: ec2.InterfaceVpcEndpointAwsService.XRAY,
     });
+
     xrayEndpoint.addToPolicy(
       new iam.PolicyStatement({
         principals: [new iam.AnyPrincipal()],
@@ -168,6 +179,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         resources: ['*'],
       }),
     );
+
     if (platformConfig.enableTempo) {
       xrayEndpoint.addToPolicy(
         new iam.PolicyStatement({
@@ -193,6 +205,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       ...interfaceEndpointProps,
       service: ec2.InterfaceVpcEndpointAwsService.PROMETHEUS_WORKSPACES,
     });
+
     ampWorkspaceEndpoint.addToPolicy(
       new iam.PolicyStatement({
         principals: [new iam.AnyPrincipal()],
@@ -200,6 +213,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         resources: [ampWorkspace.attrArn],
       }),
     );
+
     if (platformConfig.enableTempo) {
       ampWorkspaceEndpoint.addToPolicy(
         new iam.PolicyStatement({
@@ -208,6 +222,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
           actions: ['aps:QueryMetrics', 'aps:GetLabels', 'aps:GetMetricMetadata', 'aps:GetSeries'],
         }),
       );
+
       // AMG sends all data-source requests through its VPC attachment, not just Tempo.
       for (const [id, service] of [
         ['CloudWatchMetricsEndpoint', ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_MONITORING],
@@ -222,6 +237,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       ...interfaceEndpointProps,
       service: ec2.InterfaceVpcEndpointAwsService.KINESIS_FIREHOSE,
     });
+
     firehoseEndpoint.addToPolicy(
       new iam.PolicyStatement({
         principals: [new iam.AnyPrincipal()],
@@ -229,10 +245,12 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         resources: [auditStreamArn],
       }),
     );
+
     const eventBridgeEndpoint = vpc.addInterfaceEndpoint('EventBridgeEndpoint', {
       ...interfaceEndpointProps,
       service: ec2.InterfaceVpcEndpointAwsService.EVENTBRIDGE,
     });
+
     eventBridgeEndpoint.addToPolicy(
       new iam.PolicyStatement({
         principals: [new iam.AnyPrincipal()],
@@ -240,11 +258,13 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         resources: [platformConfig.auditPublisher.eventBusArn],
       }),
     );
+
     if (platformConfig.demoAuthEnabled) {
       const secretsEndpoint = vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
         ...interfaceEndpointProps,
         service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
       });
+
       secretsEndpoint.addToPolicy(
         new iam.PolicyStatement({
           principals: [new iam.AnyPrincipal()],
@@ -258,6 +278,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       ...interfaceEndpointProps,
       service: ec2.InterfaceVpcEndpointAwsService.STS,
     });
+
     stsEndpoint.addToPolicy(
       new iam.PolicyStatement({
         principals: [new iam.AnyPrincipal()],
@@ -265,6 +286,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         resources: ['*'],
       }),
     );
+
     if (platformConfig.enableTempo) {
       stsEndpoint.addToPolicy(
         new iam.PolicyStatement({
@@ -283,6 +305,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
     }
 
     const clusterName = `${platformConfig.platformName}-${platformConfig.environmentName}`;
+
     const cluster = new ecs.Cluster(this, 'ApplicationCluster', {
       vpc,
       clusterName,
@@ -290,6 +313,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
     });
 
     const repositoryRoot = process.cwd();
+
     const tempo = platformConfig.enableTempo
       ? new PrivateTempo(this, 'Tempo', {
           vpc,
@@ -302,6 +326,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
           ampRemoteWriteEndpoint: `${ampWorkspace.attrPrometheusEndpoint}api/v1/remote_write`,
         })
       : undefined;
+
     const images = {
       reservationService: resolveApplicationImage(
         this,
@@ -328,10 +353,12 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         platformConfig.applicationImages['recommendation-service'],
       ),
     };
+
     const adotImage = new ecrAssets.DockerImageAsset(this, 'AdotImage', {
       directory: path.join(repositoryRoot, 'adot-collector'),
       platform: ecrAssets.Platform.LINUX_AMD64,
     });
+
     const cloudWatchApplicationMetricsNamespace = `MoviePlatform/${platformConfig.environmentName}/applications`;
 
     const componentLogGroups = Object.fromEntries(
@@ -351,16 +378,19 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         ];
       }),
     ) as Record<(typeof APPLICATION_COMPONENTS)[number], logs.ILogGroup>;
+
     const adotLogGroup = logs.LogGroup.fromLogGroupName(
       this,
       'AdotLogs',
       importFoundationOutput('AdotLogGroupName'),
     );
+
     const applicationMetricsLogGroup = logs.LogGroup.fromLogGroupName(
       this,
       'MetricsLogs',
       importFoundationOutput('ApplicationMetricsLogGroupName'),
     );
+
     const routerLogGroup = logs.LogGroup.fromLogGroupName(
       this,
       'RouterLogs',
@@ -376,6 +406,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
       },
     });
+
     tagServiceResource(taskDefinition);
 
     // X-Ray write APIs do not support resource-scoped ARNs. ECS task roles are
@@ -386,13 +417,16 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         resources: ['*'],
       }),
     );
+
     taskDefinition.addToTaskRolePolicy(
       new iam.PolicyStatement({
         actions: AMP_REMOTE_WRITE_ACTIONS,
         resources: [ampWorkspace.attrArn],
       }),
     );
+
     applicationMetricsLogGroup.grantWrite(taskDefinition.taskRole);
+
     // FireLens is an application-side API caller: these belong to the task role,
     // not the execution role used to pull images and inject startup secrets.
     taskDefinition.addToTaskRolePolicy(
@@ -401,12 +435,14 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         resources: [auditStreamArn],
       }),
     );
+
     taskDefinition.addToTaskRolePolicy(
       new iam.PolicyStatement({
         actions: ['events:PutEvents'],
         resources: [platformConfig.auditPublisher.eventBusArn],
       }),
     );
+
     for (const group of [...Object.values(componentLogGroups), routerLogGroup]) {
       group.grantWrite(taskDefinition.taskRole);
     }
@@ -415,6 +451,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       DEMO_AUTH_ENABLED: String(platformConfig.demoAuthEnabled),
       DEPLOYMENT_ENVIRONMENT: platformConfig.environmentName,
     };
+
     const demoAuthSecret =
       platformConfig.demoAuthSecretArn === undefined
         ? undefined
@@ -423,6 +460,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
             'DemoAuthSecret',
             platformConfig.demoAuthSecretArn,
           );
+
     const demoAuthSecrets: Record<string, ecs.Secret> =
       demoAuthSecret === undefined
         ? {}
@@ -490,6 +528,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       directory: path.join(repositoryRoot, 'audit-router'),
       platform: ecrAssets.Platform.LINUX_AMD64,
     });
+
     const auditRouter = taskDefinition.addFirelensLogRouter('AuditRouter', {
       containerName: 'audit-router',
       image: ecs.ContainerImage.fromDockerImageAsset(routerImage),
@@ -505,9 +544,11 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         ROUTER_LOG_GROUP: routerLogGroup.logGroupName,
       },
     });
+
     // Routing uses container-derived FireLens tags in audit-router/platform.conf.
     const createApplicationLogDriver = (): ecs.LogDriver =>
       ecs.LogDrivers.firelens({ options: { 'log-driver-buffer-limit': '1024' } });
+
     const healthCheck = (command: string[]): ecs.HealthCheck => ({
       command,
       interval: cdk.Duration.seconds(15),
@@ -515,6 +556,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       retries: 5,
       startPeriod: cdk.Duration.seconds(20),
     });
+
     const otelEnvironment = (serviceName: string, port: number): Record<string, string> => ({
       OTEL_SERVICE_NAME: serviceName,
       OTEL_TRACES_EXPORTER: 'otlp',
@@ -562,7 +604,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         "fetch('http://127.0.0.1:3000/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
       ]),
     });
+
     reservationService.addPortMappings({ containerPort: 3000, protocol: ecs.Protocol.TCP });
+
     reservationService.addContainerDependencies({
       container: adotContainer,
       condition: ecs.ContainerDependencyCondition.HEALTHY,
@@ -588,7 +632,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       },
       healthCheck: healthCheck(['CMD-SHELL', 'curl -fsS http://127.0.0.1:8082/ready || exit 1']),
     });
+
     recommendationService.addPortMappings({ containerPort: 8082, protocol: ecs.Protocol.TCP });
+
     recommendationService.addContainerDependencies({
       container: adotContainer,
       condition: ecs.ContainerDependencyCondition.HEALTHY,
@@ -619,7 +665,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         "from urllib.request import urlopen; urlopen('http://127.0.0.1:8091/health', timeout=2).close()",
       ]),
     });
+
     reservationMcp.addPortMappings({ containerPort: 8091, protocol: ecs.Protocol.TCP });
+
     reservationMcp.addContainerDependencies(
       {
         container: reservationService,
@@ -654,7 +702,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         "from urllib.request import urlopen; urlopen('http://127.0.0.1:8092/health', timeout=2).close()",
       ]),
     });
+
     recommendationMcp.addPortMappings({ containerPort: 8092, protocol: ecs.Protocol.TCP });
+
     recommendationMcp.addContainerDependencies(
       {
         container: recommendationService,
@@ -691,7 +741,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/health', timeout=2).close()",
       ]),
     });
+
     reservationAgent.addPortMappings({ containerPort: 8080, protocol: ecs.Protocol.TCP });
+
     reservationAgent.addContainerDependencies(
       {
         container: reservationMcp,
@@ -722,7 +774,9 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         'wget -qO- http://127.0.0.1:8088/health >/dev/null || exit 1',
       ]),
     });
+
     webContainer.addPortMappings({ containerPort: WEB_CONTAINER_PORT, protocol: ecs.Protocol.TCP });
+
     webContainer.addContainerDependencies(
       {
         container: reservationAgent,
@@ -769,6 +823,7 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       // before ECS evaluates target-health failures.
       healthCheckGracePeriod: cdk.Duration.seconds(180),
     });
+
     tagServiceResource(service);
 
     const loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'LoadBalancer', {
@@ -781,12 +836,15 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
         subnetType: ec2.SubnetType.PUBLIC,
       },
     });
+
     tagServiceResource(loadBalancer);
     loadBalancer.setAttribute('access_logs.s3.enabled', 'true');
+
     loadBalancer.setAttribute(
       'access_logs.s3.bucket',
       importFoundationOutput('AlbAccessLogBucketName'),
     );
+
     loadBalancer.setAttribute('access_logs.s3.prefix', 'alb');
 
     const listener = loadBalancer.addListener('HttpListener', {
@@ -822,15 +880,18 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       value: loadBalancer.loadBalancerDnsName,
       description: 'Public DNS name for the temporary integrated demo web ALB',
     });
+
     new cdk.CfnOutput(this, 'DemoBaseUrl', {
       value: cdk.Fn.join('', ['http://', loadBalancer.loadBalancerDnsName]),
       description: 'Temporary integrated demo base URL',
     });
+
     for (const componentId of APPLICATION_COMPONENTS) {
       const outputId = `${componentId
         .split('-')
         .map((part) => part[0].toUpperCase() + part.slice(1))
         .join('')}LogGroupName`;
+
       new cdk.CfnOutput(this, outputId, {
         value: componentLogGroups[componentId].logGroupName,
         description: `CloudWatch log group for ${componentId}`,
@@ -841,38 +902,47 @@ export class MovieReservationWorkloadStack extends cdk.Stack {
       value: auditGapAlarms.alarmTopic.topicArn,
       description: 'Unsubscribed SNS topic receiving audit-gap alarm transitions',
     });
+
     new cdk.CfnOutput(this, 'AdotLogGroupName', {
       value: adotLogGroup.logGroupName,
       description: 'CloudWatch log group for the task-local ADOT collector',
     });
+
     new cdk.CfnOutput(this, 'CloudWatchApplicationMetricsNamespace', {
       value: cloudWatchApplicationMetricsNamespace,
       description: 'CloudWatch namespace containing application metrics exported through ADOT EMF',
     });
+
     new cdk.CfnOutput(this, 'EcsClusterName', {
       value: cluster.clusterName,
       description: 'ECS cluster name used by Container Insights and smoke tooling',
     });
+
     new cdk.CfnOutput(this, 'EcsServiceName', {
       value: service.serviceName,
       description: 'ECS service name used by Container Insights and smoke tooling',
     });
+
     new cdk.CfnOutput(this, 'AmpWorkspaceId', {
       value: ampWorkspace.attrWorkspaceId,
       description: 'Amazon Managed Service for Prometheus workspace ID',
     });
+
     new cdk.CfnOutput(this, 'AmpWorkspaceArn', {
       value: ampWorkspace.attrArn,
       description: 'Amazon Managed Service for Prometheus workspace ARN',
     });
+
     new cdk.CfnOutput(this, 'AmpPrometheusEndpoint', {
       value: ampWorkspace.attrPrometheusEndpoint,
       description: 'Base Prometheus-compatible API endpoint for the AMP workspace',
     });
+
     new cdk.CfnOutput(this, 'GrafanaWorkspaceId', {
       value: grafanaWorkspaceId,
       description: 'Amazon Managed Grafana workspace ID',
     });
+
     new cdk.CfnOutput(this, 'GrafanaWorkspaceUrl', {
       value: grafanaWorkspaceUrl,
       description: 'HTTPS URL for the Amazon Managed Grafana workspace',

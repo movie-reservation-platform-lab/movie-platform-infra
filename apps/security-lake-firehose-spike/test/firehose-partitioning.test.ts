@@ -4,10 +4,13 @@ import { SecurityLakeAuditIngestionStack } from '../lib/security-lake-audit-inge
 
 const TEST_TARGET = { account: '222222222222', region: 'eu-central-1' } as const;
 const EVENT_DAY_QUERY = '{eventDay: (.time / 1000 | strftime("%Y%m%d"))}';
+
 const SECURITY_LAKE_PREFIX =
   'ext/MOVIE_AUTH/1.0/region=eu-central-1/accountId=333333333333/eventDay=!{partitionKeyFromQuery:eventDay}/';
+
 const FIREHOSE_ERROR_PREFIX =
   'ext/MOVIE_AUTH/1.0-errors/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd/HH}/';
+
 const FIREHOSE_ERROR_OBJECT_PATH =
   'aws-security-data-lake-eu-central-1-example/ext/MOVIE_AUTH/1.0-errors/*';
 
@@ -81,19 +84,23 @@ describe('Firehose partitioning', () => {
   it('keeps Security Lake delivery separate from conversion-schema access', () => {
     const providerRoleArn =
       'arn:aws:iam::222222222222:role/AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1';
+
     const streams = Object.values(template.findResources('AWS::KinesisFirehose::DeliveryStream'));
 
     expect(streams).toHaveLength(1);
+
     expect(streams[0]).toHaveProperty(
       'Properties.ExtendedS3DestinationConfiguration.RoleARN',
       providerRoleArn,
     );
+
     expect(streams[0]).toHaveProperty(
       'Properties.ExtendedS3DestinationConfiguration.DataFormatConversionConfiguration.SchemaConfiguration.RoleARN',
       {
         'Fn::GetAtt': [expect.stringMatching(/^ConversionSchemaRole/), 'Arn'],
       },
     );
+
     expect(streams[0]).not.toHaveProperty(
       'Properties.ExtendedS3DestinationConfiguration.CloudWatchLoggingOptions',
     );
@@ -124,8 +131,11 @@ describe('Firehose partitioning', () => {
         }),
       ]),
     });
+
     const providerPolicies = Object.values(template.findResources('AWS::IAM::Policy'));
+
     expect(providerPolicies).toHaveLength(1);
+
     expect(providerPolicies[0]).toMatchObject({
       Properties: {
         PolicyDocument: {
@@ -139,7 +149,9 @@ describe('Firehose partitioning', () => {
         Roles: ['AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1'],
       },
     });
+
     expect(JSON.stringify(providerPolicies[0])).toContain(FIREHOSE_ERROR_OBJECT_PATH);
+
     template.resourceCountIs('AWS::Logs::LogGroup', 0);
     template.resourceCountIs('AWS::Logs::LogStream', 0);
   });
@@ -156,6 +168,7 @@ describe('Firehose partitioning', () => {
     const streams = Object.values(template.findResources('AWS::KinesisFirehose::DeliveryStream'));
 
     expect(Object.values(permissions)).toHaveLength(2);
+
     expect(Object.values(permissions)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -172,7 +185,9 @@ describe('Firehose partitioning', () => {
         }),
       ]),
     );
+
     expect(streams).toHaveLength(1);
+
     expect(streams[0]).toHaveProperty(
       'DependsOn',
       expect.arrayContaining([

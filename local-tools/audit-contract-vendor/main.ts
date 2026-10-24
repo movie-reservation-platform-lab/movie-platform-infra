@@ -4,6 +4,7 @@ import { vendorAuditContract } from './vendor-audit-contract';
 /** Run the deliberate local workflow that vendors a reviewed producer contract. */
 function main(args: readonly string[]): void {
   const [sourceBundleDirectory, sourceRevision] = args;
+
   if (
     sourceBundleDirectory === undefined ||
     !isAbsolute(sourceBundleDirectory) ||

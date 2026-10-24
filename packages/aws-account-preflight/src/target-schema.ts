@@ -32,6 +32,7 @@ export interface AwsTarget {
  */
 export function parseAwsTargetJson(contents: string): AwsTarget {
   let value: unknown;
+
   try {
     value = JSON.parse(contents) as unknown;
   } catch {
@@ -48,6 +49,7 @@ function validateAwsTarget(value: unknown): AwsTarget {
 
   const actualKeys = Object.keys(value);
   const unknownKey = actualKeys.find((key) => !isTargetKey(key));
+
   if (unknownKey !== undefined) {
     fail('the target file contains an unknown key');
   }
@@ -92,6 +94,7 @@ function isTargetKey(value: string): value is TargetKey {
 
 function requireString(value: Readonly<Record<string, unknown>>, key: TargetKey): string {
   const field = value[key];
+
   if (typeof field !== 'string') {
     fail(`the target ${key} must be a string`);
   }

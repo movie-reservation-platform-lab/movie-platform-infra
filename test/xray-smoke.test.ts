@@ -35,10 +35,12 @@ test('fails prerequisites before making a request when AWS_PROFILE is missing', 
     const report = parseReport(result.stdout);
 
     expect(result.status).toBe(1);
+
     expect(report).toMatchObject({
       result: 'failure',
       failure_stage: 'prerequisites',
     });
+
     expect(readFileSync(fixture.curlMarker, 'utf8')).toBe('');
   } finally {
     fixture.cleanup();
@@ -53,10 +55,12 @@ test('rejects an invalid report destination before making a request', () => {
     const report = parseReport(result.stdout);
 
     expect(result.status).toBe(1);
+
     expect(report).toMatchObject({
       result: 'failure',
       failure_stage: 'prerequisites',
     });
+
     expect(result.stderr).toContain('existing report path must be a writable regular file');
     expect(readFileSync(fixture.curlMarker, 'utf8')).toBe('');
   } finally {
@@ -105,6 +109,7 @@ test('writes a sanitized success report for the expected service segment', () =>
     const report = parseReport(result.stdout);
 
     expect(result.status).toBe(0);
+
     expect(report).toMatchObject({
       result: 'success',
       failure_stage: null,
@@ -112,6 +117,7 @@ test('writes a sanitized success report for the expected service segment', () =>
       region: 'eu-central-1',
       target: 'http://example.test',
     });
+
     expect(report.traceparent).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
     expect(report.xray_trace_id).toMatch(/^1-[0-9a-f]{8}-[0-9a-f]{24}$/);
     expect(report.correlation_id).toMatch(/^[0-9a-f-]{36}$/);
@@ -120,6 +126,7 @@ test('writes a sanitized success report for the expected service segment', () =>
     expect(JSON.parse(readFileSync(reportPath, 'utf8'))).toEqual(report);
 
     const serializedReport = JSON.stringify(report);
+
     expect(serializedReport).not.toContain('account');
     expect(serializedReport).not.toContain('user_id');
     expect(serializedReport).not.toContain('response');
@@ -137,6 +144,7 @@ interface SmokeFixture {
 function createFixture(curlScript: string, awsScript: string): SmokeFixture {
   const directory = mkdtempSync(path.join(tmpdir(), 'xray-smoke-'));
   const curlMarker = path.join(directory, 'curl-called');
+
   writeFileSync(curlMarker, '');
   writeExecutable(path.join(directory, 'curl'), curlScript);
   writeExecutable(path.join(directory, 'aws'), awsScript);
@@ -168,6 +176,7 @@ function runSmoke(
     CURL_MARKER: fixture.curlMarker,
     ...envOverrides,
   });
+
   for (const [key, value] of Object.entries(envOverrides)) {
     if (value === undefined) {
       delete env[key];
@@ -193,6 +202,7 @@ function parseReport(stdout: string): SmokeReport {
     .split('\n')
     .reverse()
     .find((line) => line.startsWith('{'));
+
   if (reportLine === undefined) {
     throw new Error(`smoke output did not contain a JSON report: ${stdout}`);
   }

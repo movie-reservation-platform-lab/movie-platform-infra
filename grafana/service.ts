@@ -26,6 +26,7 @@ function identifier(value: string, name: string): string {
 
 function publicHttpsUrl(value: string, name: string): string {
   const parsed = new URL(value);
+
   if (
     parsed.protocol !== 'https:' ||
     parsed.username ||
@@ -64,6 +65,7 @@ export function renderServiceGrafana(config: ServiceGrafanaConfig) {
   // increase() also requires at least two samples of a counter series.
   const errorCount = `(sum(increase(${errors}[2m])) or (0 * sum(increase(${all}[2m])))) and (max(timestamp(${all})) > time() - 90)`;
   const dashboardUrl = `${grafanaUrl}/d/${dashboardUid}`;
+
   const links = [
     { title: 'Investigation runbook', url: runbookUrl, type: 'link', targetBlank: true },
     {
@@ -73,8 +75,10 @@ export function renderServiceGrafana(config: ServiceGrafanaConfig) {
       targetBlank: true,
     },
   ];
+
   if (config.tempoUid) {
     const tempoUid = identifier(config.tempoUid, 'tempoUid');
+
     const left = {
       datasource: tempoUid,
       queries: [
@@ -87,6 +91,7 @@ export function renderServiceGrafana(config: ServiceGrafanaConfig) {
       ],
       range: { from: 'now-15m', to: 'now' },
     };
+
     links.push({
       title: 'Recommendation traces (Tempo)',
       url: `${grafanaUrl}/explore?left=${encodeURIComponent(JSON.stringify(left))}`,
@@ -115,6 +120,7 @@ export function renderServiceGrafana(config: ServiceGrafanaConfig) {
       },
     ],
   });
+
   const dashboard = {
     uid: dashboardUid,
     title: 'Service observability — recommendation service',
@@ -157,6 +163,7 @@ export function renderServiceGrafana(config: ServiceGrafanaConfig) {
       ),
     ],
   };
+
   const rule = {
     uid: ruleUid,
     title: 'Recommendation requests are failing',

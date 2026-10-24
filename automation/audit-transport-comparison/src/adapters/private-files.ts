@@ -32,6 +32,7 @@ export function readPrivateFile(path: string, label: string): string {
   }
 
   let descriptor: number;
+
   try {
     descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   } catch {
@@ -42,6 +43,7 @@ export function readPrivateFile(path: string, label: string): string {
 
   try {
     const metadata = fstatSync(descriptor);
+
     if (!metadata.isFile()) {
       throw new PrivateFileError(`the ${label} must be a regular file`);
     }
@@ -68,6 +70,7 @@ export function readPrivateFile(path: string, label: string): string {
 export function writeNewPrivateFile(path: string, contents: string, label: string): void {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   let descriptor: number;
+
   try {
     descriptor = openSync(
       path,

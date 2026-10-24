@@ -6,6 +6,7 @@ const URL_ = new URL('http://demo.example.test/audit-demo/reservation/login');
 
 function fakeFetch(status: number, body: string) {
   const calls: Array<RequestInit | undefined> = [];
+
   const implementation = (async (_url: unknown, init?: RequestInit) => {
     calls.push(init);
 
@@ -26,6 +27,7 @@ describe('HttpLoginClient', () => {
       httpStatus: 401,
       auditEventId: ID_ACCEPTED,
     });
+
     expect(fetch.calls[0]).toMatchObject({
       method: 'POST',
       redirect: 'manual',

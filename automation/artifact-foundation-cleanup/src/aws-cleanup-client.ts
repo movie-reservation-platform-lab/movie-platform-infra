@@ -17,8 +17,11 @@ import { failCleanup } from './cleanup-error';
 import type { ArtifactFoundationCleaner, RepositoryCleanupTarget } from './model';
 
 type CloudFormationMutationClient = Pick<CloudFormationClient, 'send'>;
+
 type EcrMutationClient = Pick<ECRClient, 'send'>;
+
 type StsReadClient = Pick<STSClient, 'send'>;
+
 type StackDeletionWaiter = (stackName: string) => Promise<void>;
 
 const STACK_DELETE_MAX_WAIT_SECONDS = 60 * 60;
@@ -29,6 +32,7 @@ const STACK_DELETE_MAX_WAIT_SECONDS = 60 * 60;
  */
 export function createAwsSdkCleaner(access: ValidatedAwsAccess): ArtifactFoundationCleaner {
   const credentials = createPinnedAwsCredentials(access);
+
   const cloudFormation = new CloudFormationClient({
     region: access.target.region,
     credentials,
@@ -64,6 +68,7 @@ export class AwsSdkArtifactFoundationCleaner implements ArtifactFoundationCleane
   /** Re-check the mutation client's caller before the first destructive call. */
   async verifyIdentity(): Promise<void> {
     let response;
+
     try {
       response = await this.sts.send(new GetCallerIdentityCommand({}));
     } catch {

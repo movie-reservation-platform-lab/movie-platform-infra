@@ -28,8 +28,10 @@ export async function runCli(
   dependencies: CliDependencies = PRODUCTION_DEPENDENCIES,
 ): Promise<number> {
   let operation: 'inspection' | 'cleanup' = 'inspection';
+
   try {
     const options = parseCliOptions(arguments_);
+
     if (options.help) {
       streams.stdout(USAGE);
 
@@ -38,6 +40,7 @@ export async function runCli(
 
     operation = options.execute ? 'cleanup' : 'inspection';
     const confirmation = options.confirmation;
+
     if (options.execute && confirmation === undefined) {
       failCleanup('--execute requires an exact --confirm value; run the read-only check first');
     }
@@ -48,11 +51,13 @@ export async function runCli(
 
     const access = dependencies.validateAccess(environment);
     const reader = dependencies.createReader(access);
+
     const inspection = await inspectArtifactFoundation(
       toInspectionAccess(access),
       reader,
       dependencies.artifactRepositoryCatalog,
     );
+
     streams.stdout(renderInspectionReport(inspection));
 
     if (!options.execute) {
@@ -63,8 +68,10 @@ export async function runCli(
       inspection,
       confirmation ?? failCleanup('--execute requires an exact --confirm value'),
     );
+
     streams.stdout(renderExecutionPlan(plan));
     const cleaner = dependencies.createCleaner(access);
+
     const result = await executeArtifactFoundationCleanup(plan, cleaner, async () =>
       inspectArtifactFoundation(
         toInspectionAccess(access),
@@ -72,6 +79,7 @@ export async function runCli(
         dependencies.artifactRepositoryCatalog,
       ),
     );
+
     streams.stdout(renderExecutionResult(result));
 
     return 0;
@@ -82,6 +90,7 @@ export async function runCli(
       error instanceof CleanupFailure
         ? error.message
         : 'unexpected internal error';
+
     streams.stderr(`Artifact foundation ${operation} failed: ${message}\n`);
 
     return 1;

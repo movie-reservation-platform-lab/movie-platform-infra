@@ -17,6 +17,7 @@ function success(stdout: Buffer = Buffer.alloc(0)): ProcessResult {
 
 test('reads public manifest bytes anonymously without text conversion', async () => {
   const invocations: ProcessInvocation[] = [];
+
   const client = createSkopeoRegistryClient({ executablePath: SKOPEO_EXECUTABLE }, (invocation) => {
     invocations.push(invocation);
 
@@ -24,6 +25,7 @@ test('reads public manifest bytes anonymously without text conversion', async ()
   });
 
   await expect(client.readRawManifest({ reference: SOURCE })).resolves.toEqual(RAW_MANIFEST);
+
   expect(invocations).toEqual([
     {
       executable: SKOPEO_EXECUTABLE,
@@ -37,6 +39,7 @@ test('reads public manifest bytes anonymously without text conversion', async ()
 
 test('uses an explicit auth file for a private manifest read', async () => {
   const invocations: ProcessInvocation[] = [];
+
   const runner = (invocation: ProcessInvocation) => {
     invocations.push(invocation);
 
@@ -62,6 +65,7 @@ test('uses an explicit auth file for a private manifest read', async () => {
 
 test('copies a digest to its retention tag with preservation, TLS, and separate auth', async () => {
   const invocations: ProcessInvocation[] = [];
+
   const runner = (invocation: ProcessInvocation) => {
     invocations.push(invocation);
 
@@ -102,6 +106,7 @@ test('copies a digest to its retention tag with preservation, TLS, and separate 
 
 test('forces anonymous source access when no source auth file is supplied', async () => {
   const invocations: ProcessInvocation[] = [];
+
   const runner = (invocation: ProcessInvocation) => {
     invocations.push(invocation);
 

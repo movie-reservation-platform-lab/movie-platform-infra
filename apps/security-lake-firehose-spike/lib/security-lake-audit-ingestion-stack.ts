@@ -21,6 +21,7 @@ export class SecurityLakeAuditIngestionStack extends Stack {
       catalogId: this.account,
       databaseInput: { description: 'Disposable Firehose conversion schema for issue 71' },
     });
+
     const conversionTable = new glue.CfnTable(this, 'ConversionTable', {
       catalogId: this.account,
       databaseName: conversionDatabase.ref,
@@ -70,6 +71,7 @@ export class SecurityLakeAuditIngestionStack extends Stack {
         }),
       },
     });
+
     const conversionDatabaseAccess = new lakeformation.CfnPrincipalPermissions(
       this,
       'ConversionDatabaseAccess',
@@ -87,6 +89,7 @@ export class SecurityLakeAuditIngestionStack extends Stack {
         },
       },
     );
+
     const conversionTableAccess = new lakeformation.CfnPrincipalPermissions(
       this,
       'ConversionTableAccess',
@@ -114,6 +117,7 @@ export class SecurityLakeAuditIngestionStack extends Stack {
       this.region,
       props.sourceConfig.sourceAccountId,
     );
+
     const providerErrorOutputPolicy = new iam.CfnPolicy(this, 'ProviderErrorOutputPolicy', {
       policyName: 'security-lake-firehose-error-output',
       roles: [props.sourceConfig.providerRoleName],
@@ -138,6 +142,7 @@ export class SecurityLakeAuditIngestionStack extends Stack {
         ],
       }),
     });
+
     const stream = new firehose.CfnDeliveryStream(this, 'DeliveryStream', {
       deliveryStreamType: 'DirectPut',
       deliveryStreamEncryptionConfigurationInput: { keyType: 'AWS_OWNED_CMK' },
@@ -182,6 +187,7 @@ export class SecurityLakeAuditIngestionStack extends Stack {
         processingConfiguration: partitioning.processingConfiguration,
       },
     });
+
     stream.addResourceDependency(conversionDatabaseAccess);
     stream.addResourceDependency(conversionTableAccess);
     stream.addResourceDependency(providerErrorOutputPolicy);

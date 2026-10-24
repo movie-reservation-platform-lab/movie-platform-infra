@@ -14,6 +14,7 @@ const AUDIT_PUBLISH_FAILURE_REASONS = [
   'configuration',
   'unavailable',
 ] as const;
+
 // Log-derived metric: CloudWatch-style name, unlike the OTel snake_case names.
 const UNAUDITED_SUCCESSFUL_LOGINS_METRIC = 'UnauditedSuccessfulLogins';
 
@@ -68,6 +69,7 @@ export class AuditGapAlarms extends Construct {
         treatMissingData: cloudwatch.TreatMissingData.BREACHING,
       });
     });
+
     new cloudwatch.CompositeAlarm(this, 'PrimaryAuditPublishFailureAlarm', {
       alarmDescription:
         'Primary audit publisher failed: logins may be unaudited. The child alarm in ' +
@@ -91,6 +93,7 @@ export class AuditGapAlarms extends Construct {
         metricValue: '1',
       },
     );
+
     const unauditedSuccessfulLoginsMetric = unauditedSuccessfulLogins.metric({
       period: cdk.Duration.minutes(1),
       statistic: cloudwatch.Stats.SUM,

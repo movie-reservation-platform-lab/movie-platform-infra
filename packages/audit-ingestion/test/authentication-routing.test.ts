@@ -10,7 +10,9 @@ function createRoutingTemplate(): Template {
   const stack = new Stack(new App(), 'RoutingFixture', {
     env: { account: '222222222222', region: 'eu-central-1' },
   });
+
   const bus = new EventBus(stack, 'AuditBus');
+
   new Rule(stack, 'AuthenticationRule', {
     eventBus: bus,
     eventPattern: buildAuthenticationEventPattern(WORKLOAD_ACCOUNT_ID),

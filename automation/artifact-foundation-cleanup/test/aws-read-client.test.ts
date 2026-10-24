@@ -19,11 +19,14 @@ import {
 } from './test-support';
 
 type CloudFormationReadClient = Pick<CloudFormationClient, 'send'>;
+
 type EcrReadClient = Pick<ECRClient, 'send'>;
+
 type StsReadClient = Pick<STSClient, 'send'>;
 
 const TEST_REPOSITORY_ARN =
   'arn:aws:ecr:eu-central-1:111111111111:repository/movie-reservation-service';
+
 const TEST_REPOSITORY_URI =
   '111111111111.dkr.ecr.eu-central-1.amazonaws.com/movie-reservation-service';
 
@@ -67,6 +70,7 @@ function inspectRepository(reader: AwsSdkArtifactFoundationReader): Promise<unkn
 
 test('verifies the exact SDK caller with one read-only STS command', async () => {
   const commands: unknown[] = [];
+
   const reader = new AwsSdkArtifactFoundationReader(
     TEST_TARGET,
     cloudFormationClient(async () => ({})),
@@ -123,6 +127,7 @@ test('sanitizes unexpected SDK identity failures', async () => {
 
 test('inspects an exact CloudFormation stack with one read command', async () => {
   const commands: unknown[] = [];
+
   const reader = new AwsSdkArtifactFoundationReader(
     TEST_TARGET,
     cloudFormationClient(async (command) => {
@@ -153,8 +158,10 @@ test('inspects an exact CloudFormation stack with one read command', async () =>
     terminationProtection: true,
     outputs: { RepositoryName: 'movie-reservation-service' },
   });
+
   expect(commands).toHaveLength(1);
   expect(commands[0]).toBeInstanceOf(DescribeStacksCommand);
+
   expect((commands[0] as DescribeStacksCommand).input).toEqual({
     StackName: 'ArtifactFoundationStack',
   });
@@ -165,6 +172,7 @@ test('maps the precise CloudFormation missing-stack response to absence', async 
     TEST_TARGET,
     cloudFormationClient(async () => {
       const error = new Error('Stack with id ArtifactFoundationStack does not exist');
+
       error.name = 'ValidationError';
       throw error;
     }),
@@ -188,6 +196,7 @@ test('sanitizes unexpected CloudFormation failures', async () => {
   await expect(reader.inspectStack('ArtifactFoundationStack')).rejects.toThrow(
     'unable to inspect the CloudFormation stack',
   );
+
   await expect(reader.inspectStack('ArtifactFoundationStack')).rejects.not.toThrow(
     'private SDK diagnostic',
   );
@@ -217,6 +226,7 @@ test('refuses a CloudFormation stack ARN outside the pinned account and Region',
 
 test('inventories repository settings, tags, lifecycle, and paginated image digests using read commands only', async () => {
   const commands: unknown[] = [];
+
   const reader = new AwsSdkArtifactFoundationReader(
     TEST_TARGET,
     cloudFormationClient(async () => {
@@ -224,6 +234,7 @@ test('inventories repository settings, tags, lifecycle, and paginated image dige
     }),
     ecrClient(async (command) => {
       commands.push(command);
+
       if (command instanceof DescribeRepositoriesCommand) {
         return { repositories: [repositoryDescription()] };
       }
@@ -290,6 +301,7 @@ test('inventories repository settings, tags, lifecycle, and paginated image dige
     'ListImagesCommand',
     'ListImagesCommand',
   ]);
+
   for (const command of commands) {
     if (
       command instanceof DescribeRepositoriesCommand ||
@@ -319,12 +331,14 @@ test('inventories repository settings, tags, lifecycle, and paginated image dige
 
 test('reports an absent repository without issuing follow-up ECR commands', async () => {
   const commands: unknown[] = [];
+
   const reader = new AwsSdkArtifactFoundationReader(
     TEST_TARGET,
     cloudFormationClient(async () => ({})),
     ecrClient(async (command) => {
       commands.push(command);
       const error = new Error('private repository detail');
+
       error.name = 'RepositoryNotFoundException';
       throw error;
     }),
@@ -362,6 +376,7 @@ test('refuses a repository identity outside the pinned target', async () => {
   );
 
   await expect(inspectRepository(reader)).rejects.toBeInstanceOf(InspectionFailure);
+
   await expect(inspectRepository(reader)).rejects.toThrow(
     'ECR returned a repository outside the pinned target',
   );
@@ -427,11 +442,13 @@ test('sanitizes unexpected lifecycle-policy failures', async () => {
   await expect(inspectRepository(reader)).rejects.toThrow(
     'unable to inspect the ECR lifecycle policy',
   );
+
   await expect(inspectRepository(reader)).rejects.not.toThrow('private lifecycle diagnostic');
 });
 
 test('rejects a repeated ECR image pagination token', async () => {
   let imagePageCalls = 0;
+
   const reader = new AwsSdkArtifactFoundationReader(
     TEST_TARGET,
     cloudFormationClient(async () => ({})),
@@ -462,6 +479,7 @@ test('rejects a repeated ECR image pagination token', async () => {
   await expect(inspectRepository(reader)).rejects.toThrow(
     'ECR returned a repeated image pagination token',
   );
+
   expect(imagePageCalls).toBe(2);
 });
 

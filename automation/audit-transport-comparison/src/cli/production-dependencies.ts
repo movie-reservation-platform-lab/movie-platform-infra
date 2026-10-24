@@ -66,6 +66,7 @@ async function verifySdkIdentity(access: ValidatedAwsAccess, label: string): Pro
   const identity = await new STSClient(pinnedClientConfig(access)).send(
     new GetCallerIdentityCommand({}),
   );
+
   if (identity.Account !== access.target.accountId) {
     throw new RunConfigError(
       `the SDK credentials for the ${label} profile do not reach the preflighted account`,
@@ -79,6 +80,7 @@ function createComparisonDependencies(
   audit: ValidatedAwsAccess,
 ): ComparisonDependencies {
   const auditClientConfig = pinnedClientConfig(audit);
+
   const catalog = new GlueSecurityLakeCatalog(
     new GlueClient(auditClientConfig),
     config.securityLakeStore.crawlerName,
@@ -87,6 +89,7 @@ function createComparisonDependencies(
   // Resolve the Security Lake table once and reuse it; forget a failed lookup
   // so the next poll retries instead of repeating a cached rejection.
   let securityLakeTable: Promise<{ database: string; table: string }> | undefined;
+
   const resolveSecurityLakeTable = () => {
     securityLakeTable ??= catalog.resolveTable().catch((error: unknown) => {
       securityLakeTable = undefined;

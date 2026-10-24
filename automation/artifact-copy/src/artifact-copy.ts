@@ -19,8 +19,10 @@ import {
 } from './model';
 
 const SHA256_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
+
 const REGISTRY_HOST_PATTERN =
   /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?::[0-9]{1,5})?$/;
+
 const REPOSITORY_SEGMENT_PATTERN = /^[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*$/;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
 
@@ -54,6 +56,7 @@ export async function transferAndVerifyArtifact(
 ): Promise<ArtifactTransferVerification> {
   const validated = validateTransferRequest(request);
   const shouldCopy = validated.operation === ARTIFACT_TRANSFER_OPERATION.COPY_AND_VERIFY;
+
   const { sourceManifest, destinationManifest } = await inspectTransfer(
     validated,
     client,
@@ -88,6 +91,7 @@ async function inspectTransfer(
     },
     'source',
   );
+
   const sourceManifest = inspectRawImageManifest(
     sourceRawManifest,
     validated.expectedDigest,
@@ -119,11 +123,13 @@ async function inspectTransfer(
     },
     'destination',
   );
+
   const destinationManifest = inspectRawImageManifest(
     destinationRawManifest,
     validated.expectedDigest,
     'destination',
   );
+
   assertEquivalentImageManifests(sourceManifest, destinationManifest);
 
   return Object.freeze({ sourceManifest, destinationManifest });
@@ -175,6 +181,7 @@ function validateRequest(request: ArtifactCopyRequest): ValidatedArtifactCopyReq
   }
 
   const sourceParts = request.sourceReference.split('@');
+
   if (
     sourceParts.length !== 2 ||
     sourceParts[1] !== request.expectedDigest ||
@@ -212,17 +219,20 @@ function isValidRepository(value: string): boolean {
   }
 
   const slashIndex = value.indexOf('/');
+
   if (slashIndex <= 0 || slashIndex === value.length - 1) {
     return false;
   }
 
   const host = value.slice(0, slashIndex);
   const repositoryPath = value.slice(slashIndex + 1);
+
   if (!REGISTRY_HOST_PATTERN.test(host)) {
     return false;
   }
 
   const portText = host.includes(':') ? host.slice(host.lastIndexOf(':') + 1) : undefined;
+
   if (portText !== undefined && Number(portText) > 65_535) {
     return false;
   }

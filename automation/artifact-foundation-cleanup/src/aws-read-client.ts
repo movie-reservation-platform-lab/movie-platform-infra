@@ -31,7 +31,9 @@ import {
 } from './model';
 
 type CloudFormationReadClient = Pick<CloudFormationClient, 'send'>;
+
 type EcrReadClient = Pick<ECRClient, 'send'>;
+
 type StsReadClient = Pick<STSClient, 'send'>;
 
 const MAX_IMAGE_PAGES = 1_000;
@@ -70,6 +72,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
    */
   async verifyIdentity(): Promise<void> {
     let response;
+
     try {
       response = await this.sts.send(new GetCallerIdentityCommand({}));
     } catch {
@@ -89,6 +92,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
    */
   async inspectStack(stackName: string): Promise<StackInspection | undefined> {
     let response;
+
     try {
       response = await this.cloudFormation.send(
         new DescribeStacksCommand({ StackName: stackName }),
@@ -102,6 +106,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
     }
 
     const stacks = response.Stacks ?? [];
+
     if (stacks.length !== 1) {
       failInspection('CloudFormation returned an unexpected stack result');
     }
@@ -117,6 +122,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
     definition: ArtifactRepositoryDefinition,
   ): Promise<RepositoryInspection | undefined> {
     let response;
+
     try {
       response = await this.ecr.send(
         new DescribeRepositoriesCommand({
@@ -133,12 +139,14 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
     }
 
     const repositories = response.repositories ?? [];
+
     if (repositories.length !== 1) {
       failInspection('ECR returned an unexpected repository result');
     }
 
     const repository = repositories[0];
     const identity = validateRepositoryIdentity(repository, this.target, definition);
+
     const [tags, lifecyclePolicyText, images] = await Promise.all([
       this.readRepositoryTags(identity.arn),
       this.readLifecyclePolicy(definition),
@@ -175,6 +183,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
     repositoryArn: string,
   ): Promise<Readonly<Record<string, string>>> {
     let response;
+
     try {
       response = await this.ecr.send(
         new ListTagsForResourceCommand({ resourceArn: repositoryArn }),
@@ -184,6 +193,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
     }
 
     const tags: Array<readonly [string, string]> = [];
+
     for (const tag of response.tags ?? []) {
       if (tag.Key === undefined || tag.Value === undefined) {
         failInspection('ECR returned an unexpected repository tag');
@@ -234,6 +244,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
 
     for (let page = 0; page < MAX_IMAGE_PAGES; page += 1) {
       let response;
+
       try {
         response = await this.ecr.send(
           new ListImagesCommand({
@@ -250,6 +261,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
 
       imageIdentifiers.push(...(response.imageIds ?? []));
       nextToken = response.nextToken;
+
       if (nextToken === undefined) {
         return groupImagesByDigest(imageIdentifiers);
       }
@@ -279,6 +291,7 @@ function mapStack(stack: Stack, expectedName: string, target: AwsTarget): StackI
   }
 
   const outputs: Record<string, string> = {};
+
   for (const output of stack.Outputs ?? []) {
     if (output.OutputKey !== undefined && output.OutputValue !== undefined) {
       outputs[output.OutputKey] = output.OutputValue;
@@ -386,6 +399,7 @@ function groupImagesByDigest(
     }
 
     const tags = tagsByDigest.get(image.imageDigest) ?? new Set<string>();
+
     if (image.imageTag !== undefined) {
       tags.add(image.imageTag);
     }

@@ -12,8 +12,11 @@ import {
 } from '../src/model';
 
 export const TEST_DIGEST_A = `sha256:${'a'.repeat(64)}`;
+
 export const TEST_DIGEST_B = `sha256:${'b'.repeat(64)}`;
+
 export const RESERVATION_SERVICE_REPOSITORY_DEFINITION = ARTIFACT_FOUNDATION_REPOSITORIES[0];
+
 export const RESERVATION_WEB_REPOSITORY_DEFINITION = ARTIFACT_FOUNDATION_REPOSITORIES[1];
 
 export const TEST_ARTIFACT_REPOSITORY_CATALOG = Object.freeze({

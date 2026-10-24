@@ -59,8 +59,10 @@ const WORKGROUP_NAME = /^[a-zA-Z0-9._-]{1,128}$/;
 const CRAWLER_NAME = /^[\w.-]{1,255}$/;
 const ALARM_NAME_PREFIX = /^[\w./-]{1,200}$/;
 const LOGIN_PATH = /^\/[a-z0-9_-][a-z0-9/_-]{0,199}$/;
+
 const SQS_QUEUE_URL =
   /^https:\/\/sqs\.([a-z]{2}-[a-z]+-[0-9])\.amazonaws\.com\/([0-9]{12})\/[\w-]{1,80}$/;
+
 const MAX_ATTEMPTS_PER_OUTCOME = 20;
 
 export function loadRunConfig(path: string): RunConfig {
@@ -69,6 +71,7 @@ export function loadRunConfig(path: string): RunConfig {
 
 export function parseRunConfig(contents: string): RunConfig {
   const root = requireObject(parseJson(contents, 'run file'), 'run file');
+
   if (root.schema !== RUN_CONFIG_SCHEMA) {
     throw new RunConfigError(`run file schema must be ${RUN_CONFIG_SCHEMA}`);
   }
@@ -119,6 +122,7 @@ export function parseRunConfig(contents: string): RunConfig {
 /** Account and Region encoded in an SQS queue URL, for checking it against the audit target. */
 export function queueUrlLocation(queueUrl: string): { region: string; accountId: string } {
   const match = SQS_QUEUE_URL.exec(queueUrl);
+
   if (match === null) {
     throw new RunConfigError('deliveryHealth.deadLetterQueueUrl must be an SQS queue URL');
   }
@@ -145,18 +149,21 @@ function requireSettings(
 ): ComparisonSettings {
   const defaults = RUN_CONFIG_DEFAULTS;
   const attempts = requireObject(root.attempts ?? defaults.attempts, 'attempts');
+
   const accepted = requireInteger(
     attempts.accepted ?? defaults.attempts.accepted,
     'attempts.accepted',
     0,
     MAX_ATTEMPTS_PER_OUTCOME,
   );
+
   const rejected = requireInteger(
     attempts.rejected ?? defaults.attempts.rejected,
     'attempts.rejected',
     0,
     MAX_ATTEMPTS_PER_OUTCOME,
   );
+
   if (accepted + rejected === 0) {
     throw new RunConfigError('attempts must request at least one login');
   }
@@ -167,12 +174,14 @@ function requireSettings(
     60,
     3600,
   );
+
   const pollIntervalSeconds = requireInteger(
     root.pollIntervalSeconds ?? defaults.pollIntervalSeconds,
     'pollIntervalSeconds',
     5,
     300,
   );
+
   if (pollIntervalSeconds > timeoutSeconds) {
     throw new RunConfigError('pollIntervalSeconds must not exceed timeoutSeconds');
   }
@@ -201,6 +210,7 @@ function requireSettings(
  */
 function requireLoginUrl(root: Readonly<Record<string, unknown>>): URL {
   let endpoint: URL;
+
   try {
     endpoint = new URL(requireString(root.endpoint, 'endpoint'));
   } catch (error) {
@@ -213,6 +223,7 @@ function requireLoginUrl(root: Readonly<Record<string, unknown>>): URL {
     root.allowInsecureHttp ?? RUN_CONFIG_DEFAULTS.allowInsecureHttp,
     'allowInsecureHttp',
   );
+
   if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && allowInsecureHttp)) {
     throw new RunConfigError('endpoint must use https unless allowInsecureHttp is true');
   }
@@ -230,6 +241,7 @@ function requireLoginUrl(root: Readonly<Record<string, unknown>>): URL {
     requireMatch(root.loginPath ?? RUN_CONFIG_DEFAULTS.loginPath, 'loginPath', LOGIN_PATH),
     endpoint,
   );
+
   if (loginUrl.origin !== endpoint.origin) {
     throw new RunConfigError('loginPath must stay on the endpoint origin');
   }
@@ -263,6 +275,7 @@ function requireString(value: unknown, label: string): string {
 
 function requireMatch(value: unknown, label: string, pattern: RegExp): string {
   const text = requireString(value, label);
+
   if (!pattern.test(text)) {
     throw new RunConfigError(`${label} has an unsupported format`);
   }
@@ -288,6 +301,7 @@ function requireBoolean(value: unknown, label: string): boolean {
 
 function requireAbsolutePath(value: unknown, label: string): string {
   const path = requireString(value, label);
+
   if (!isAbsolute(path)) {
     throw new RunConfigError(`${label} must be an absolute path`);
   }

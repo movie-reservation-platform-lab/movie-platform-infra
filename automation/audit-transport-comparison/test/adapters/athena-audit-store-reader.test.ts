@@ -15,6 +15,7 @@ const WINDOW = {
   workloadAccountId: '333333333333',
   region: 'eu-central-1',
 };
+
 const row = (value: string) => ({ Data: [{ VarCharValue: value }] });
 
 function reader(client: ReturnType<typeof fakeSdkClient>, clock = new FakeClock()) {
@@ -24,6 +25,7 @@ function reader(client: ReturnType<typeof fakeSdkClient>, clock = new FakeClock(
 describe('AthenaAuditStoreReader', () => {
   it('waits for the query, skips the header row, and de-duplicates IDs', async () => {
     const clock = new FakeClock();
+
     const client = fakeSdkClient([
       [StartQueryExecutionCommand, [{ QueryExecutionId: 'q-1' }]],
       [
@@ -42,6 +44,7 @@ describe('AthenaAuditStoreReader', () => {
     await expect(
       reader(client, clock).findEventIds([ID_ACCEPTED], WINDOW, after(600)),
     ).resolves.toEqual(new Set([ID_ACCEPTED]));
+
     expect(client.sent[0]?.input).toEqual({ QueryString: 'SELECT 1', WorkGroup: 'wg' });
     expect(clock.sleeps).toEqual([2000]);
   });
@@ -79,6 +82,7 @@ describe('AthenaAuditStoreReader', () => {
     await expect(
       reader(client, new FakeClock(after(600))).findEventIds([ID_ACCEPTED], WINDOW, after(600)),
     ).rejects.toBeInstanceOf(QueryDeadlineExceededError);
+
     expect(client.sent.at(-1)?.input).toEqual({ QueryExecutionId: 'q-2' });
   });
 });

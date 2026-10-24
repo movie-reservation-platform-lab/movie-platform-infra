@@ -16,6 +16,7 @@ describe('redaction', () => {
     expect(describeError(Object.assign(new Error('nope'), { name: 'AccessDeniedException' }))).toBe(
       'AccessDeniedException: nope',
     );
+
     expect(describeError(new Error('x'.repeat(400)))).toHaveLength(303);
   });
 });
