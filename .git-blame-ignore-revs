@@ -6,3 +6,6 @@
 
 # style: format committed TypeScript with Prettier and ESLint layout fixes
 00f19253b42b728566072fcbea97caf0f08b3264
+
+# style: add blank lines between tests, statements, and declarations
+bfa8f9de2f3714b86ab81035860e5a4baea712c6
