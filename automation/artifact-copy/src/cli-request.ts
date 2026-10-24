@@ -36,9 +36,7 @@ export interface ArtifactCopyCliRequestV2 {
   readonly transferRequest: ArtifactTransferRequest;
 }
 
-export type ArtifactCopyCliRequest =
-  | ArtifactCopyCliRequestV1
-  | ArtifactCopyCliRequestV2;
+export type ArtifactCopyCliRequest = ArtifactCopyCliRequestV1 | ArtifactCopyCliRequestV2;
 
 export class ArtifactCopyCliInputFailure extends Error {
   constructor() {
@@ -68,16 +66,18 @@ export function parseArtifactCopyCliRequest(rawRequest: Buffer): ArtifactCopyCli
   } catch {
     failCliInput();
   }
+
   if (!isJsonObject(parsed)) {
     failCliInput();
   }
 
   const requestVersion = parsed.requestVersion;
-  const allowedFields = requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION
-    ? V1_ALLOWED_FIELDS
-    : requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION_V2
-      ? V2_ALLOWED_FIELDS
-      : failCliInput();
+  const allowedFields =
+    requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION
+      ? V1_ALLOWED_FIELDS
+      : requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION_V2
+        ? V2_ALLOWED_FIELDS
+        : failCliInput();
   const fields = Object.keys(parsed);
   if (fields.some((field) => !allowedFields.has(field))) {
     failCliInput();
@@ -103,11 +103,13 @@ export function parseArtifactCopyCliRequest(rawRequest: Buffer): ArtifactCopyCli
       copyRequest: Object.freeze(commonRequest),
     });
   }
+
   if (requestVersion !== ARTIFACT_COPY_CLI_REQUEST_VERSION_V2) {
     failCliInput();
   }
 
   const operation = readOperation(parsed);
+
   return Object.freeze({
     requestVersion,
     transferRequest: Object.freeze({ ...commonRequest, operation }),
@@ -122,6 +124,7 @@ function readOperation(object: JsonObject): ArtifactTransferOperation {
   ) {
     failCliInput();
   }
+
   return operation;
 }
 
@@ -130,6 +133,7 @@ function readRequiredString(object: JsonObject, field: string): string {
   if (typeof value !== 'string' || value.length === 0) {
     failCliInput();
   }
+
   return value;
 }
 
@@ -138,9 +142,11 @@ function readOptionalString(object: JsonObject, field: string): string | undefin
   if (value === undefined) {
     return undefined;
   }
+
   if (typeof value !== 'string' || value.length === 0) {
     failCliInput();
   }
+
   return value;
 }
 
@@ -154,10 +160,12 @@ function assertNoDuplicateJsonObjectKeys(jsonText: string): void {
       objectKeySets.push(new Set());
       continue;
     }
+
     if (character === '}') {
       objectKeySets.pop();
       continue;
     }
+
     if (character !== '"') {
       continue;
     }
@@ -168,6 +176,7 @@ function assertNoDuplicateJsonObjectKeys(jsonText: string): void {
     while (isJsonWhitespace(jsonText[nextIndex])) {
       nextIndex += 1;
     }
+
     if (jsonText[nextIndex] !== ':') {
       continue;
     }
@@ -176,15 +185,18 @@ function assertNoDuplicateJsonObjectKeys(jsonText: string): void {
     if (currentKeys === undefined) {
       failCliInput();
     }
+
     let key: unknown;
     try {
       key = JSON.parse(jsonText.slice(stringStart, index + 1)) as unknown;
     } catch {
       failCliInput();
     }
+
     if (typeof key !== 'string' || currentKeys.has(key)) {
       failCliInput();
     }
+
     currentKeys.add(key);
   }
 }
@@ -195,10 +207,12 @@ function findJsonStringEnd(jsonText: string, start: number): number {
       index += 1;
       continue;
     }
+
     if (jsonText[index] === '"') {
       return index;
     }
   }
+
   failCliInput();
 }
 

@@ -30,11 +30,7 @@ export interface AuditAccountIngestionStackProps extends StackProps {
  * justifies the additional infrastructure and operational ownership.
  */
 export class AuditAccountIngestionStack extends Stack {
-  public constructor(
-    scope: Construct,
-    id: string,
-    props: AuditAccountIngestionStackProps,
-  ) {
+  public constructor(scope: Construct, id: string, props: AuditAccountIngestionStackProps) {
     super(scope, id, props);
 
     const ingestion = new AuditIngestion(this, 'AuditIngestion', {
@@ -50,14 +46,16 @@ export class AuditAccountIngestionStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
-    ingestion.eventBus.addToResourcePolicy(new iam.PolicyStatement({
-      actions: ['events:PutEvents'],
-      principals: props.config.workloadAccountIds.map(
-        (accountId) => new iam.AccountPrincipal(accountId),
-      ),
-      resources: [ingestion.eventBus.eventBusArn],
-      sid: 'AllowConfiguredWorkloadAccounts',
-    }));
+    ingestion.eventBus.addToResourcePolicy(
+      new iam.PolicyStatement({
+        actions: ['events:PutEvents'],
+        principals: props.config.workloadAccountIds.map(
+          (accountId) => new iam.AccountPrincipal(accountId),
+        ),
+        resources: [ingestion.eventBus.eventBusArn],
+        sid: 'AllowConfiguredWorkloadAccounts',
+      }),
+    );
 
     // Athena keeps query results in managed storage, so the audit account needs
     // no result bucket. Enforced: queries cannot redirect results elsewhere.

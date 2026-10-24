@@ -1,7 +1,4 @@
-import {
-  ARTIFACT_COPY_FAILURE_CODE,
-  ArtifactCopyFailure,
-} from '../src/artifact-copy-error';
+import { ARTIFACT_COPY_FAILURE_CODE, ArtifactCopyFailure } from '../src/artifact-copy-error';
 import { copyAndVerifyArtifact, transferAndVerifyArtifact } from '../src/artifact-copy';
 import {
   ARTIFACT_COPY_VERIFICATION_METHOD,
@@ -19,6 +16,7 @@ test('verifies source before copying and destination after copying', async () =>
   const client: RegistryImageClient = {
     readRawManifest: async ({ reference, authFile }) => {
       events.push(`read:${reference}:${authFile ?? 'anonymous'}`);
+
       return fixture.rawManifest;
     },
     copy: async ({ sourceReference, destinationReference }) => {
@@ -35,10 +33,8 @@ test('verifies source before copying and destination after copying', async () =>
     configDigest: CONFIG_DIGEST,
     layerDigests: [LAYER_DIGEST_A, LAYER_DIGEST_B],
   });
-  const destinationDigestReference =
-    `${fixture.request.destinationRepository}@${fixture.digest}`;
-  const destinationCopyReference =
-    `${fixture.request.destinationRepository}:sha256-${fixture.digest.slice('sha256:'.length)}`;
+  const destinationDigestReference = `${fixture.request.destinationRepository}@${fixture.digest}`;
+  const destinationCopyReference = `${fixture.request.destinationRepository}:sha256-${fixture.digest.slice('sha256:'.length)}`;
   expect(events).toEqual([
     `read:${fixture.request.sourceReference}:anonymous`,
     `copy:${fixture.request.sourceReference}:${destinationCopyReference}`,
@@ -63,8 +59,7 @@ test('passes separate source and destination auth files to the registry port', a
 
   expect(client.copy).toHaveBeenCalledWith({
     sourceReference: request.sourceReference,
-    destinationReference:
-      `${request.destinationRepository}:sha256-${request.expectedDigest.slice('sha256:'.length)}`,
+    destinationReference: `${request.destinationRepository}:sha256-${request.expectedDigest.slice('sha256:'.length)}`,
     sourceAuthFile: request.sourceAuthFile,
     destinationAuthFile: request.destinationAuthFile,
   });
@@ -76,6 +71,7 @@ test('v2 copy-and-verify preserves source-read, copy, destination-read ordering'
   const client: RegistryImageClient = {
     readRawManifest: async ({ reference }) => {
       events.push(`read:${reference}`);
+
       return fixture.rawManifest;
     },
     copy: async ({ destinationReference }) => {
@@ -83,10 +79,13 @@ test('v2 copy-and-verify preserves source-read, copy, destination-read ordering'
     },
   };
 
-  const result = await transferAndVerifyArtifact({
-    ...fixture.request,
-    operation: ARTIFACT_TRANSFER_OPERATION.COPY_AND_VERIFY,
-  }, client);
+  const result = await transferAndVerifyArtifact(
+    {
+      ...fixture.request,
+      operation: ARTIFACT_TRANSFER_OPERATION.COPY_AND_VERIFY,
+    },
+    client,
+  );
 
   expect(result).toEqual({
     verificationMethod: ARTIFACT_TRANSFER_VERIFICATION_METHOD,
@@ -111,10 +110,13 @@ test('v2 verify-existing performs two reads and never invokes the mutating port'
   const copy = jest.fn(async () => undefined);
   const client: RegistryImageClient = { readRawManifest, copy };
 
-  const result = await transferAndVerifyArtifact({
-    ...fixture.request,
-    operation: ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING,
-  }, client);
+  const result = await transferAndVerifyArtifact(
+    {
+      ...fixture.request,
+      operation: ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING,
+    },
+    client,
+  );
 
   expect(result).toEqual({
     verificationMethod: ARTIFACT_TRANSFER_VERIFICATION_METHOD,
@@ -145,15 +147,21 @@ test('v2 verify-existing does not copy when destination verification fails', asy
       if (reads === 2) {
         throw new Error('destination absent');
       }
+
       return fixture.rawManifest;
     },
     copy,
   };
 
-  await expect(transferAndVerifyArtifact({
-    ...fixture.request,
-    operation: ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING,
-  }, client)).rejects.toMatchObject({
+  await expect(
+    transferAndVerifyArtifact(
+      {
+        ...fixture.request,
+        operation: ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING,
+      },
+      client,
+    ),
+  ).rejects.toMatchObject({
     code: ARTIFACT_COPY_FAILURE_CODE.DESTINATION_READ_FAILED,
   });
   expect(copy).not.toHaveBeenCalled();
@@ -256,9 +264,7 @@ test.each([
     copy: jest.fn(async () => undefined),
   };
 
-  await expect(
-    copyAndVerifyArtifact({ ...fixture.request, ...overrides }, client),
-  ).rejects.toEqual(
+  await expect(copyAndVerifyArtifact({ ...fixture.request, ...overrides }, client)).rejects.toEqual(
     new ArtifactCopyFailure(ARTIFACT_COPY_FAILURE_CODE.INVALID_INPUT, message),
   );
   expect(client.readRawManifest).not.toHaveBeenCalled();
@@ -277,6 +283,7 @@ test.each([
       if (reads === failingRead) {
         throw new Error('private auth-file and registry diagnostic');
       }
+
       return fixture.rawManifest;
     },
     copy: async () => undefined,

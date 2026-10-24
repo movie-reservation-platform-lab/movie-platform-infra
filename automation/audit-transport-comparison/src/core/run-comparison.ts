@@ -17,7 +17,14 @@ import {
 } from './ports';
 import { describeError } from './redaction';
 import type { ComparisonContext, ComparisonSettings } from './settings';
-import { compareEvent, isAudited, isExpectedStatus, isPassed, storeStatus, utcDaysBetween } from './verdict';
+import {
+  compareEvent,
+  isAudited,
+  isExpectedStatus,
+  isPassed,
+  storeStatus,
+  utcDaysBetween,
+} from './verdict';
 
 /** Deliberately wrong password for rejected attempts; not a secret. */
 export const REJECTED_PASSWORD = 'transport-comparison-intentionally-wrong';
@@ -80,15 +87,22 @@ export async function runComparison(
     for (const store of ['securityLake', 'legacy'] as const) {
       await pollStore(dependencies.stores[store], polls[store], ids, window, deadline, clock);
     }
+
     const now = clock.now();
     if (!Object.values(polls).some((poll) => isAwaitingEvents(poll, ids)) || now >= deadline) {
       break;
     }
-    if (shouldRefreshCatalog(settings, catalogRefresh.startedAt, polls.securityLake, ids, logins, now)) {
+
+    if (
+      shouldRefreshCatalog(settings, catalogRefresh.startedAt, polls.securityLake, ids, logins, now)
+    ) {
       catalogRefresh.startedAt = now;
       catalogRefresh.error = await startCrawler(dependencies.catalog);
     }
-    await clock.sleep(Math.min(settings.pollIntervalSeconds * 1000, deadline.getTime() - now.getTime()));
+
+    await clock.sleep(
+      Math.min(settings.pollIntervalSeconds * 1000, deadline.getTime() - now.getTime()),
+    );
   }
 
   const deliveryHealth = await readDeliveryHealth(dependencies.deliveryHealth);
@@ -152,16 +166,19 @@ async function sendLogins(
           requestId,
           correlationId: `transport-comparison-${runId}`,
           username: context.credentials.username,
-          password: expectedOutcome === 'accepted' ? context.credentials.password : REJECTED_PASSWORD,
+          password:
+            expectedOutcome === 'accepted' ? context.credentials.password : REJECTED_PASSWORD,
         })),
         error: null,
       };
     } catch (error) {
       response = { httpStatus: null, auditEventId: null, error: describeError(error) };
     }
+
     const responseMs = dependencies.clock.now().getTime() - sentAt.getTime();
     attempts.push({ requestId, expectedOutcome, sentAt, responseMs, ...response });
   }
+
   return attempts;
 }
 
@@ -177,6 +194,7 @@ async function pollStore(
   if (poll.error !== null || missing.length === 0) {
     return;
   }
+
   try {
     const found = await reader.findEventIds(missing, window, deadline);
     const seenAt = clock.now();
@@ -185,6 +203,7 @@ async function pollStore(
     if (error instanceof QueryDeadlineExceededError) {
       return; // Out of time, not broken: the store stays "incomplete".
     }
+
     // A failing query (for example AccessDenied) will not heal by polling again.
     poll.error = describeError(error);
   }
@@ -205,16 +224,20 @@ function shouldRefreshCatalog(
   now: Date,
 ): boolean {
   const lastLoginAt = logins.at(-1)?.sentAt ?? now;
-  return settings.refreshCatalog
-    && refreshStartedAt === null
-    && isAwaitingEvents(securityLake, ids)
-    && now.getTime() - lastLoginAt.getTime() >= settings.catalogRefreshDelaySeconds * 1000;
+
+  return (
+    settings.refreshCatalog &&
+    refreshStartedAt === null &&
+    isAwaitingEvents(securityLake, ids) &&
+    now.getTime() - lastLoginAt.getTime() >= settings.catalogRefreshDelaySeconds * 1000
+  );
 }
 
 /** @returns the redacted error, or `null` when the crawler started (or was already running). */
 async function startCrawler(catalog: CatalogRefresher): Promise<string | null> {
   try {
     await catalog.startCrawler();
+
     return null;
   } catch (error) {
     return describeError(error);

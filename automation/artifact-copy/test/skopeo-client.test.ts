@@ -1,7 +1,4 @@
-import {
-  ARTIFACT_COPY_FAILURE_CODE,
-  ArtifactCopyFailure,
-} from '../src/artifact-copy-error';
+import { ARTIFACT_COPY_FAILURE_CODE, ArtifactCopyFailure } from '../src/artifact-copy-error';
 import {
   createSkopeoRegistryClient,
   type ProcessInvocation,
@@ -9,10 +6,8 @@ import {
 } from '../src/skopeo-client';
 
 const SOURCE = `ghcr.io/example/service@sha256:${'a'.repeat(64)}`;
-const DESTINATION_DIGEST =
-  `111111111111.dkr.ecr.eu-central-1.amazonaws.com/service@sha256:${'a'.repeat(64)}`;
-const DESTINATION_TAG =
-  `111111111111.dkr.ecr.eu-central-1.amazonaws.com/service:sha256-${'a'.repeat(64)}`;
+const DESTINATION_DIGEST = `111111111111.dkr.ecr.eu-central-1.amazonaws.com/service@sha256:${'a'.repeat(64)}`;
+const DESTINATION_TAG = `111111111111.dkr.ecr.eu-central-1.amazonaws.com/service:sha256-${'a'.repeat(64)}`;
 const RAW_MANIFEST = Buffer.from('{"schemaVersion":2}');
 const SKOPEO_EXECUTABLE = '/usr/bin/skopeo';
 
@@ -24,6 +19,7 @@ test('reads public manifest bytes anonymously without text conversion', async ()
   const invocations: ProcessInvocation[] = [];
   const client = createSkopeoRegistryClient({ executablePath: SKOPEO_EXECUTABLE }, (invocation) => {
     invocations.push(invocation);
+
     return success(RAW_MANIFEST);
   });
 
@@ -31,13 +27,7 @@ test('reads public manifest bytes anonymously without text conversion', async ()
   expect(invocations).toEqual([
     {
       executable: SKOPEO_EXECUTABLE,
-      arguments: [
-        'inspect',
-        '--raw',
-        '--tls-verify=true',
-        '--no-creds',
-        `docker://${SOURCE}`,
-      ],
+      arguments: ['inspect', '--raw', '--tls-verify=true', '--no-creds', `docker://${SOURCE}`],
       timeoutMilliseconds: 30_000,
       maxOutputBytes: 4 * 1024 * 1024,
       shell: false,
@@ -49,8 +39,10 @@ test('uses an explicit auth file for a private manifest read', async () => {
   const invocations: ProcessInvocation[] = [];
   const runner = (invocation: ProcessInvocation) => {
     invocations.push(invocation);
+
     return success(RAW_MANIFEST);
   };
+
   const client = createSkopeoRegistryClient({ executablePath: SKOPEO_EXECUTABLE }, runner);
 
   await client.readRawManifest({
@@ -72,8 +64,10 @@ test('copies a digest to its retention tag with preservation, TLS, and separate 
   const invocations: ProcessInvocation[] = [];
   const runner = (invocation: ProcessInvocation) => {
     invocations.push(invocation);
+
     return success();
   };
+
   const client = createSkopeoRegistryClient({ executablePath: SKOPEO_EXECUTABLE }, runner);
 
   await client.copy({
@@ -83,33 +77,37 @@ test('copies a digest to its retention tag with preservation, TLS, and separate 
     destinationAuthFile: '/tmp/movie-platform/ecr-auth.json',
   });
 
-  expect(invocations).toEqual([{
-    executable: SKOPEO_EXECUTABLE,
-    arguments: [
-      'copy',
-      '--quiet',
-      '--preserve-digests',
-      '--src-tls-verify=true',
-      '--dest-tls-verify=true',
-      '--src-authfile',
-      '/tmp/movie-platform/ghcr-auth.json',
-      '--dest-authfile',
-      '/tmp/movie-platform/ecr-auth.json',
-      `docker://${SOURCE}`,
-      `docker://${DESTINATION_TAG}`,
-    ],
-    timeoutMilliseconds: 5 * 60_000,
-    maxOutputBytes: 4 * 1024 * 1024,
-    shell: false,
-  }]);
+  expect(invocations).toEqual([
+    {
+      executable: SKOPEO_EXECUTABLE,
+      arguments: [
+        'copy',
+        '--quiet',
+        '--preserve-digests',
+        '--src-tls-verify=true',
+        '--dest-tls-verify=true',
+        '--src-authfile',
+        '/tmp/movie-platform/ghcr-auth.json',
+        '--dest-authfile',
+        '/tmp/movie-platform/ecr-auth.json',
+        `docker://${SOURCE}`,
+        `docker://${DESTINATION_TAG}`,
+      ],
+      timeoutMilliseconds: 5 * 60_000,
+      maxOutputBytes: 4 * 1024 * 1024,
+      shell: false,
+    },
+  ]);
 });
 
 test('forces anonymous source access when no source auth file is supplied', async () => {
   const invocations: ProcessInvocation[] = [];
   const runner = (invocation: ProcessInvocation) => {
     invocations.push(invocation);
+
     return success();
   };
+
   const client = createSkopeoRegistryClient({ executablePath: SKOPEO_EXECUTABLE }, runner);
 
   await client.copy({
@@ -134,24 +132,15 @@ test.each([
     },
   ],
 ] as const)('sanitizes a Skopeo %s', async (_name, result) => {
-  const client = createSkopeoRegistryClient(
-    { executablePath: SKOPEO_EXECUTABLE },
-    () => result,
-  );
+  const client = createSkopeoRegistryClient({ executablePath: SKOPEO_EXECUTABLE }, () => result);
 
   await expect(client.readRawManifest({ reference: SOURCE })).rejects.toEqual(
-    new ArtifactCopyFailure(
-      ARTIFACT_COPY_FAILURE_CODE.TOOL_FAILED,
-      'skopeo inspect failed',
-    ),
+    new ArtifactCopyFailure(ARTIFACT_COPY_FAILURE_CODE.TOOL_FAILED, 'skopeo inspect failed'),
   );
 });
 
 test('rejects an empty successful inspect result', async () => {
-  const client = createSkopeoRegistryClient(
-    { executablePath: SKOPEO_EXECUTABLE },
-    () => success(),
-  );
+  const client = createSkopeoRegistryClient({ executablePath: SKOPEO_EXECUTABLE }, () => success());
 
   await expect(client.readRawManifest({ reference: SOURCE })).rejects.toEqual(
     new ArtifactCopyFailure(

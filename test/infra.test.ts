@@ -10,12 +10,14 @@ import {
   type PlatformConfigContext,
 } from '../lib/config/platform-config';
 
-const TEST_TARGET = { account: '111111111111', region: 'eu-central-1' } as const satisfies DeploymentTarget;
+const TEST_TARGET = {
+  account: '111111111111',
+  region: 'eu-central-1',
+} as const satisfies DeploymentTarget;
 const TEST_DIGEST = `sha256:${'a'.repeat(64)}`;
 const TEST_AUDIT_EVENT_BUS_ARN =
   'arn:aws:events:eu-central-1:222222222222:event-bus/movie-platform-audit';
-const TEST_DEMO_AUTH_SECRET_ARN =
-  `arn:aws:secretsmanager:${TEST_TARGET.region}:${TEST_TARGET.account}:secret:movie-platform/aws-demo/auth-Ab12Cd`;
+const TEST_DEMO_AUTH_SECRET_ARN = `arn:aws:secretsmanager:${TEST_TARGET.region}:${TEST_TARGET.account}:secret:movie-platform/aws-demo/auth-Ab12Cd`;
 const reference = (repository: string) =>
   `${TEST_TARGET.account}.dkr.ecr.${TEST_TARGET.region}.amazonaws.com/${repository}@${TEST_DIGEST}`;
 const TEST_CONTEXT = {
@@ -68,6 +70,7 @@ function createStack(
   target: DeploymentTarget = TEST_TARGET,
 ): MovieReservationWorkloadStack {
   const app = new cdk.App();
+
   return new MovieReservationWorkloadStack(app, 'TestStack', {
     env: target,
     platformConfig: resolvePlatformConfig(
@@ -90,12 +93,16 @@ function resources(template: Template, type: string): Resource[] {
 }
 
 function containers(template: Template): Container[] {
-  return resources(template, 'AWS::ECS::TaskDefinition')[0].Properties?.ContainerDefinitions as Container[];
+  return resources(template, 'AWS::ECS::TaskDefinition')[0].Properties
+    ?.ContainerDefinitions as Container[];
 }
 
 function container(template: Template, name: string): Container {
   const found = containers(template).find(({ Name }) => Name === name);
-  if (found === undefined) throw new Error(`missing container ${name}`);
+  if (found === undefined) {
+    throw new Error(`missing container ${name}`);
+  }
+
   return found;
 }
 
@@ -129,6 +136,7 @@ describe('workload platform configuration (CDK context boundary)', () => {
           imageDigest: TEST_DIGEST,
         });
       }
+
       expect(config).toMatchObject({
         platformName: 'movie-reservation-platform',
         serviceName: 'movie-platform-demo',
@@ -176,8 +184,7 @@ describe('workload platform configuration (CDK context boundary)', () => {
           {
             allowedIngressPrefixListId: 'pl-0123456789abcdef0',
             ...TEST_CONTEXT,
-            reservationWebImageReference:
-              `${TEST_TARGET.account}.dkr.ecr.${TEST_TARGET.region}.amazonaws.com/movie-reservation-web:latest`,
+            reservationWebImageReference: `${TEST_TARGET.account}.dkr.ecr.${TEST_TARGET.region}.amazonaws.com/movie-reservation-web:latest`,
           },
           TEST_TARGET,
         ),
@@ -218,7 +225,11 @@ describe('workload platform configuration (CDK context boundary)', () => {
       ).toThrow('allowedIngressPrefixListId');
       expect(() =>
         resolvePlatformConfig(
-          { allowedIngressPrefixListId: 'pl-0123456789abcdef0', ...TEST_CONTEXT, enableEcsExec: 'yes' },
+          {
+            allowedIngressPrefixListId: 'pl-0123456789abcdef0',
+            ...TEST_CONTEXT,
+            enableEcsExec: 'yes',
+          },
           TEST_TARGET,
         ),
       ).toThrow('enableEcsExec');
@@ -252,40 +263,75 @@ describe('workload platform configuration (CDK context boundary)', () => {
         allowedIngressPrefixListId: 'pl-0123456789abcdef0',
         ...TEST_CONTEXT,
       };
-      expect(() => resolvePlatformConfig({ ...context, auditEventBusArn: undefined }, TEST_TARGET))
-        .toThrow('auditEventBusArn');
-      expect(() => resolvePlatformConfig({ ...context, auditEventBusArn: 'not-an-arn' }, TEST_TARGET))
-        .toThrow('custom EventBridge event-bus ARN');
-      expect(() => resolvePlatformConfig({
-        ...context,
-        auditEventBusArn: TEST_AUDIT_EVENT_BUS_ARN.replace('eu-central-1', 'us-east-1'),
-      }, TEST_TARGET)).toThrow('deployment Region');
-      expect(() => resolvePlatformConfig({
-        ...context,
-        auditEventBusArn: TEST_AUDIT_EVENT_BUS_ARN.replace('222222222222', TEST_TARGET.account),
-      }, TEST_TARGET)).toThrow('separate audit account');
-      expect(() => resolvePlatformConfig({
-        ...context,
-        auditEventBusArn: TEST_AUDIT_EVENT_BUS_ARN.replace('movie-platform-audit', 'default'),
-      }, TEST_TARGET)).toThrow('default bus');
-      expect(() => resolvePlatformConfig({
-        ...context,
-        auditEventBusArn: `${TEST_AUDIT_EVENT_BUS_ARN}*`,
-      }, TEST_TARGET)).toThrow('without wildcards');
-      expect(() => resolvePlatformConfig({ ...context, auditPublishTimeoutMs: 99 }, TEST_TARGET))
-        .toThrow('auditPublishTimeoutMs');
-      expect(resolvePlatformConfig({
-        ...context,
-        auditPublishTimeoutMs: '2500',
-      }, TEST_TARGET).auditPublisher.timeoutMs).toBe(2_500);
+      expect(() =>
+        resolvePlatformConfig({ ...context, auditEventBusArn: undefined }, TEST_TARGET),
+      ).toThrow('auditEventBusArn');
+      expect(() =>
+        resolvePlatformConfig({ ...context, auditEventBusArn: 'not-an-arn' }, TEST_TARGET),
+      ).toThrow('custom EventBridge event-bus ARN');
+      expect(() =>
+        resolvePlatformConfig(
+          {
+            ...context,
+            auditEventBusArn: TEST_AUDIT_EVENT_BUS_ARN.replace('eu-central-1', 'us-east-1'),
+          },
+          TEST_TARGET,
+        ),
+      ).toThrow('deployment Region');
+      expect(() =>
+        resolvePlatformConfig(
+          {
+            ...context,
+            auditEventBusArn: TEST_AUDIT_EVENT_BUS_ARN.replace('222222222222', TEST_TARGET.account),
+          },
+          TEST_TARGET,
+        ),
+      ).toThrow('separate audit account');
+      expect(() =>
+        resolvePlatformConfig(
+          {
+            ...context,
+            auditEventBusArn: TEST_AUDIT_EVENT_BUS_ARN.replace('movie-platform-audit', 'default'),
+          },
+          TEST_TARGET,
+        ),
+      ).toThrow('default bus');
+      expect(() =>
+        resolvePlatformConfig(
+          {
+            ...context,
+            auditEventBusArn: `${TEST_AUDIT_EVENT_BUS_ARN}*`,
+          },
+          TEST_TARGET,
+        ),
+      ).toThrow('without wildcards');
+      expect(() =>
+        resolvePlatformConfig({ ...context, auditPublishTimeoutMs: 99 }, TEST_TARGET),
+      ).toThrow('auditPublishTimeoutMs');
+      expect(
+        resolvePlatformConfig(
+          {
+            ...context,
+            auditPublishTimeoutMs: '2500',
+          },
+          TEST_TARGET,
+        ).auditPublisher.timeoutMs,
+      ).toBe(2_500);
     });
   });
 
   describe('demo authentication', () => {
     it('rejects incomplete or cross-account demo credential secrets', () => {
       expect(() => synthesized({ demoAuthEnabled: true })).toThrow('demoAuthSecretArn');
-      expect(() => synthesized({ demoAuthSecretArn: TEST_DEMO_AUTH_SECRET_ARN })).toThrow('demoAuthEnabled=true');
-      expect(() => synthesized({ demoAuthEnabled: true, demoAuthSecretArn: TEST_DEMO_AUTH_SECRET_ARN.replace(TEST_TARGET.account, '222222222222') })).toThrow('deployment account');
+      expect(() => synthesized({ demoAuthSecretArn: TEST_DEMO_AUTH_SECRET_ARN })).toThrow(
+        'demoAuthEnabled=true',
+      );
+      expect(() =>
+        synthesized({
+          demoAuthEnabled: true,
+          demoAuthSecretArn: TEST_DEMO_AUTH_SECRET_ARN.replace(TEST_TARGET.account, '222222222222'),
+        }),
+      ).toThrow('deployment account');
     });
   });
 });
@@ -301,7 +347,9 @@ describe('MovieReservationWorkloadStack', () => {
     it('imports all six ECR images by exact digest and builds only owned collector/router assets', () => {
       const stack = createStack();
       expect(stack.node.tryFindChild('AdotImage')).toBeInstanceOf(ecrAssets.DockerImageAsset);
-      expect(stack.node.tryFindChild('AuditRouterImage')).toBeInstanceOf(ecrAssets.DockerImageAsset);
+      expect(stack.node.tryFindChild('AuditRouterImage')).toBeInstanceOf(
+        ecrAssets.DockerImageAsset,
+      );
       template.resourceCountIs('AWS::ECR::Repository', 0);
 
       for (const input of APPLICATION_COMPONENT_INPUTS) {
@@ -321,15 +369,24 @@ describe('MovieReservationWorkloadStack', () => {
       const endpointServices = resources(template, 'AWS::EC2::VPCEndpoint').map(
         ({ Properties }) => Properties?.ServiceName,
       );
-      for (const suffix of ['ecr.api', 'ecr.dkr', 'logs', 'xray', 'aps-workspaces', 'sts', 'kinesis-firehose', 'events']) {
+      for (const suffix of [
+        'ecr.api',
+        'ecr.dkr',
+        'logs',
+        'xray',
+        'aps-workspaces',
+        'sts',
+        'kinesis-firehose',
+        'events',
+      ]) {
         expect(JSON.stringify(endpointServices)).toContain(suffix);
       }
     });
 
     it('restricts the EventBridge endpoint policy to PutEvents on the exact central audit bus', () => {
       const endpoints = resources(template, 'AWS::EC2::VPCEndpoint');
-      const eventBridgeEndpoint = endpoints.find(
-        ({ Properties }) => JSON.stringify(Properties?.ServiceName).includes('.events'),
+      const eventBridgeEndpoint = endpoints.find(({ Properties }) =>
+        JSON.stringify(Properties?.ServiceName).includes('.events'),
       );
 
       expect(eventBridgeEndpoint).toBeDefined();
@@ -348,7 +405,10 @@ describe('MovieReservationWorkloadStack', () => {
       const app = new cdk.App({ context: {} });
       new MovieReservationWorkloadStack(app, 'UncachedWorkload', {
         env: TEST_TARGET,
-        platformConfig: resolvePlatformConfig({ allowedIngressPrefixListId: 'pl-0123456789abcdef0', ...TEST_CONTEXT }, TEST_TARGET),
+        platformConfig: resolvePlatformConfig(
+          { allowedIngressPrefixListId: 'pl-0123456789abcdef0', ...TEST_CONTEXT },
+          TEST_TARGET,
+        ),
       });
       expect(app.synth().manifest.missing ?? []).toEqual([]);
     });
@@ -377,13 +437,19 @@ describe('MovieReservationWorkloadStack', () => {
         ].sort(),
       );
       expect(definitions.filter(({ Essential }) => Essential).length).toBe(7);
-      expect(definitions.reduce((total, definition) => total + definition.Cpu, 0)).toBeLessThanOrEqual(2048);
-      expect(definitions.reduce((total, definition) => total + definition.Memory, 0)).toBeLessThanOrEqual(4096);
+      expect(
+        definitions.reduce((total, definition) => total + definition.Cpu, 0),
+      ).toBeLessThanOrEqual(2048);
+      expect(
+        definitions.reduce((total, definition) => total + definition.Memory, 0),
+      ).toBeLessThanOrEqual(4096);
       expect(container(template, 'adot-collector')).toMatchObject({
         Essential: false,
         RestartPolicy: { Enabled: true, RestartAttemptPeriod: 60 },
       });
-      for (const name of definitions.filter(({ Name }) => Name.startsWith('movie-')).map(({ Name }) => Name)) {
+      for (const name of definitions
+        .filter(({ Name }) => Name.startsWith('movie-'))
+        .map(({ Name }) => Name)) {
         expect(container(template, name).HealthCheck).toMatchObject({
           Interval: 15,
           Retries: 5,
@@ -470,7 +536,9 @@ describe('MovieReservationWorkloadStack', () => {
         DEMO_RESERVATION_POLL_ATTEMPTS: '6',
         OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4319',
       });
-      expect(environment(container(template, 'movie-reservation-agent'))).not.toHaveProperty('NO_LLM');
+      expect(environment(container(template, 'movie-reservation-agent'))).not.toHaveProperty(
+        'NO_LLM',
+      );
 
       const telemetryContracts = [
         ['movie-reservation-service', 'reservation-v1', 4318],
@@ -479,9 +547,11 @@ describe('MovieReservationWorkloadStack', () => {
         ['movie-recommendation-service', 'recommendation-v1', 4321],
         ['movie-reservation-mcp', 'reservation-mcp-v1', 4322],
       ] as const;
-      expect(new Set(telemetryContracts.map(([, , port]) => port)).size).toBe(telemetryContracts.length);
+      expect(new Set(telemetryContracts.map(([, , port]) => port)).size).toBe(
+        telemetryContracts.length,
+      );
       const mappedContainerPorts = containers(template)
-        .flatMap(definition => definition.PortMappings ?? [])
+        .flatMap((definition) => definition.PortMappings ?? [])
         .map(({ ContainerPort }) => ContainerPort);
       for (const [serviceName, serviceVersion, port] of telemetryContracts) {
         expect(mappedContainerPorts).not.toContain(port);
@@ -524,23 +594,35 @@ describe('MovieReservationWorkloadStack', () => {
   describe('logging', () => {
     it('routes app stdout through an essential bounded FireLens router with ordered shutdown', () => {
       expect(container(template, 'audit-router')).toMatchObject({
-        Essential: true, Cpu: 128, Memory: 256, StopTimeout: 120,
+        Essential: true,
+        Cpu: 128,
+        Memory: 256,
+        StopTimeout: 120,
         FirelensConfiguration: { Type: 'fluentbit' },
       });
       for (const input of APPLICATION_COMPONENT_INPUTS) {
         const definition = container(template, `movie-${input.componentId}`);
         expect(definition.LogConfiguration).toEqual({
-          LogDriver: 'awsfirelens', Options: { 'log-driver-buffer-limit': '1024' },
+          LogDriver: 'awsfirelens',
+          Options: { 'log-driver-buffer-limit': '1024' },
         });
-        expect(definition.DependsOn).toContainEqual({ ContainerName: 'audit-router', Condition: 'START' });
+        expect(definition.DependsOn).toContainEqual({
+          ContainerName: 'audit-router',
+          Condition: 'START',
+        });
       }
+
       expect(JSON.stringify(template.toJSON())).not.toContain('"FromPort":24224');
     });
 
     it('leaves log groups and Grafana to the observability stack', () => {
       template.resourceCountIs('AWS::Logs::LogGroup', 0);
       template.resourceCountIs('AWS::Grafana::Workspace', 0);
-      expect(containers(template).filter(({ LogConfiguration }) => LogConfiguration?.Options?.['awslogs-group'])).toHaveLength(2);
+      expect(
+        containers(template).filter(
+          ({ LogConfiguration }) => LogConfiguration?.Options?.['awslogs-group'],
+        ),
+      ).toHaveLength(2);
     });
   });
 
@@ -555,7 +637,9 @@ describe('MovieReservationWorkloadStack', () => {
       const service = resources(template, 'AWS::ECS::Service')[0];
       expect(service.Properties?.HealthCheckGracePeriodSeconds).toBe(180);
       expect(JSON.stringify(service.Properties?.LoadBalancers)).toContain('movie-reservation-web');
-      expect(JSON.stringify(service.Properties?.LoadBalancers)).not.toContain('movie-reservation-service');
+      expect(JSON.stringify(service.Properties?.LoadBalancers)).not.toContain(
+        'movie-reservation-service',
+      );
       template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
         FromPort: 80,
         ToPort: 80,
@@ -576,7 +660,10 @@ describe('MovieReservationWorkloadStack', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
         LoadBalancerAttributes: Match.arrayWith([
           { Key: 'access_logs.s3.enabled', Value: 'true' },
-          { Key: 'access_logs.s3.bucket', Value: { 'Fn::ImportValue': 'MoviePlatformAwsDemo:AlbAccessLogBucketName' } },
+          {
+            Key: 'access_logs.s3.bucket',
+            Value: { 'Fn::ImportValue': 'MoviePlatformAwsDemo:AlbAccessLogBucketName' },
+          },
           { Key: 'access_logs.s3.prefix', Value: 'alb' },
         ]),
       });
@@ -588,10 +675,13 @@ describe('MovieReservationWorkloadStack', () => {
   describe('telemetry', () => {
     it('uses the imported AMP workspace API endpoint for collector remote write', () => {
       expect(environment(container(template, 'adot-collector')).AMP_REMOTE_WRITE_ENDPOINT).toEqual({
-        'Fn::Join': ['', [
-          { 'Fn::ImportValue': 'MoviePlatformAwsDemo:AmpPrometheusEndpoint' },
-          'api/v1/remote_write',
-        ]],
+        'Fn::Join': [
+          '',
+          [
+            { 'Fn::ImportValue': 'MoviePlatformAwsDemo:AmpPrometheusEndpoint' },
+            'api/v1/remote_write',
+          ],
+        ],
       });
     });
   });
@@ -608,15 +698,22 @@ describe('MovieReservationWorkloadStack', () => {
       };
       // Every container in the task shares this role, including the applications.
       const allowedActions = document.Statement.flatMap(actions);
-      expect(allowedActions).toEqual(expect.arrayContaining([
-        'xray:PutTraceSegments', 'aps:RemoteWrite', 'logs:PutLogEvents', 'firehose:PutRecordBatch',
-        'events:PutEvents',
-      ]));
-      expect(document.Statement).toContainEqual(expect.objectContaining({
-        Action: 'events:PutEvents',
-        Effect: 'Allow',
-        Resource: TEST_AUDIT_EVENT_BUS_ARN,
-      }));
+      expect(allowedActions).toEqual(
+        expect.arrayContaining([
+          'xray:PutTraceSegments',
+          'aps:RemoteWrite',
+          'logs:PutLogEvents',
+          'firehose:PutRecordBatch',
+          'events:PutEvents',
+        ]),
+      );
+      expect(document.Statement).toContainEqual(
+        expect.objectContaining({
+          Action: 'events:PutEvents',
+          Effect: 'Allow',
+          Resource: TEST_AUDIT_EVENT_BUS_ARN,
+        }),
+      );
       expect(allowedActions).not.toContain('ecr:PutImage');
       expect(allowedActions).not.toContain('ecs:UpdateService');
     });
@@ -631,7 +728,10 @@ describe('MovieReservationWorkloadStack', () => {
         AUDIT_STDOUT_COMPARISON_MIRROR: 'true',
       });
       for (const definition of containers(template)) {
-        if (definition.Name === 'movie-reservation-service') continue;
+        if (definition.Name === 'movie-reservation-service') {
+          continue;
+        }
+
         expect(environment(definition)).not.toHaveProperty('AUDIT_EVENT_BUS_ARN');
         expect(environment(definition)).not.toHaveProperty('AUDIT_PUBLISHER');
       }
@@ -645,21 +745,36 @@ describe('MovieReservationWorkloadStack', () => {
       template.resourceCountIs('AWS::SNS::Topic', 1);
       template.resourceCountIs('AWS::SNS::Subscription', 0);
       template.hasResourceProperties('AWS::SNS::TopicPolicy', {
-        PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({
-          Effect: 'Deny',
-          Condition: { Bool: { 'aws:SecureTransport': 'false' } },
-        })]) },
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Deny',
+              Condition: { Bool: { 'aws:SecureTransport': 'false' } },
+            }),
+          ]),
+        },
       });
       expect(template.toJSON().Outputs.AuditAlarmTopicArn.Value).toEqual({ Ref: topicLogicalId() });
     });
 
     it('watches every bounded primary publish failure reason and telemetry loss', () => {
-      const failureAlarms = resources(template, 'AWS::CloudWatch::Alarm')
-        .filter(({ Properties }) => Properties?.MetricName === 'audit_publish_total');
-      const reasons = failureAlarms.map(({ Properties }) =>
-        (Properties?.Dimensions as { Name: string; Value: string }[])
-          .find(({ Name }) => Name === 'failure_reason')?.Value);
-      expect(reasons.sort()).toEqual(['aborted', 'configuration', 'rejected', 'throttled', 'timeout', 'unavailable']);
+      const failureAlarms = resources(template, 'AWS::CloudWatch::Alarm').filter(
+        ({ Properties }) => Properties?.MetricName === 'audit_publish_total',
+      );
+      const reasons = failureAlarms.map(
+        ({ Properties }) =>
+          (Properties?.Dimensions as { Name: string; Value: string }[]).find(
+            ({ Name }) => Name === 'failure_reason',
+          )?.Value,
+      );
+      expect(reasons.sort()).toEqual([
+        'aborted',
+        'configuration',
+        'rejected',
+        'throttled',
+        'timeout',
+        'unavailable',
+      ]);
 
       for (const { Properties } of failureAlarms) {
         expect(Properties).toMatchObject({
@@ -675,20 +790,24 @@ describe('MovieReservationWorkloadStack', () => {
         // Children only explain the cause; the composite is the single notifier.
         expect(Properties).not.toHaveProperty('AlarmActions');
         // Role, not transport: the selector survives an EventBridge-to-stdout rollback.
-        expect(Properties?.Dimensions).toEqual(expect.arrayContaining([
-          { Name: 'ServiceName', Value: 'movie-reservation-service' },
-          { Name: 'Environment', Value: 'aws-demo' },
-          { Name: 'audit_publisher_role', Value: 'primary' },
-          { Name: 'result', Value: 'failed' },
-        ]));
+        expect(Properties?.Dimensions).toEqual(
+          expect.arrayContaining([
+            { Name: 'ServiceName', Value: 'movie-reservation-service' },
+            { Name: 'Environment', Value: 'aws-demo' },
+            { Name: 'audit_publisher_role', Value: 'primary' },
+            { Name: 'result', Value: 'failed' },
+          ]),
+        );
         expect(Properties?.Dimensions).toHaveLength(5);
       }
     });
 
     it('notifies once when any primary publish failure alarm fires', () => {
-      const failureAlarmIds = Object.keys(template.findResources('AWS::CloudWatch::Alarm', {
-        Properties: { MetricName: 'audit_publish_total' },
-      }));
+      const failureAlarmIds = Object.keys(
+        template.findResources('AWS::CloudWatch::Alarm', {
+          Properties: { MetricName: 'audit_publish_total' },
+        }),
+      );
       const [composite] = resources(template, 'AWS::CloudWatch::CompositeAlarm');
       expect(resources(template, 'AWS::CloudWatch::CompositeAlarm')).toHaveLength(1);
       expect(composite.Properties?.AlarmActions).toEqual([{ Ref: topicLogicalId() }]);
@@ -699,6 +818,7 @@ describe('MovieReservationWorkloadStack', () => {
       for (const alarmId of failureAlarmIds) {
         expect(rule).toContain(`{"Fn::GetAtt":["${alarmId}","Arn"]}`);
       }
+
       expect(rule.match(/ OR /g)).toHaveLength(5);
     });
 
@@ -707,10 +827,17 @@ describe('MovieReservationWorkloadStack', () => {
       expect(filters).toHaveLength(1);
       const [{ Properties: filter }] = filters;
       // Both conditions must hold, and the status is matched as a number.
-      expect(filter.FilterPattern).toBe('{ ($.event = "audit.emit.failed") && ($.auth_status_id = 1) }');
-      expect(filter.LogGroupName).toEqual({ 'Fn::ImportValue': expect.stringContaining(':ReservationServiceLogGroupName') });
+      expect(filter.FilterPattern).toBe(
+        '{ ($.event = "audit.emit.failed") && ($.auth_status_id = 1) }',
+      );
+      expect(filter.LogGroupName).toEqual({
+        'Fn::ImportValue': expect.stringContaining(':ReservationServiceLogGroupName'),
+      });
       const [transformation] = filter.MetricTransformations;
-      expect(transformation).toMatchObject({ MetricNamespace: 'MoviePlatform/aws-demo/audit-gaps', MetricValue: '1' });
+      expect(transformation).toMatchObject({
+        MetricNamespace: 'MoviePlatform/aws-demo/audit-gaps',
+        MetricValue: '1',
+      });
 
       // Filter and alarm are linked only by namespace + metric name.
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
@@ -739,26 +866,47 @@ describe('MovieReservationWorkloadStack', () => {
 
   describe('demo authentication', () => {
     it('preserves the disabled default for every audit producer', () => {
-      for (const producer of ['reservation-service', 'reservation-agent', 'recommendation-service']) {
-        expect(environment(container(template, `movie-${producer}`))).toMatchObject({ DEMO_AUTH_ENABLED: 'false' });
+      for (const producer of [
+        'reservation-service',
+        'reservation-agent',
+        'recommendation-service',
+      ]) {
+        expect(environment(container(template, `movie-${producer}`))).toMatchObject({
+          DEMO_AUTH_ENABLED: 'false',
+        });
       }
     });
 
     describe('when demo authentication is enabled', () => {
       it('injects demo credentials only through Secrets Manager', () => {
-        const enabled = synthesized({ demoAuthEnabled: true, demoAuthSecretArn: TEST_DEMO_AUTH_SECRET_ARN });
-        for (const producer of ['reservation-service', 'reservation-agent', 'recommendation-service']) {
+        const enabled = synthesized({
+          demoAuthEnabled: true,
+          demoAuthSecretArn: TEST_DEMO_AUTH_SECRET_ARN,
+        });
+        for (const producer of [
+          'reservation-service',
+          'reservation-agent',
+          'recommendation-service',
+        ]) {
           const definition = container(enabled, `movie-${producer}`);
-          expect(environment(definition)).toMatchObject({ DEMO_AUTH_ENABLED: 'true', DEPLOYMENT_ENVIRONMENT: 'aws-demo' });
+          expect(environment(definition)).toMatchObject({
+            DEMO_AUTH_ENABLED: 'true',
+            DEPLOYMENT_ENVIRONMENT: 'aws-demo',
+          });
           expect(environment(definition)).not.toHaveProperty('DEMO_AUTH_PASSWORD');
-          expect(definition).toMatchObject({ Secrets: [
-            { Name: 'DEMO_AUTH_USERNAME', ValueFrom: `${TEST_DEMO_AUTH_SECRET_ARN}:username::` },
-            { Name: 'DEMO_AUTH_PASSWORD', ValueFrom: `${TEST_DEMO_AUTH_SECRET_ARN}:password::` },
-          ] });
+          expect(definition).toMatchObject({
+            Secrets: [
+              { Name: 'DEMO_AUTH_USERNAME', ValueFrom: `${TEST_DEMO_AUTH_SECRET_ARN}:username::` },
+              { Name: 'DEMO_AUTH_PASSWORD', ValueFrom: `${TEST_DEMO_AUTH_SECRET_ARN}:password::` },
+            ],
+          });
         }
+
         expect(JSON.stringify(enabled.toJSON())).toContain('secretsmanager:GetSecretValue');
         expect(JSON.stringify(enabled.toJSON())).toContain('secretsmanager');
-        const taskPolicy = resources(enabled, 'AWS::IAM::Policy').find(({ Properties }) => String(Properties?.PolicyName).includes('TaskRoleDefaultPolicy'));
+        const taskPolicy = resources(enabled, 'AWS::IAM::Policy').find(({ Properties }) =>
+          String(Properties?.PolicyName).includes('TaskRoleDefaultPolicy'),
+        );
         expect(JSON.stringify(taskPolicy)).not.toContain('secretsmanager:GetSecretValue');
       });
     });

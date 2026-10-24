@@ -87,6 +87,7 @@ function resolveAwsConfigFile(
     if (!isAbsolute(override)) {
       fail(`${variableName} must be an absolute path`);
     }
+
     return override;
   }
 
@@ -94,5 +95,6 @@ function resolveAwsConfigFile(
   if (home === undefined || !isAbsolute(home)) {
     fail(`HOME must be an absolute path when ${variableName} is unset`);
   }
+
   return join(home, '.aws', defaultName);
 }

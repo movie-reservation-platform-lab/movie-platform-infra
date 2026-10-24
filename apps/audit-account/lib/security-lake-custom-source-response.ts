@@ -34,23 +34,20 @@ export function loadSecurityLakeCustomSourceResponse(
   environment: NodeJS.ProcessEnv,
   auditAccountId: string,
 ): SecurityLakeCustomSourceResponse {
-  const responsePath =
-    environment[SECURITY_LAKE_CUSTOM_SOURCE_RESPONSE_ENVIRONMENT_VARIABLE];
+  const responsePath = environment[SECURITY_LAKE_CUSTOM_SOURCE_RESPONSE_ENVIRONMENT_VARIABLE];
   if (responsePath === undefined || responsePath.length === 0) {
     throw new Error(
       `${SECURITY_LAKE_CUSTOM_SOURCE_RESPONSE_ENVIRONMENT_VARIABLE} must name the custom-source response file.`,
     );
   }
+
   if (!isAbsolute(responsePath)) {
     throw new Error(
       `${SECURITY_LAKE_CUSTOM_SOURCE_RESPONSE_ENVIRONMENT_VARIABLE} must be an absolute path.`,
     );
   }
 
-  return parseSecurityLakeCustomSourceResponse(
-    readFileSync(responsePath, 'utf8'),
-    auditAccountId,
-  );
+  return parseSecurityLakeCustomSourceResponse(readFileSync(responsePath, 'utf8'), auditAccountId);
 }
 
 /** Reduce the untrusted AWS creation receipt to CDK's narrow destination contract. */
@@ -58,30 +55,17 @@ export function parseSecurityLakeCustomSourceResponse(
   contents: string,
   auditAccountId: string,
 ): SecurityLakeCustomSourceResponse {
-  const response = requireJsonObject(
-    parseJsonText(contents),
-    'custom-source response',
-  );
+  const response = requireJsonObject(parseJsonText(contents), 'custom-source response');
   const source = requireJsonObject(response.source, 'source');
   const provider = requireJsonObject(source.provider, 'source.provider');
-  const sourceName = requireExactString(
-    source.sourceName,
-    CUSTOM_SOURCE_NAME,
-    'source.sourceName',
-  );
+  const sourceName = requireExactString(source.sourceName, CUSTOM_SOURCE_NAME, 'source.sourceName');
   const sourceVersion = requireExactString(
     source.sourceVersion,
     CUSTOM_SOURCE_VERSION,
     'source.sourceVersion',
   );
-  const providerRoleArn = requireNonEmptyString(
-    provider.roleArn,
-    'source.provider.roleArn',
-  );
-  const providerRoleName = requireProviderRoleName(
-    providerRoleArn,
-    auditAccountId,
-  );
+  const providerRoleArn = requireNonEmptyString(provider.roleArn, 'source.provider.roleArn');
+  const providerRoleName = requireProviderRoleName(providerRoleArn, auditAccountId);
   const { bucketName, sourcePrefix } = parseSourceLocation(
     requireNonEmptyString(provider.location, 'source.provider.location'),
   );
@@ -108,13 +92,11 @@ function parseJsonText(contents: string): unknown {
 }
 
 /** Require a JSON object before reading any named response fields. */
-function requireJsonObject(
-  value: unknown,
-  fieldName: string,
-): Readonly<Record<string, unknown>> {
+function requireJsonObject(value: unknown, fieldName: string): Readonly<Record<string, unknown>> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`${fieldName} must be a JSON object.`);
   }
+
   return value as Readonly<Record<string, unknown>>;
 }
 
@@ -123,18 +105,16 @@ function requireNonEmptyString(value: unknown, fieldName: string): string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(`${fieldName} must be a non-empty string.`);
   }
+
   return value;
 }
 
 /** Narrow one response field to the exact source contract supported by this app. */
-function requireExactString<T extends string>(
-  value: unknown,
-  expected: T,
-  fieldName: string,
-): T {
+function requireExactString<T extends string>(value: unknown, expected: T, fieldName: string): T {
   if (value !== expected) {
     throw new Error(`${fieldName} must equal ${expected}.`);
   }
+
   return expected;
 }
 
@@ -144,10 +124,12 @@ function requireProviderRoleName(roleArn: string, auditAccountId: string): strin
   if (match === null || match[1] !== auditAccountId || match[2] === undefined) {
     throw new Error('source.provider.roleArn must belong to the audit account.');
   }
+
   const roleName = match[2].split('/').at(-1);
   if (roleName === undefined || roleName.length === 0) {
     throw new Error('source.provider.roleArn must contain a role name.');
   }
+
   return roleName;
 }
 
@@ -162,15 +144,17 @@ function parseSourceLocation(location: string): {
   } catch {
     throw new Error('source.provider.location must be a valid S3 URI.');
   }
+
   const sourcePrefix = parsed.pathname.slice(1);
   if (
-    parsed.protocol !== 's3:'
-    || parsed.hostname.length === 0
-    || sourcePrefix !== CUSTOM_SOURCE_VERSIONED_PREFIX
+    parsed.protocol !== 's3:' ||
+    parsed.hostname.length === 0 ||
+    sourcePrefix !== CUSTOM_SOURCE_VERSIONED_PREFIX
   ) {
     throw new Error(
       `source.provider.location must use s3://<bucket>/${CUSTOM_SOURCE_VERSIONED_PREFIX}.`,
     );
   }
+
   return { bucketName: parsed.hostname, sourcePrefix };
 }

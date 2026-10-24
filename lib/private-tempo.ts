@@ -28,57 +28,109 @@ export class PrivateTempo extends Construct {
   constructor(scope: Construct, id: string, props: PrivateTempoProps) {
     super(scope, id);
     this.grafanaSecurityGroup = new ec2.SecurityGroup(this, 'GrafanaConnection', {
-      vpc: props.vpc, description: 'AMG outbound private data-source connection; no inbound rules',
+      vpc: props.vpc,
+      description: 'AMG outbound private data-source connection; no inbound rules',
     });
     const securityGroup = new ec2.SecurityGroup(this, 'SecurityGroup', {
-      vpc: props.vpc, description: 'Tempo: collector ingestion and Grafana query only',
+      vpc: props.vpc,
+      description: 'Tempo: collector ingestion and Grafana query only',
     });
-    securityGroup.addIngressRule(props.applicationSecurityGroup, ec2.Port.tcp(4317), 'ADOT OTLP ingestion');
+    securityGroup.addIngressRule(
+      props.applicationSecurityGroup,
+      ec2.Port.tcp(4317),
+      'ADOT OTLP ingestion',
+    );
     securityGroup.addIngressRule(this.grafanaSecurityGroup, ec2.Port.tcp(3200), 'AMG query API');
-    props.endpointSecurityGroup.addIngressRule(securityGroup, ec2.Port.tcp(443), 'Tempo image pulls and logs');
-    props.endpointSecurityGroup.addIngressRule(this.grafanaSecurityGroup, ec2.Port.tcp(443), 'AMG AWS data sources');
+    props.endpointSecurityGroup.addIngressRule(
+      securityGroup,
+      ec2.Port.tcp(443),
+      'Tempo image pulls and logs',
+    );
+    props.endpointSecurityGroup.addIngressRule(
+      this.grafanaSecurityGroup,
+      ec2.Port.tcp(443),
+      'AMG AWS data sources',
+    );
 
     const namespace = new discovery.PrivateDnsNamespace(this, 'Namespace', {
-      name: 'aws-demo.internal', vpc: props.vpc,
+      name: 'aws-demo.internal',
+      vpc: props.vpc,
     });
     const image = new ecrAssets.DockerImageAsset(this, 'Image', {
-      directory: path.join(props.repositoryRoot, 'tempo'), platform: ecrAssets.Platform.LINUX_AMD64,
+      directory: path.join(props.repositoryRoot, 'tempo'),
+      platform: ecrAssets.Platform.LINUX_AMD64,
     });
     const task = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
-      family: 'aws-demo-tempo', cpu: 512, memoryLimitMiB: 1024,
-      runtimePlatform: { cpuArchitecture: ecs.CpuArchitecture.X86_64, operatingSystemFamily: ecs.OperatingSystemFamily.LINUX },
+      family: 'aws-demo-tempo',
+      cpu: 512,
+      memoryLimitMiB: 1024,
+      runtimePlatform: {
+        cpuArchitecture: ecs.CpuArchitecture.X86_64,
+        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
+      },
     });
     (task.node.defaultChild as ecs.CfnTaskDefinition).overrideLogicalId('TempoTaskDefinition');
-    task.addToTaskRolePolicy(new iam.PolicyStatement({
-      actions: ['aps:RemoteWrite'], resources: [props.ampWorkspaceArn],
-    }));
+    task.addToTaskRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['aps:RemoteWrite'],
+        resources: [props.ampWorkspaceArn],
+      }),
+    );
     task.addContainer('Tempo', {
-      containerName: 'tempo', image: ecs.ContainerImage.fromDockerImageAsset(image),
-      essential: true, user: '10001', memoryLimitMiB: 1024,
+      containerName: 'tempo',
+      image: ecs.ContainerImage.fromDockerImageAsset(image),
+      essential: true,
+      user: '10001',
+      memoryLimitMiB: 1024,
       environment: {
         AWS_REGION: cdk.Stack.of(this).region,
         AWS_STS_REGIONAL_ENDPOINTS: 'regional',
         AMP_REMOTE_WRITE_ENDPOINT: props.ampRemoteWriteEndpoint,
       },
       logging: ecs.LogDrivers.awsLogs({
-        streamPrefix: 'tempo', logGroup: new logs.LogGroup(this, 'Logs', {
-          retention: logs.RetentionDays.ONE_WEEK, removalPolicy: cdk.RemovalPolicy.DESTROY,
+        streamPrefix: 'tempo',
+        logGroup: new logs.LogGroup(this, 'Logs', {
+          retention: logs.RetentionDays.ONE_WEEK,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
         }),
       }),
       portMappings: [{ containerPort: 3200 }, { containerPort: 4317 }],
       stopTimeout: cdk.Duration.seconds(30),
       healthCheck: {
-        command: ['CMD', '/busybox', 'wget', '-q', '-T', '3', '-O', '/dev/null', 'http://127.0.0.1:3200/ready'],
-        interval: cdk.Duration.seconds(15), timeout: cdk.Duration.seconds(5),
-        retries: 3, startPeriod: cdk.Duration.seconds(60),
+        command: [
+          'CMD',
+          '/busybox',
+          'wget',
+          '-q',
+          '-T',
+          '3',
+          '-O',
+          '/dev/null',
+          'http://127.0.0.1:3200/ready',
+        ],
+        interval: cdk.Duration.seconds(15),
+        timeout: cdk.Duration.seconds(5),
+        retries: 3,
+        startPeriod: cdk.Duration.seconds(60),
       },
     });
     const service = new ecs.FargateService(this, 'Service', {
-      serviceName: 'aws-demo-tempo', cluster: props.cluster, taskDefinition: task,
-      desiredCount: 1, assignPublicIp: false, vpcSubnets: props.workloadSubnets,
-      securityGroups: [securityGroup], circuitBreaker: { rollback: true },
-      minHealthyPercent: 0, maxHealthyPercent: 100,
-      cloudMapOptions: { name: 'tempo', cloudMapNamespace: namespace, dnsRecordType: discovery.DnsRecordType.A, dnsTtl: cdk.Duration.seconds(10) },
+      serviceName: 'aws-demo-tempo',
+      cluster: props.cluster,
+      taskDefinition: task,
+      desiredCount: 1,
+      assignPublicIp: false,
+      vpcSubnets: props.workloadSubnets,
+      securityGroups: [securityGroup],
+      circuitBreaker: { rollback: true },
+      minHealthyPercent: 0,
+      maxHealthyPercent: 100,
+      cloudMapOptions: {
+        name: 'tempo',
+        cloudMapNamespace: namespace,
+        dnsRecordType: discovery.DnsRecordType.A,
+        dnsTtl: cdk.Duration.seconds(10),
+      },
     });
     (service.node.defaultChild as ecs.CfnService).overrideLogicalId('TempoService');
 
@@ -89,6 +141,8 @@ export class PrivateTempo extends Construct {
     new cdk.CfnOutput(stack, 'GrafanaVpcSubnetIds', {
       value: cdk.Fn.join(',', props.vpc.selectSubnets({ subnetGroupName: 'workload' }).subnetIds),
     });
-    new cdk.CfnOutput(stack, 'GrafanaVpcSecurityGroupId', { value: this.grafanaSecurityGroup.securityGroupId });
+    new cdk.CfnOutput(stack, 'GrafanaVpcSecurityGroupId', {
+      value: this.grafanaSecurityGroup.securityGroupId,
+    });
   }
 }

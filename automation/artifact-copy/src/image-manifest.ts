@@ -7,8 +7,7 @@ import {
 } from './artifact-copy-error';
 import type { ImageManifestIdentity } from './model';
 
-export const OCI_IMAGE_MANIFEST_MEDIA_TYPE =
-  'application/vnd.oci.image.manifest.v1+json';
+export const OCI_IMAGE_MANIFEST_MEDIA_TYPE = 'application/vnd.oci.image.manifest.v1+json';
 export const DOCKER_V2_IMAGE_MANIFEST_MEDIA_TYPE =
   'application/vnd.docker.distribution.manifest.v2+json';
 
@@ -64,9 +63,11 @@ export function inspectRawImageManifest(
   if (!isJsonObject(parsed)) {
     failInvalidManifest(location, 'manifest must be a JSON object');
   }
+
   if (parsed.schemaVersion !== 2) {
     failInvalidManifest(location, 'schemaVersion must equal 2');
   }
+
   if (
     typeof parsed.mediaType !== 'string' ||
     !SUPPORTED_IMAGE_MANIFEST_MEDIA_TYPES.has(parsed.mediaType)
@@ -78,6 +79,7 @@ export function inspectRawImageManifest(
   if (!Array.isArray(parsed.layers)) {
     failInvalidManifest(location, 'layers must be an array');
   }
+
   const layerDigests = parsed.layers.map((layer, index) =>
     readDescriptorDigest(layer, location, `layers[${index}]`),
   );
@@ -98,14 +100,14 @@ export function assertEquivalentImageManifests(
   if (source.manifestDigest !== destination.manifestDigest) {
     failContentMismatch('top-level manifest digest');
   }
+
   if (source.configDigest !== destination.configDigest) {
     failContentMismatch('config digest');
   }
+
   if (
     source.layerDigests.length !== destination.layerDigests.length ||
-    source.layerDigests.some(
-      (digest, index) => digest !== destination.layerDigests[index],
-    )
+    source.layerDigests.some((digest, index) => digest !== destination.layerDigests[index])
   ) {
     failContentMismatch('ordered layer digests');
   }
@@ -119,22 +121,19 @@ function readDescriptorDigest(
   if (!isJsonObject(value)) {
     failInvalidManifest(location, `${fieldName} must be a descriptor object`);
   }
-  if (
-    typeof value.mediaType !== 'string' ||
-    !DESCRIPTOR_MEDIA_TYPE_PATTERN.test(value.mediaType)
-  ) {
+
+  if (typeof value.mediaType !== 'string' || !DESCRIPTOR_MEDIA_TYPE_PATTERN.test(value.mediaType)) {
     failInvalidManifest(location, `${fieldName}.mediaType is invalid`);
   }
+
   if (typeof value.digest !== 'string' || !SHA256_DIGEST_PATTERN.test(value.digest)) {
     failInvalidManifest(location, `${fieldName}.digest must be a lowercase sha256 digest`);
   }
-  if (
-    typeof value.size !== 'number' ||
-    !Number.isSafeInteger(value.size) ||
-    value.size < 0
-  ) {
+
+  if (typeof value.size !== 'number' || !Number.isSafeInteger(value.size) || value.size < 0) {
     failInvalidManifest(location, `${fieldName}.size must be a non-negative integer`);
   }
+
   return value.digest;
 }
 

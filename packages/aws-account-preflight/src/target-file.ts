@@ -17,6 +17,7 @@ export function loadAwsTarget(environment: NodeJS.ProcessEnv): AwsTarget {
   if (metadata.isSymbolicLink()) {
     fail('the target file must not be a symbolic link');
   }
+
   if (!metadata.isFile()) {
     fail('the target file must be a regular file');
   }
@@ -25,9 +26,11 @@ export function loadAwsTarget(environment: NodeJS.ProcessEnv): AwsTarget {
   if (currentUid === undefined) {
     fail('the target file owner cannot be verified on this operating system');
   }
+
   if (metadata.uid !== currentUid) {
     fail('the target file must be owned by the current operator');
   }
+
   if ((metadata.mode & 0o077) !== 0) {
     fail('the target file must deny all group and other access');
   }
@@ -49,6 +52,7 @@ function resolveTargetFile(environment: NodeJS.ProcessEnv): string {
     if (!isAbsolute(override)) {
       fail('MOVIE_PLATFORM_AWS_TARGET_FILE must be an absolute path');
     }
+
     return override;
   }
 
@@ -57,6 +61,7 @@ function resolveTargetFile(environment: NodeJS.ProcessEnv): string {
     if (!isAbsolute(xdgConfigHome)) {
       fail('XDG_CONFIG_HOME must be an absolute path');
     }
+
     return join(xdgConfigHome, 'movie-platform', TARGET_FILE_NAME);
   }
 
@@ -64,6 +69,7 @@ function resolveTargetFile(environment: NodeJS.ProcessEnv): string {
   if (home === undefined || !isAbsolute(home)) {
     fail('HOME must be an absolute path when XDG_CONFIG_HOME is unset');
   }
+
   return join(home, '.config', 'movie-platform', TARGET_FILE_NAME);
 }
 

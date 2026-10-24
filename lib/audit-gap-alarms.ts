@@ -44,8 +44,10 @@ export class AuditGapAlarms extends Construct {
     // composite notifies, so one outage produces one notification.
     const primaryAuditPublishFailureAlarms = AUDIT_PUBLISH_FAILURE_REASONS.map((failureReason) => {
       const alarmIdReason = failureReason[0].toUpperCase() + failureReason.slice(1);
+
       return new cloudwatch.Alarm(this, `PrimaryPublish${alarmIdReason}Alarm`, {
-        alarmDescription: `Primary audit publisher failed with reason "${failureReason}": a login may be ` +
+        alarmDescription:
+          `Primary audit publisher failed with reason "${failureReason}": a login may be ` +
           'unaudited. Missing data means the metric pipeline is broken and is treated as breaching.',
         metric: new cloudwatch.Metric({
           namespace: props.applicationMetricsNamespace,
@@ -67,31 +69,36 @@ export class AuditGapAlarms extends Construct {
       });
     });
     new cloudwatch.CompositeAlarm(this, 'PrimaryAuditPublishFailureAlarm', {
-      alarmDescription: 'Primary audit publisher failed: logins may be unaudited. The child alarm in ' +
+      alarmDescription:
+        'Primary audit publisher failed: logins may be unaudited. The child alarm in ' +
         'ALARM names the failure reason; see docs/runbooks/audit-publish-alarms.md.',
       alarmRule: cloudwatch.AlarmRule.anyOf(...primaryAuditPublishFailureAlarms),
     }).addAlarmAction(alarmAction);
 
     // A metric filter metric has no dimensions, so the environment is part of
     // the namespace to keep environments that share an account apart.
-    const unauditedSuccessfulLogins = new logs.MetricFilter(this, 'UnauditedSuccessfulLoginFilter', {
-      logGroup: props.reservationServiceLogGroup,
-      filterPattern: logs.FilterPattern.all(
-        logs.FilterPattern.stringValue('$.event', '=', 'audit.emit.failed'),
-        logs.FilterPattern.numberValue('$.auth_status_id', '=', 1),
-      ),
-      metricNamespace: `MoviePlatform/${props.environmentName}/audit-gaps`,
-      metricName: UNAUDITED_SUCCESSFUL_LOGINS_METRIC,
-      metricValue: '1',
-    });
+    const unauditedSuccessfulLogins = new logs.MetricFilter(
+      this,
+      'UnauditedSuccessfulLoginFilter',
+      {
+        logGroup: props.reservationServiceLogGroup,
+        filterPattern: logs.FilterPattern.all(
+          logs.FilterPattern.stringValue('$.event', '=', 'audit.emit.failed'),
+          logs.FilterPattern.numberValue('$.auth_status_id', '=', 1),
+        ),
+        metricNamespace: `MoviePlatform/${props.environmentName}/audit-gaps`,
+        metricName: UNAUDITED_SUCCESSFUL_LOGINS_METRIC,
+        metricValue: '1',
+      },
+    );
     const unauditedSuccessfulLoginsMetric = unauditedSuccessfulLogins.metric({
       period: cdk.Duration.minutes(1),
       statistic: cloudwatch.Stats.SUM,
     });
 
-
     new cloudwatch.Alarm(this, 'UnauditedSuccessfulLoginAlarm', {
-      alarmDescription: 'A successful login was not audited: the audit event was not accepted. ' +
+      alarmDescription:
+        'A successful login was not audited: the audit event was not accepted. ' +
         'Find it via audit.emit.failed with auth_status_id=1; see docs/runbooks/audit-publish-alarms.md.',
       metric: unauditedSuccessfulLoginsMetric,
       threshold: 0,

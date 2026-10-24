@@ -24,16 +24,20 @@ test('applies defaults for the optional run toggles', () => {
 });
 
 test('accepts every documented run toggle', () => {
-  expect(parseEcsCanarySpikeConfig(contextOf({
-    ...REQUIRED,
-    spikeProfile: 'breaker',
-    bridgeMissingData: 'missing',
-    deploymentAlarmSet: 'members',
-    infraRevision: 'tag-2',
-    recipeRevision: 'env-2',
-    activeTaskDefinitionArn: 'arn:aws:ecs:eu-central-1:111111111111:task-definition/Family:7',
-    failInfraDeploy: 'true',
-  }))).toMatchObject({
+  expect(
+    parseEcsCanarySpikeConfig(
+      contextOf({
+        ...REQUIRED,
+        spikeProfile: 'breaker',
+        bridgeMissingData: 'missing',
+        deploymentAlarmSet: 'members',
+        infraRevision: 'tag-2',
+        recipeRevision: 'env-2',
+        activeTaskDefinitionArn: 'arn:aws:ecs:eu-central-1:111111111111:task-definition/Family:7',
+        failInfraDeploy: 'true',
+      }),
+    ),
+  ).toMatchObject({
     activeTaskDefinitionArn: 'arn:aws:ecs:eu-central-1:111111111111:task-definition/Family:7',
     failInfraDeploy: true,
     infraRevision: 'tag-2',
@@ -55,10 +59,13 @@ test.each([
   ['an invalid expiry date', { ...REQUIRED, expiresOn: '2026-13-45' }],
   ['a revision with spaces', { ...REQUIRED, infraRevision: 'tag 2' }],
   ['a non-string revision', { ...REQUIRED, recipeRevision: 2 }],
-  ['a task definition ARN without a revision', {
-    ...REQUIRED,
-    activeTaskDefinitionArn: 'arn:aws:ecs:eu-central-1:111111111111:task-definition/Family',
-  }],
+  [
+    'a task definition ARN without a revision',
+    {
+      ...REQUIRED,
+      activeTaskDefinitionArn: 'arn:aws:ecs:eu-central-1:111111111111:task-definition/Family',
+    },
+  ],
   ['an empty task definition ARN', { ...REQUIRED, activeTaskDefinitionArn: '' }],
   ['a non-boolean fail flag', { ...REQUIRED, failInfraDeploy: 'yes' }],
 ])('rejects %s', (_description, values) => {

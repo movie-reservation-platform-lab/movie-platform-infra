@@ -4,10 +4,7 @@ import { AuditAccountIngestionStack } from '../lib/audit-account-ingestion-stack
 import { loadSecurityLakeCustomSourceResponse } from '../lib/security-lake-custom-source-response';
 
 const config = loadAuditAccountConfig(process.env);
-const customSource = loadSecurityLakeCustomSourceResponse(
-  process.env,
-  config.auditAccountId,
-);
+const customSource = loadSecurityLakeCustomSourceResponse(process.env, config.auditAccountId);
 const app = new App();
 
 new AuditAccountIngestionStack(app, 'AuditAccountIngestionStack', {

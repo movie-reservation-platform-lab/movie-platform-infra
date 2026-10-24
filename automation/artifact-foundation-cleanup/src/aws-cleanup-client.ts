@@ -14,10 +14,7 @@ import {
 } from '@movie-platform/aws-account-preflight';
 import { createPinnedAwsCredentials } from './aws-client-config';
 import { failCleanup } from './cleanup-error';
-import type {
-  ArtifactFoundationCleaner,
-  RepositoryCleanupTarget,
-} from './model';
+import type { ArtifactFoundationCleaner, RepositoryCleanupTarget } from './model';
 
 type CloudFormationMutationClient = Pick<CloudFormationClient, 'send'>;
 type EcrMutationClient = Pick<ECRClient, 'send'>;
@@ -30,9 +27,7 @@ const STACK_DELETE_MAX_WAIT_SECONDS = 60 * 60;
  * Build the destructive AWS adapter from the exact profile and Region approved
  * by preflight. The adapter is created only after all execution gates pass.
  */
-export function createAwsSdkCleaner(
-  access: ValidatedAwsAccess,
-): ArtifactFoundationCleaner {
+export function createAwsSdkCleaner(access: ValidatedAwsAccess): ArtifactFoundationCleaner {
   const credentials = createPinnedAwsCredentials(access);
   const cloudFormation = new CloudFormationClient({
     region: access.target.region,
@@ -57,9 +52,7 @@ export function createAwsSdkCleaner(
 }
 
 /** AWS SDK v3 mutation adapter kept injectable for credential-free tests. */
-export class AwsSdkArtifactFoundationCleaner
-  implements ArtifactFoundationCleaner
-{
+export class AwsSdkArtifactFoundationCleaner implements ArtifactFoundationCleaner {
   constructor(
     private readonly target: AwsTarget,
     private readonly cloudFormation: CloudFormationMutationClient,
@@ -80,6 +73,7 @@ export class AwsSdkArtifactFoundationCleaner
     if (response.Account === undefined || response.Arn === undefined) {
       failCleanup('STS returned an unexpected cleanup caller identity shape');
     }
+
     validateAwsCallerIdentity(this.target, response.Account, response.Arn);
   }
 
@@ -137,6 +131,7 @@ export class AwsSdkArtifactFoundationCleaner
       if (hasErrorName(error, 'RepositoryNotFoundException')) {
         return;
       }
+
       failCleanup(
         `unable to delete retained ECR repository for ${repository.componentId}; cleanup can be retried`,
       );
@@ -146,9 +141,6 @@ export class AwsSdkArtifactFoundationCleaner
 
 function hasErrorName(error: unknown, expectedName: string): boolean {
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'name' in error &&
-    error.name === expectedName
+    typeof error === 'object' && error !== null && 'name' in error && error.name === expectedName
   );
 }

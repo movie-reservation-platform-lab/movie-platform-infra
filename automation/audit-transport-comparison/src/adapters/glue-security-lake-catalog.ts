@@ -1,4 +1,9 @@
-import { CrawlerRunningException, type GlueClient, GetCrawlerCommand, StartCrawlerCommand } from '@aws-sdk/client-glue';
+import {
+  CrawlerRunningException,
+  type GlueClient,
+  GetCrawlerCommand,
+  StartCrawlerCommand,
+} from '@aws-sdk/client-glue';
 
 import type { CatalogRefresher } from '../core/ports';
 import type { SendClient } from './sdk-client';
@@ -21,6 +26,7 @@ export class GlueSecurityLakeCatalog implements CatalogRefresher {
     if (target?.DatabaseName === undefined || table === undefined) {
       throw new Error('the Security Lake crawler has no catalog target table');
     }
+
     return { database: target.DatabaseName, table };
   }
 

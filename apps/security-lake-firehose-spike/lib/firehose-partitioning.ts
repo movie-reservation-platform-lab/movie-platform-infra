@@ -2,8 +2,7 @@ import type { CfnDeliveryStream } from 'aws-cdk-lib/aws-kinesisfirehose';
 
 /** Firehose properties that route valid and failed records into separate datasets. */
 export interface FirehosePartitioning {
-  readonly dynamicPartitioningConfiguration:
-    CfnDeliveryStream.DynamicPartitioningConfigurationProperty;
+  readonly dynamicPartitioningConfiguration: CfnDeliveryStream.DynamicPartitioningConfigurationProperty;
   readonly errorObjectPrefix: string;
   readonly errorOutputPrefix: string;
   readonly prefix: string;
@@ -23,38 +22,36 @@ export function buildFirehosePartitioning(
   region: string,
   sourceAccountId: string,
 ): FirehosePartitioning {
-  const dynamicPartitioningConfiguration: CfnDeliveryStream.DynamicPartitioningConfigurationProperty = {
-    enabled: true,
-  };
+  const dynamicPartitioningConfiguration: CfnDeliveryStream.DynamicPartitioningConfigurationProperty =
+    {
+      enabled: true,
+    };
   const errorObjectPrefix = `${sourcePrefix.slice(0, -1)}-errors/`;
   const errorOutputPrefix =
-    errorObjectPrefix +
-    '!{firehose:error-output-type}/' +
-    '!{timestamp:yyyy/MM/dd/HH}/';
+    errorObjectPrefix + '!{firehose:error-output-type}/' + '!{timestamp:yyyy/MM/dd/HH}/';
   const prefix =
     `${sourcePrefix}` +
     `region=${region}/` +
     `accountId=${sourceAccountId}/` +
     `eventDay=!{partitionKeyFromQuery:eventDay}/`;
-  const processingConfiguration:
-    CfnDeliveryStream.ProcessingConfigurationProperty = {
-      enabled: true,
-      processors: [
-        {
-          type: 'MetadataExtraction',
-          parameters: [
-            {
-              parameterName: 'JsonParsingEngine',
-              parameterValue: 'JQ-1.6',
-            },
-            {
-              parameterName: 'MetadataExtractionQuery',
-              parameterValue: '{eventDay: (.time / 1000 | strftime("%Y%m%d"))}',
-            },
-          ],
-        },
-      ],
-    };
+  const processingConfiguration: CfnDeliveryStream.ProcessingConfigurationProperty = {
+    enabled: true,
+    processors: [
+      {
+        type: 'MetadataExtraction',
+        parameters: [
+          {
+            parameterName: 'JsonParsingEngine',
+            parameterValue: 'JQ-1.6',
+          },
+          {
+            parameterName: 'MetadataExtractionQuery',
+            parameterValue: '{eventDay: (.time / 1000 | strftime("%Y%m%d"))}',
+          },
+        ],
+      },
+    ],
+  };
 
   return {
     dynamicPartitioningConfiguration,

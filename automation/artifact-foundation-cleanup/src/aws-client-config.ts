@@ -6,9 +6,7 @@ import type { ValidatedAwsAccess } from '@movie-platform/aws-account-preflight';
  * Build the explicit AWS SDK credential provider shared by read and mutation
  * adapters. Ambient credentials are deliberately excluded from cleanup.
  */
-export function createPinnedAwsCredentials(
-  access: ValidatedAwsAccess,
-): ReturnType<typeof fromIni> {
+export function createPinnedAwsCredentials(access: ValidatedAwsAccess): ReturnType<typeof fromIni> {
   return fromIni({
     profile: access.target.profile,
     filepath: access.configFiles.credentialsFilepath,

@@ -19,9 +19,14 @@ export const DEFAULT_CONFIG: EcsCanarySpikeConfig = {
 };
 
 /** Synthesize both spike stacks and return the service stack. */
-export function synthServiceStack(overrides: Partial<EcsCanarySpikeConfig> = {}): EcsCanarySpikeServiceStack {
+export function synthServiceStack(
+  overrides: Partial<EcsCanarySpikeConfig> = {},
+): EcsCanarySpikeServiceStack {
   const app = new App();
-  const repositoryStack = new EcsCanarySpikeImageRepositoryStack(app, 'TestRepositoryStack', { env: ENV });
+  const repositoryStack = new EcsCanarySpikeImageRepositoryStack(app, 'TestRepositoryStack', {
+    env: ENV,
+  });
+
   return new EcsCanarySpikeServiceStack(app, 'TestServiceStack', {
     env: ENV,
     config: { ...DEFAULT_CONFIG, ...overrides },
@@ -37,5 +42,8 @@ export function synthServiceTemplate(overrides: Partial<EcsCanarySpikeConfig> = 
 /** Synthesize the repository stack on its own. */
 export function synthRepositoryTemplate(): Template {
   const app = new App();
-  return Template.fromStack(new EcsCanarySpikeImageRepositoryStack(app, 'TestRepositoryStack', { env: ENV }));
+
+  return Template.fromStack(
+    new EcsCanarySpikeImageRepositoryStack(app, 'TestRepositoryStack', { env: ENV }),
+  );
 }

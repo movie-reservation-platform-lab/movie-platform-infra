@@ -1,6 +1,5 @@
 import type { CfnTable } from 'aws-cdk-lib/aws-glue';
 
-
 /**
  * Firehose conversion columns for platform-audit/1 OCSF Authentication events.
  *
@@ -9,8 +8,9 @@ import type { CfnTable } from 'aws-cdk-lib/aws-glue';
  *
  */
 export const AUDIT_CONVERSION_COLUMNS: readonly CfnTable.ColumnProperty[] = [
-  ...['activity_id', 'category_uid', 'class_uid', 'type_uid', 'severity_id', 'status_id']
-    .map((name) => ({ name, type: 'int' })),
+  ...['activity_id', 'category_uid', 'class_uid', 'type_uid', 'severity_id', 'status_id'].map(
+    (name) => ({ name, type: 'int' }),
+  ),
   { name: 'activity_name', type: 'string' },
   { name: 'status_detail', type: 'string' },
   { name: 'time', type: 'bigint' },

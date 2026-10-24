@@ -2,8 +2,7 @@ import type { CfnDeliveryStream } from 'aws-cdk-lib/aws-kinesisfirehose';
 
 /** Firehose properties that keep valid and failed records in separate datasets. */
 export interface FirehosePartitioning {
-  readonly dynamicPartitioningConfiguration:
-    CfnDeliveryStream.DynamicPartitioningConfigurationProperty;
+  readonly dynamicPartitioningConfiguration: CfnDeliveryStream.DynamicPartitioningConfigurationProperty;
   readonly errorObjectPrefix: string;
   readonly errorOutputPrefix: string;
   readonly prefix: string;
@@ -22,8 +21,7 @@ export function buildFirehosePartitioning(
     dynamicPartitioningConfiguration: { enabled: true },
     errorObjectPrefix,
     errorOutputPrefix:
-      `${errorObjectPrefix}!{firehose:error-output-type}/` +
-      '!{timestamp:yyyy/MM/dd/HH}/',
+      `${errorObjectPrefix}!{firehose:error-output-type}/` + '!{timestamp:yyyy/MM/dd/HH}/',
     prefix:
       `${sourcePrefix}region=${region}/` +
       `accountId=${sourceAccountId}/` +

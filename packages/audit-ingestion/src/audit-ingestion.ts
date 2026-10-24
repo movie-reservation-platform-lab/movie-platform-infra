@@ -1,11 +1,4 @@
-import {
-  Arn,
-  Aws,
-  Duration,
-  RemovalPolicy,
-  Stack,
-  Tags,
-} from 'aws-cdk-lib';
+import { Arn, Aws, Duration, RemovalPolicy, Stack, Tags } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as glue from 'aws-cdk-lib/aws-glue';
@@ -160,11 +153,7 @@ export class AuditIngestion extends Construct {
     );
 
     const conversionSchema = createConversionSchema(this, stack);
-    const quarantinePolicy = createProviderQuarantinePolicy(
-      this,
-      stack,
-      props.destination,
-    );
+    const quarantinePolicy = createProviderQuarantinePolicy(this, stack, props.destination);
     this.producers = props.producers.map((producer) =>
       createProducerResources(this, {
         bufferInterval: props.bufferInterval ?? Duration.seconds(300),
@@ -203,31 +192,21 @@ function createAuditArchive(
     sourceEventBus: eventBus,
   });
   archive.applyRemovalPolicy(removalPolicy);
+
   return archive;
 }
 
 /** Create the shared Glue schema and grant Firehose read-only catalog access. */
-function createConversionSchema(
-  scope: Construct,
-  stack: Stack,
-): ConversionSchemaResources {
+function createConversionSchema(scope: Construct, stack: Stack): ConversionSchemaResources {
   const catalog = createConversionCatalog(scope, stack);
   const role = createConversionSchemaRole(scope, stack, catalog);
-  const lakeFormationAccess = createLakeFormationAccess(
-    scope,
-    stack,
-    catalog,
-    role,
-  );
+  const lakeFormationAccess = createLakeFormationAccess(scope, stack, catalog, role);
 
   return { ...catalog, ...lakeFormationAccess, role };
 }
 
 /** Define the JSON-to-Parquet conversion shape in the Glue Data Catalog. */
-function createConversionCatalog(
-  scope: Construct,
-  stack: Stack,
-): ConversionCatalogResources {
+function createConversionCatalog(scope: Construct, stack: Stack): ConversionCatalogResources {
   const database = new glue.CfnDatabase(scope, 'ConversionDatabase', {
     catalogId: stack.account,
     databaseInput: {
@@ -267,22 +246,30 @@ function createConversionSchemaRole(
     description: 'Allows Firehose to read the platform audit conversion schema',
     inlinePolicies: {
       SchemaRead: new iam.PolicyDocument({
-        statements: [new iam.PolicyStatement({
-          actions: ['glue:GetTable', 'glue:GetTableVersion', 'glue:GetTableVersions'],
-          resources: [
-            Arn.format({ service: 'glue', resource: 'catalog' }, stack),
-            Arn.format({
-              service: 'glue',
-              resource: 'database',
-              resourceName: catalog.database.ref,
-            }, stack),
-            Arn.format({
-              service: 'glue',
-              resource: 'table',
-              resourceName: `${catalog.database.ref}/${catalog.table.ref}`,
-            }, stack),
-          ],
-        })],
+        statements: [
+          new iam.PolicyStatement({
+            actions: ['glue:GetTable', 'glue:GetTableVersion', 'glue:GetTableVersions'],
+            resources: [
+              Arn.format({ service: 'glue', resource: 'catalog' }, stack),
+              Arn.format(
+                {
+                  service: 'glue',
+                  resource: 'database',
+                  resourceName: catalog.database.ref,
+                },
+                stack,
+              ),
+              Arn.format(
+                {
+                  service: 'glue',
+                  resource: 'table',
+                  resourceName: `${catalog.database.ref}/${catalog.table.ref}`,
+                },
+                stack,
+              ),
+            ],
+          }),
+        ],
       }),
     },
   });
@@ -310,22 +297,18 @@ function createLakeFormationAccess(
       },
     },
   );
-  const tableAccess = new lakeformation.CfnPrincipalPermissions(
-    scope,
-    'ConversionTableAccess',
-    {
-      permissions: ['DESCRIBE'],
-      permissionsWithGrantOption: [],
-      principal: { dataLakePrincipalIdentifier: role.roleArn },
-      resource: {
-        table: {
-          catalogId: stack.account,
-          databaseName: catalog.database.ref,
-          name: catalog.table.ref,
-        },
+  const tableAccess = new lakeformation.CfnPrincipalPermissions(scope, 'ConversionTableAccess', {
+    permissions: ['DESCRIBE'],
+    permissionsWithGrantOption: [],
+    principal: { dataLakePrincipalIdentifier: role.roleArn },
+    resource: {
+      table: {
+        catalogId: stack.account,
+        databaseName: catalog.database.ref,
+        name: catalog.table.ref,
       },
     },
-  );
+  });
 
   return { databaseAccess, tableAccess };
 }
@@ -337,22 +320,27 @@ function createProviderQuarantinePolicy(
   destination: SecurityLakeDestination,
 ): iam.CfnPolicy {
   const errorObjectPrefix = `${destination.sourcePrefix.slice(0, -1)}-errors/`;
+
   return new iam.CfnPolicy(scope, 'ProviderQuarantinePolicy', {
     policyDocument: new iam.PolicyDocument({
-      statements: [new iam.PolicyStatement({
-        actions: ['s3:PutObject'],
-        resources: [Arn.format(
-          {
-            account: '',
-            partition: Aws.PARTITION,
-            region: '',
-            resource: destination.bucketName,
-            resourceName: `${errorObjectPrefix}*`,
-            service: 's3',
-          },
-          stack,
-        )],
-      })],
+      statements: [
+        new iam.PolicyStatement({
+          actions: ['s3:PutObject'],
+          resources: [
+            Arn.format(
+              {
+                account: '',
+                partition: Aws.PARTITION,
+                region: '',
+                resource: destination.bucketName,
+                resourceName: `${errorObjectPrefix}*`,
+                service: 's3',
+              },
+              stack,
+            ),
+          ],
+        }),
+      ],
     }),
     policyName: 'movie-platform-audit-quarantine-write',
     roles: [destination.providerRoleName],
@@ -469,8 +457,7 @@ function createDeliveryStream(
           versionId: 'LATEST',
         },
       },
-      dynamicPartitioningConfiguration:
-        partitioning.dynamicPartitioningConfiguration,
+      dynamicPartitioningConfiguration: partitioning.dynamicPartitioningConfiguration,
       errorOutputPrefix: partitioning.errorOutputPrefix,
       prefix: partitioning.prefix,
       processingConfiguration: partitioning.processingConfiguration,
@@ -514,8 +501,7 @@ function createProducerMetrics(
       namespace: 'AWS/Firehose',
       statistic: 'Sum',
     }),
-    targetDeadLetterMessages:
-      deadLetterQueue.metricApproximateNumberOfMessagesVisible(),
+    targetDeadLetterMessages: deadLetterQueue.metricApproximateNumberOfMessagesVisible(),
     throttledRecords: new cloudwatch.Metric({
       dimensionsMap: { DeliveryStreamName: deliveryStream.ref },
       metricName: 'ThrottledRecords',
@@ -529,22 +515,25 @@ function validateProps(props: AuditIngestionProps): void {
   if (props.producers.length === 0) {
     throw new Error('AuditIngestion requires at least one producer.');
   }
+
   const accountIds = props.producers.map(({ workloadAccountId }) => workloadAccountId);
   if (
-    accountIds.some((accountId) => !/^[0-9]{12}$/.test(accountId))
-    || new Set(accountIds).size !== accountIds.length
+    accountIds.some((accountId) => !/^[0-9]{12}$/.test(accountId)) ||
+    new Set(accountIds).size !== accountIds.length
   ) {
     throw new Error('AuditIngestion producer account IDs must be unique 12-digit values.');
   }
+
   const bufferSeconds = props.bufferInterval?.toSeconds();
   if (bufferSeconds !== undefined && (bufferSeconds < 60 || bufferSeconds > 900)) {
     // Dynamic partitioning requires at least 60 s; Firehose allows at most 900 s.
     throw new Error('AuditIngestion bufferInterval must be between 60 and 900 seconds.');
   }
+
   if (
-    !props.destination.sourcePrefix.startsWith('ext/')
-    || !props.destination.sourcePrefix.endsWith('/')
-    || props.destination.sourcePrefix.includes('..')
+    !props.destination.sourcePrefix.startsWith('ext/') ||
+    !props.destination.sourcePrefix.endsWith('/') ||
+    props.destination.sourcePrefix.includes('..')
   ) {
     throw new Error('AuditIngestion sourcePrefix must be an assigned ext/ prefix.');
   }

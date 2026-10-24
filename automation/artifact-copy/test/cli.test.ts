@@ -19,12 +19,7 @@ import {
   type RegistryImageClient,
 } from '../src/model';
 import { createSkopeoRegistryClient } from '../src/skopeo-client';
-import {
-  CONFIG_DIGEST,
-  LAYER_DIGEST_A,
-  LAYER_DIGEST_B,
-  createCopyFixture,
-} from './test-support';
+import { CONFIG_DIGEST, LAYER_DIGEST_A, LAYER_DIGEST_B, createCopyFixture } from './test-support';
 
 const REQUEST_FILE = '/tmp/movie-platform/artifact-copy-request.json';
 const SKOPEO_EXECUTABLE = '/usr/bin/skopeo';
@@ -46,21 +41,27 @@ function v2RequestDocument(
   overrides: Readonly<Record<string, unknown>> = {},
 ): Buffer {
   const fixture = createCopyFixture();
-  return Buffer.from(JSON.stringify({
-    requestVersion: ARTIFACT_COPY_CLI_REQUEST_VERSION_V2,
-    ...fixture.request,
-    operation,
-    ...overrides,
-  }));
+
+  return Buffer.from(
+    JSON.stringify({
+      requestVersion: ARTIFACT_COPY_CLI_REQUEST_VERSION_V2,
+      ...fixture.request,
+      operation,
+      ...overrides,
+    }),
+  );
 }
 
 function requestDocument(overrides: Readonly<Record<string, unknown>> = {}): Buffer {
   const fixture = createCopyFixture();
-  return Buffer.from(JSON.stringify({
-    requestVersion: ARTIFACT_COPY_CLI_REQUEST_VERSION,
-    ...fixture.request,
-    ...overrides,
-  }));
+
+  return Buffer.from(
+    JSON.stringify({
+      requestVersion: ARTIFACT_COPY_CLI_REQUEST_VERSION,
+      ...fixture.request,
+      ...overrides,
+    }),
+  );
 }
 
 async function run(
@@ -81,11 +82,13 @@ async function run(
     },
     dependencies,
   );
+
   return { status, stdout, stderr };
 }
 
 function successfulVerification(): ArtifactCopyVerification {
   const fixture = createCopyFixture();
+
   return Object.freeze({
     verificationMethod: ARTIFACT_COPY_VERIFICATION_METHOD,
     sourceManifestDigest: fixture.digest,
@@ -96,10 +99,10 @@ function successfulVerification(): ArtifactCopyVerification {
 }
 
 function successfulTransferVerification(
-  outcome: ArtifactTransferVerification['outcome'] =
-    ARTIFACT_TRANSFER_OUTCOME.ALREADY_PRESENT,
+  outcome: ArtifactTransferVerification['outcome'] = ARTIFACT_TRANSFER_OUTCOME.ALREADY_PRESENT,
 ): ArtifactTransferVerification {
   const fixture = createCopyFixture();
+
   return Object.freeze({
     verificationMethod: ARTIFACT_TRANSFER_VERIFICATION_METHOD,
     outcome,
@@ -118,23 +121,28 @@ function successfulDependencies(
     readRawManifest: async () => Buffer.alloc(0),
     copy: async () => undefined,
   };
+
   return {
     readRequestFile: (requestFilePath) => {
       events.push(`read:${requestFilePath}`);
+
       return rawRequest;
     },
     createRegistryClient: (trustedSkopeoExecutable) => {
       events.push(`client:${trustedSkopeoExecutable}`);
+
       return client;
     },
     copyArtifact: async (request, receivedClient) => {
       events.push(`copy:${request.sourceReference}:${request.destinationRepository}`);
       expect(receivedClient).toBe(client);
+
       return successfulVerification();
     },
     transferArtifact: async (request, receivedClient) => {
       events.push(`transfer:${request.operation}:${request.sourceReference}`);
       expect(receivedClient).toBe(client);
+
       return successfulTransferVerification(
         request.operation === ARTIFACT_TRANSFER_OPERATION.COPY_AND_VERIFY
           ? ARTIFACT_TRANSFER_OUTCOME.COPIED
@@ -144,29 +152,32 @@ function successfulDependencies(
   };
 }
 
-test.each([['--help'], ['-h']])('prints help without reading a request for %s', async (argument) => {
-  const successful = successfulDependencies();
-  const dependencies: ArtifactCopyCliDependencies = {
-    readRequestFile: jest.fn(successful.readRequestFile),
-    createRegistryClient: jest.fn(successful.createRegistryClient),
-    copyArtifact: jest.fn(successful.copyArtifact),
-    transferArtifact: jest.fn(successful.transferArtifact),
-  };
+test.each([['--help'], ['-h']])(
+  'prints help without reading a request for %s',
+  async (argument) => {
+    const successful = successfulDependencies();
+    const dependencies: ArtifactCopyCliDependencies = {
+      readRequestFile: jest.fn(successful.readRequestFile),
+      createRegistryClient: jest.fn(successful.createRegistryClient),
+      copyArtifact: jest.fn(successful.copyArtifact),
+      transferArtifact: jest.fn(successful.transferArtifact),
+    };
 
-  const result = await run([argument], dependencies);
+    const result = await run([argument], dependencies);
 
-  expect(result.status).toBe(ARTIFACT_COPY_CLI_EXIT_CODE.SUCCESS);
-  expect(result.stderr).toBe('');
-  expect(result.stdout).toContain('artifact-copy-request-v1');
-  expect(result.stdout).toContain('v2');
-  expect(result.stdout).toContain('verify-existing');
-  expect(result.stdout).toContain('credentials remain in referenced auth files');
-  expect(result.stdout).toContain('Destination policy is owned by the caller');
-  expect(dependencies.readRequestFile).not.toHaveBeenCalled();
-  expect(dependencies.createRegistryClient).not.toHaveBeenCalled();
-  expect(dependencies.copyArtifact).not.toHaveBeenCalled();
-  expect(dependencies.transferArtifact).not.toHaveBeenCalled();
-});
+    expect(result.status).toBe(ARTIFACT_COPY_CLI_EXIT_CODE.SUCCESS);
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toContain('artifact-copy-request-v1');
+    expect(result.stdout).toContain('v2');
+    expect(result.stdout).toContain('verify-existing');
+    expect(result.stdout).toContain('credentials remain in referenced auth files');
+    expect(result.stdout).toContain('Destination policy is owned by the caller');
+    expect(dependencies.readRequestFile).not.toHaveBeenCalled();
+    expect(dependencies.createRegistryClient).not.toHaveBeenCalled();
+    expect(dependencies.copyArtifact).not.toHaveBeenCalled();
+    expect(dependencies.transferArtifact).not.toHaveBeenCalled();
+  },
+);
 
 test('dispatches v2 verify-existing and emits only its sanitized outcome', async () => {
   const events: string[] = [];
@@ -174,10 +185,7 @@ test('dispatches v2 verify-existing and emits only its sanitized outcome', async
 
   const result = await run(
     EXECUTION_ARGUMENTS,
-    successfulDependencies(
-      events,
-      v2RequestDocument(ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING),
-    ),
+    successfulDependencies(events, v2RequestDocument(ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING)),
   );
 
   expect(result.status).toBe(ARTIFACT_COPY_CLI_EXIT_CODE.SUCCESS);
@@ -197,10 +205,7 @@ test('routes v2 verify-existing through the mutation-free library branch', async
   const fixture = createCopyFixture();
   const copy = jest.fn(async () => undefined);
   const dependencies: ArtifactCopyCliDependencies = {
-    ...successfulDependencies(
-      [],
-      v2RequestDocument(ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING),
-    ),
+    ...successfulDependencies([], v2RequestDocument(ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING)),
     createRegistryClient: () => ({
       readRawManifest: async () => fixture.rawManifest,
       copy,
@@ -224,9 +229,12 @@ test('emits only the existing sanitized immutable verification result as JSON', 
 
   const result = await run(
     EXECUTION_ARGUMENTS,
-    successfulDependencies(events, requestDocument({
-      sourceAuthFile: '/tmp/movie-platform/ghcr-auth.json',
-    })),
+    successfulDependencies(
+      events,
+      requestDocument({
+        sourceAuthFile: '/tmp/movie-platform/ghcr-auth.json',
+      }),
+    ),
   );
 
   expect(result.status).toBe(ARTIFACT_COPY_CLI_EXIT_CODE.SUCCESS);
@@ -256,11 +264,7 @@ test.each([
     EXECUTION_ARGUMENTS,
     Buffer.from('{"destinationAuthFile":"/private/auth.json"'),
   ],
-  [
-    'unknown inline credential',
-    EXECUTION_ARGUMENTS,
-    requestDocument({ token: 'inline-secret' }),
-  ],
+  ['unknown inline credential', EXECUTION_ARGUMENTS, requestDocument({ token: 'inline-secret' })],
   [
     'malformed digest',
     EXECUTION_ARGUMENTS,
@@ -292,16 +296,13 @@ test.each([
 test('classifies invalid Skopeo selection without exposing the executable path', async () => {
   const dependencies: ArtifactCopyCliDependencies = {
     ...successfulDependencies(),
-    createRegistryClient: (executablePath) =>
-      createSkopeoRegistryClient({ executablePath }),
+    createRegistryClient: (executablePath) => createSkopeoRegistryClient({ executablePath }),
   };
 
-  const result = await run([
-    '--request-file',
-    REQUEST_FILE,
-    '--skopeo-executable',
-    'relative/untrusted-skopeo',
-  ], dependencies);
+  const result = await run(
+    ['--request-file', REQUEST_FILE, '--skopeo-executable', 'relative/untrusted-skopeo'],
+    dependencies,
+  );
 
   expect(result).toEqual({
     status: ARTIFACT_COPY_CLI_EXIT_CODE.INVALID_INPUT,
@@ -368,6 +369,7 @@ test('returns stable destination-verification status after copied content drifts
     createRegistryClient: () => ({
       readRawManifest: async () => {
         reads += 1;
+
         return reads === 1 ? fixture.rawManifest : Buffer.from('{}');
       },
       copy: async () => undefined,
@@ -380,8 +382,7 @@ test('returns stable destination-verification status after copied content drifts
   expect(result).toEqual({
     status: ARTIFACT_COPY_CLI_EXIT_CODE.DESTINATION_VERIFICATION_FAILED,
     stdout: '',
-    stderr:
-      `Artifact copy failed: ${ARTIFACT_COPY_CLI_FAILURE.DESTINATION_VERIFICATION_FAILED}\n`,
+    stderr: `Artifact copy failed: ${ARTIFACT_COPY_CLI_FAILURE.DESTINATION_VERIFICATION_FAILED}\n`,
   });
   expect(reads).toBe(2);
 });

@@ -42,10 +42,12 @@ describe('spike service stack infrastructure', () => {
     });
     // Inline and standalone inbound rules only: task egress to 0.0.0.0/0 is
     // intended, because tasks pull from ECR through the internet gateway.
-    const inlineIngress = Object.values(template.findResources('AWS::EC2::SecurityGroup'))
-      .map((group) => group.Properties.SecurityGroupIngress ?? []);
-    const standaloneIngress = Object.values(template.findResources('AWS::EC2::SecurityGroupIngress'))
-      .map((rule) => rule.Properties);
+    const inlineIngress = Object.values(template.findResources('AWS::EC2::SecurityGroup')).map(
+      (group) => group.Properties.SecurityGroupIngress ?? [],
+    );
+    const standaloneIngress = Object.values(
+      template.findResources('AWS::EC2::SecurityGroupIngress'),
+    ).map((rule) => rule.Properties);
     const ingress = JSON.stringify([inlineIngress, standaloneIngress]);
     expect(ingress).not.toContain('CidrIp');
   });
@@ -65,7 +67,9 @@ describe('spike service stack infrastructure', () => {
     });
     template.hasResourceProperties('AWS::ElasticLoadBalancingV2::ListenerRule', {
       Priority: 10,
-      Conditions: [Match.objectLike({ Field: 'path-pattern', PathPatternConfig: { Values: ['/*'] } })],
+      Conditions: [
+        Match.objectLike({ Field: 'path-pattern', PathPatternConfig: { Values: ['/*'] } }),
+      ],
       Actions: [Match.objectLike({ Type: 'forward' })],
     });
   });
@@ -83,10 +87,12 @@ describe('spike service stack infrastructure', () => {
     template.hasResourceProperties('AWS::ECS::TaskDefinition', {
       Cpu: '256',
       Memory: '512',
-      ContainerDefinitions: [Match.objectLike({
-        Name: 'fixture',
-        PortMappings: [Match.objectLike({ ContainerPort: 8080 })],
-      })],
+      ContainerDefinitions: [
+        Match.objectLike({
+          Name: 'fixture',
+          PortMappings: [Match.objectLike({ ContainerPort: 8080 })],
+        }),
+      ],
     });
     const taskDefinitions = JSON.stringify(template.findResources('AWS::ECS::TaskDefinition'));
     expect(taskDefinitions).toContain('"@",{"Ref":"ImageDigest"}');
@@ -117,15 +123,21 @@ describe('spike service stack infrastructure', () => {
     ['notBreaching', 'notBreaching'],
     ['breaching', 'breaching'],
     ['missing', 'missing'],
-  ] as const)('models the bridge alarm at 10s with missing data treated as %s', (setting, expected) => {
-    synthServiceTemplate({ bridgeMissingData: setting }).hasResourceProperties('AWS::CloudWatch::Alarm', {
-      AlarmName: 'EcsCanarySpike-WatchVerdict',
-      Namespace: 'EcsCanarySpike',
-      MetricName: 'WatchVerdict',
-      Period: 10,
-      TreatMissingData: expected,
-    });
-  });
+  ] as const)(
+    'models the bridge alarm at 10s with missing data treated as %s',
+    (setting, expected) => {
+      synthServiceTemplate({ bridgeMissingData: setting }).hasResourceProperties(
+        'AWS::CloudWatch::Alarm',
+        {
+          AlarmName: 'EcsCanarySpike-WatchVerdict',
+          Namespace: 'EcsCanarySpike',
+          MetricName: 'WatchVerdict',
+          Period: 10,
+          TreatMissingData: expected,
+        },
+      );
+    },
+  );
 
   it('combines both member alarms into the rollback composite', () => {
     template.hasResourceProperties('AWS::CloudWatch::CompositeAlarm', {
@@ -167,17 +179,23 @@ describe('spike service stack infrastructure', () => {
   });
 
   it('changes the recipe, not the cluster, when recipeRevision changes', () => {
-    synthServiceTemplate({ recipeRevision: 'env-2' }).hasResourceProperties('AWS::ECS::TaskDefinition', {
-      ContainerDefinitions: [Match.objectLike({
-        Environment: [{ Name: 'SPIKE_RECIPE_REVISION', Value: 'env-2' }],
-      })],
-    });
+    synthServiceTemplate({ recipeRevision: 'env-2' }).hasResourceProperties(
+      'AWS::ECS::TaskDefinition',
+      {
+        ContainerDefinitions: [
+          Match.objectLike({
+            Environment: [{ Name: 'SPIKE_RECIPE_REVISION', Value: 'env-2' }],
+          }),
+        ],
+      },
+    );
     synthServiceTemplate({ infraRevision: 'tag-2' }).hasResourceProperties('AWS::ECS::Cluster', {
       Tags: Match.arrayWith([{ Key: 'InfraRevision', Value: 'tag-2' }]),
     });
-    const recipeOf = (infraRevision: string): string => JSON.stringify(
-      synthServiceTemplate({ infraRevision }).findResources('AWS::ECS::TaskDefinition'),
-    );
+    const recipeOf = (infraRevision: string): string =>
+      JSON.stringify(
+        synthServiceTemplate({ infraRevision }).findResources('AWS::ECS::TaskDefinition'),
+      );
     expect(recipeOf('tag-2')).toBe(recipeOf('1'));
   });
 });
@@ -192,8 +210,10 @@ describe('Session 3 release model: infra deploys carry the running revision', ()
   });
 
   it('pins the service to the running revision passed as context', () => {
-    synthServiceTemplate({ activeTaskDefinitionArn: RUNNING })
-      .hasResourceProperties('AWS::ECS::Service', { TaskDefinition: RUNNING });
+    synthServiceTemplate({ activeTaskDefinitionArn: RUNNING }).hasResourceProperties(
+      'AWS::ECS::Service',
+      { TaskDefinition: RUNNING },
+    );
   });
 
   it('has no CloudFormation parameter a raw deploy could reuse for the running revision', () => {
@@ -202,10 +222,14 @@ describe('Session 3 release model: infra deploys carry the running revision', ()
   });
 
   it('fails validation without the running revision, so a raw deploy stops before AWS', () => {
-    Annotations.fromStack(synthServiceStack({ activeTaskDefinitionArn: undefined }))
-      .hasError('*', Match.stringLikeRegexp('Missing context activeTaskDefinitionArn'));
-    Annotations.fromStack(synthServiceStack({ activeTaskDefinitionArn: RUNNING }))
-      .hasNoError('*', Match.anyValue());
+    Annotations.fromStack(synthServiceStack({ activeTaskDefinitionArn: undefined })).hasError(
+      '*',
+      Match.stringLikeRegexp('Missing context activeTaskDefinitionArn'),
+    );
+    Annotations.fromStack(synthServiceStack({ activeTaskDefinitionArn: RUNNING })).hasNoError(
+      '*',
+      Match.anyValue(),
+    );
   });
 
   it('exports the recipe ARN for the release script and the infra-deploy wrapper', () => {

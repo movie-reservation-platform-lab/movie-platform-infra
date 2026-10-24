@@ -24,24 +24,28 @@ export class SecurityLakeCustomSourcePrerequisitesStack extends Stack {
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSGlueServiceRole'),
       ],
     });
-    crawlerRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['s3:GetBucketLocation', 's3:ListBucket'],
-      resources: [props.prerequisitesConfig.bucketArn],
-      conditions: {
-        StringLike: {
-          's3:prefix': [
-            props.prerequisitesConfig.sourcePrefix,
-            `${props.prerequisitesConfig.sourcePrefix}*`,
-          ],
+    crawlerRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:GetBucketLocation', 's3:ListBucket'],
+        resources: [props.prerequisitesConfig.bucketArn],
+        conditions: {
+          StringLike: {
+            's3:prefix': [
+              props.prerequisitesConfig.sourcePrefix,
+              `${props.prerequisitesConfig.sourcePrefix}*`,
+            ],
+          },
         },
-      },
-    }));
-    crawlerRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['s3:GetObject', 's3:PutObject'],
-      resources: [
-        `${props.prerequisitesConfig.bucketArn}/${props.prerequisitesConfig.sourcePrefix}*`,
-      ],
-    }));
+      }),
+    );
+    crawlerRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:GetObject', 's3:PutObject'],
+        resources: [
+          `${props.prerequisitesConfig.bucketArn}/${props.prerequisitesConfig.sourcePrefix}*`,
+        ],
+      }),
+    );
 
     new CfnOutput(this, 'CrawlerRoleArn', {
       description: 'Pass this role to Security Lake CreateCustomLogSource.',

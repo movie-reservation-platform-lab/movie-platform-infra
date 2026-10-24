@@ -67,26 +67,36 @@ export class FakeStore implements AuditStoreReader {
     private readonly availableAt: ReadonlyMap<string, Date>,
   ) {}
 
-  public async findEventIds(ids: readonly string[], window: LookupWindow, deadline: Date): Promise<ReadonlySet<string>> {
+  public async findEventIds(
+    ids: readonly string[],
+    window: LookupWindow,
+    deadline: Date,
+  ): Promise<ReadonlySet<string>> {
     this.calls.push({ ids, window });
     if (this.failure !== null) {
       throw this.failure;
     }
+
     const now = this.clock.now();
     if (now >= deadline) {
       throw new QueryDeadlineExceededError();
     }
+
     return new Set(ids.filter((id) => (this.availableAt.get(id) ?? Infinity) <= now));
   }
 }
 
 export function availableAfter(clock: FakeClock, seconds: Record<string, number>): FakeStore {
-  return new FakeStore(clock, new Map(Object.entries(seconds).map(([id, delay]) => [id, after(delay)])));
+  return new FakeStore(
+    clock,
+    new Map(Object.entries(seconds).map(([id, delay]) => [id, after(delay)])),
+  );
 }
 
 /** Login client answering from a script; requests are recorded for assertions. */
 export function scriptedLogins(...responses: Array<LoginResponse | Error>) {
   const requests: LoginRequest[] = [];
+
   return {
     requests,
     client: {
@@ -96,9 +106,11 @@ export function scriptedLogins(...responses: Array<LoginResponse | Error>) {
         if (response === undefined) {
           throw new Error(`no scripted response for login ${requests.length}`);
         }
+
         if (response instanceof Error) {
           throw response;
         }
+
         return response;
       },
     },
@@ -113,6 +125,7 @@ export function fakeComparisonDependencies(
 ): ComparisonDependencies & { readonly crawlerStarts: Date[] } {
   const crawlerStarts: Date[] = [];
   const statusFor: Record<LoginOutcome, number> = { accepted: 200, rejected: 401 };
+
   return {
     clock,
     login: scriptedLogins(

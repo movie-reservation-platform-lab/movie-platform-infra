@@ -4,12 +4,19 @@ import { AuditStack } from '../lib/audit-stack';
 import { resolveAuditConfig } from '../lib/audit-config';
 
 const env = { account: '111111111111', region: 'eu-central-1' };
-const audit = (disposable = false): Template => Template.fromStack(new AuditStack(new cdk.App(), 'AuditTest', {
-  env, config: resolveAuditConfig({ allowAuditDataDeletion: disposable }),
-}));
+const audit = (disposable = false): Template =>
+  Template.fromStack(
+    new AuditStack(new cdk.App(), 'AuditTest', {
+      env,
+      config: resolveAuditConfig({ allowAuditDataDeletion: disposable }),
+    }),
+  );
 
 test.each([
-  [1, 1], [3650, 3650], ['7', 7], [' 30 ', 30],
+  [1, 1],
+  [3650, 3650],
+  ['7', 7],
+  [' 30 ', 30],
 ] as const)('accepts explicit audit retention %p as %i days', (input, expectedDays) => {
   expect(resolveAuditConfig({ auditRetentionDays: input }).auditRetentionDays).toBe(expectedDays);
 });
@@ -39,9 +46,17 @@ test.each<{ name: string; value: unknown }>([
 
 test('audit foundation is independent of workload networking, images and observability', () => {
   const template = audit();
-  for (const type of ['AWS::ECS::Service', 'AWS::EC2::VPC', 'AWS::APS::Workspace', 'AWS::Grafana::Workspace', 'AWS::SQS::Queue', 'AWS::Lambda::Function']) {
+  for (const type of [
+    'AWS::ECS::Service',
+    'AWS::EC2::VPC',
+    'AWS::APS::Workspace',
+    'AWS::Grafana::Workspace',
+    'AWS::SQS::Queue',
+    'AWS::Lambda::Function',
+  ]) {
     template.resourceCountIs(type, 0);
   }
+
   expect(JSON.stringify(template.toJSON())).not.toContain('Fn::ImportValue');
   template.resourceCountIs('AWS::KinesisFirehose::DeliveryStream', 1);
   template.resourceCountIs('AWS::Glue::Table', 3);
@@ -52,15 +67,22 @@ test('audit buckets are private, encrypted, versioned and retained unless explic
   const template = audit();
   for (const bucket of Object.values(template.findResources('AWS::S3::Bucket'))) {
     expect(bucket).toMatchObject({
-      DeletionPolicy: 'Retain', UpdateReplacePolicy: 'Retain',
+      DeletionPolicy: 'Retain',
+      UpdateReplacePolicy: 'Retain',
       Properties: {
         VersioningConfiguration: { Status: 'Enabled' },
-        PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true },
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
       },
     });
     expect(JSON.stringify(bucket)).toContain('AES256');
     expect(JSON.stringify(bucket)).toContain('NoncurrentVersionExpiration');
   }
+
   const disposable = audit(true);
   disposable.resourceCountIs('Custom::S3AutoDeleteObjects', 3);
   for (const bucket of Object.values(disposable.findResources('AWS::S3::Bucket'))) {
@@ -71,9 +93,14 @@ test('audit buckets are private, encrypted, versioned and retained unless explic
 test('Firehose archives gzip JSONL with no Lambda processor and exposes freshness alarm', () => {
   const template = audit();
   template.hasResourceProperties('AWS::IAM::Role', {
-    AssumeRolePolicyDocument: Match.objectLike({ Statement: Match.arrayWith([
-      Match.objectLike({ Principal: { Service: 'firehose.amazonaws.com' }, Condition: { StringEquals: { 'sts:ExternalId': env.account } } }),
-    ]) }),
+    AssumeRolePolicyDocument: Match.objectLike({
+      Statement: Match.arrayWith([
+        Match.objectLike({
+          Principal: { Service: 'firehose.amazonaws.com' },
+          Condition: { StringEquals: { 'sts:ExternalId': env.account } },
+        }),
+      ]),
+    }),
   });
   template.hasResourceProperties('AWS::KinesisFirehose::DeliveryStream', {
     DeliveryStreamType: 'DirectPut',
@@ -85,10 +112,14 @@ test('Firehose archives gzip JSONL with no Lambda processor and exposes freshnes
     }),
   });
   template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-    Namespace: 'AWS/Firehose', MetricName: 'DeliveryToS3.DataFreshness', Threshold: 300,
+    Namespace: 'AWS/Firehose',
+    MetricName: 'DeliveryToS3.DataFreshness',
+    Threshold: 300,
   });
   const roles = template.findResources('AWS::IAM::Policy');
-  const deliveryPolicy = Object.entries(roles).find(([key]) => key.includes('FirehoseDeliveryRole'))?.[1];
+  const deliveryPolicy = Object.entries(roles).find(([key]) =>
+    key.includes('FirehoseDeliveryRole'),
+  )?.[1];
   expect(JSON.stringify(deliveryPolicy)).toContain('s3:PutObject');
   expect(JSON.stringify(deliveryPolicy)).not.toContain('s3:DeleteObject');
 });
@@ -96,22 +127,35 @@ test('Firehose archives gzip JSONL with no Lambda processor and exposes freshnes
 test('Athena scans projected date partitions with a one GiB per-query ceiling', () => {
   const template = audit();
   template.hasResourceProperties('AWS::Athena::WorkGroup', {
-    WorkGroupConfiguration: Match.objectLike({ BytesScannedCutoffPerQuery: 1073741824, EnforceWorkGroupConfiguration: true }),
+    WorkGroupConfiguration: Match.objectLike({
+      BytesScannedCutoffPerQuery: 1073741824,
+      EnforceWorkGroupConfiguration: true,
+    }),
   });
   template.hasResourceProperties('AWS::Glue::Table', {
     TableInput: Match.objectLike({
       Name: 'authentication',
-      Parameters: Match.objectLike({ 'projection.enabled': 'true', 'projection.ingest_date.format': 'yyyy-MM-dd' }),
-      StorageDescriptor: Match.objectLike({ Columns: Match.arrayWith([
-        Match.objectLike({ Name: 'unmapped', Type: Match.stringLikeRegexp('aws_alb_trace_id:string') }),
-      ]) }),
+      Parameters: Match.objectLike({
+        'projection.enabled': 'true',
+        'projection.ingest_date.format': 'yyyy-MM-dd',
+      }),
+      StorageDescriptor: Match.objectLike({
+        Columns: Match.arrayWith([
+          Match.objectLike({
+            Name: 'unmapped',
+            Type: Match.stringLikeRegexp('aws_alb_trace_id:string'),
+          }),
+        ]),
+      }),
     }),
   });
 });
 
 test('CloudTrail captures write management evidence, not a made-up per-login Firehose receipt', () => {
   audit().hasResourceProperties('AWS::CloudTrail::Trail', {
-    IsMultiRegionTrail: false, IncludeGlobalServiceEvents: false, EnableLogFileValidation: true,
+    IsMultiRegionTrail: false,
+    IncludeGlobalServiceEvents: false,
+    EnableLogFileValidation: true,
     EventSelectors: [{ IncludeManagementEvents: true, ReadWriteType: 'WriteOnly' }],
   });
 });

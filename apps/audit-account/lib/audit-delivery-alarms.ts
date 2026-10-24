@@ -49,7 +49,8 @@ export class AuditDeliveryAlarms extends Construct {
       const alarms = [
         new cloudwatch.Alarm(producerScope, 'FailedInvocationsAlarm', {
           ...alarmProps,
-          alarmDescription: `Critical: EventBridge permanently failed to deliver audit events from ` +
+          alarmDescription:
+            `Critical: EventBridge permanently failed to deliver audit events from ` +
             `${workloadAccountId} to Firehose. See ${RUNBOOK}.`,
           metric: metrics.failedInvocations.with({ period: oneMinute }),
           threshold: 0,
@@ -57,7 +58,8 @@ export class AuditDeliveryAlarms extends Construct {
         }),
         new cloudwatch.Alarm(producerScope, 'TargetDeadLetterAlarm', {
           ...alarmProps,
-          alarmDescription: `Critical: undelivered audit events from ${workloadAccountId} are ` +
+          alarmDescription:
+            `Critical: undelivered audit events from ${workloadAccountId} are ` +
             `waiting in the target DLQ. See ${RUNBOOK}.`,
           metric: metrics.targetDeadLetterMessages.with({
             period: oneMinute,
@@ -68,7 +70,8 @@ export class AuditDeliveryAlarms extends Construct {
         }),
         new cloudwatch.Alarm(producerScope, 'DeliveryFreshnessAlarm', {
           ...alarmProps,
-          alarmDescription: `Critical: Firehose has not delivered audit records from ` +
+          alarmDescription:
+            `Critical: Firehose has not delivered audit records from ` +
             `${workloadAccountId} to Security Lake for over ${freshnessThreshold.toSeconds()} s. ` +
             `See ${RUNBOOK}.`,
           metric: metrics.deliveryFreshness.with({ period: oneMinute }),
@@ -77,7 +80,8 @@ export class AuditDeliveryAlarms extends Construct {
         }),
         new cloudwatch.Alarm(producerScope, 'FailedConversionAlarm', {
           ...alarmProps,
-          alarmDescription: `Critical: audit records from ${workloadAccountId} failed Parquet ` +
+          alarmDescription:
+            `Critical: audit records from ${workloadAccountId} failed Parquet ` +
             `conversion and were quarantined outside the query dataset. See ${RUNBOOK}.`,
           metric: metrics.failedConversionRecords.with({ period: oneMinute }),
           threshold: 0,
@@ -87,7 +91,8 @@ export class AuditDeliveryAlarms extends Construct {
         // loss raises the failed-invocation and DLQ alarms. 3 of 5 ignores bursts.
         new cloudwatch.Alarm(producerScope, 'SustainedThrottlingAlarm', {
           ...alarmProps,
-          alarmDescription: `Warning: Firehose is throttling audit records from ` +
+          alarmDescription:
+            `Warning: Firehose is throttling audit records from ` +
             `${workloadAccountId}; sustained throttling precedes delivery failure. See ${RUNBOOK}.`,
           metric: metrics.throttledRecords.with({ period: oneMinute }),
           threshold: 0,

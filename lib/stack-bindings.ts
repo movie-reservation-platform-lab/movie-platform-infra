@@ -4,8 +4,12 @@ export const PLATFORM_NAME = 'movie-reservation-platform';
 export const ENVIRONMENT_NAME = 'aws-demo';
 export const EXPORT_PREFIX = 'MoviePlatformAwsDemo';
 export const COMPONENTS = [
-  'reservation-web', 'reservation-agent', 'reservation-mcp',
-  'recommendation-mcp', 'reservation-service', 'recommendation-service',
+  'reservation-web',
+  'reservation-agent',
+  'reservation-mcp',
+  'recommendation-mcp',
+  'reservation-service',
+  'recommendation-service',
 ] as const;
 
 /** Explicit one-way foundation contract. Workload never grants back into foundations. */

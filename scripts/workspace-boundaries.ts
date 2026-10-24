@@ -23,6 +23,7 @@ function requireJsonObject(value: unknown, label: string): JsonObject {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`${label} must be a JSON object.`);
   }
+
   return value as JsonObject;
 }
 
@@ -31,19 +32,29 @@ function requirePackageName(value: unknown, packageJsonPath: string): string {
   if (typeof value !== 'string' || value.trim() !== value || value.length === 0) {
     throw new Error(`${packageJsonPath} must contain a nonblank package name.`);
   }
+
   return value;
 }
 
 /** Collect unique dependency names from every npm dependency section in stable order. */
 function collectDependencyNames(manifest: JsonObject, packageJsonPath: string): readonly string[] {
   const names = new Set<string>();
-  for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'] as const) {
+  for (const field of [
+    'dependencies',
+    'devDependencies',
+    'peerDependencies',
+    'optionalDependencies',
+  ] as const) {
     const value = manifest[field];
-    if (value === undefined) continue;
+    if (value === undefined) {
+      continue;
+    }
+
     for (const name of Object.keys(requireJsonObject(value, `${packageJsonPath}#${field}`))) {
       names.add(name);
     }
   }
+
   return [...names].sort();
 }
 
@@ -53,24 +64,33 @@ function discoverWorkspacesByKind(
   directory: 'apps' | 'automation' | 'packages',
 ): readonly WorkspaceNode[] {
   const workspaceRoot = join(repositoryRoot, directory);
-  if (!existsSync(workspaceRoot)) return [];
+  if (!existsSync(workspaceRoot)) {
+    return [];
+  }
+
   return readdirSync(workspaceRoot, { withFileTypes: true })
-    .filter(entry => entry.isDirectory())
-    .flatMap(entry => {
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) => {
       const workspacePath = join(workspaceRoot, entry.name);
       const packageJsonPath = join(workspacePath, 'package.json');
-      if (!existsSync(packageJsonPath)) return [];
-      const manifest = requireJsonObject(JSON.parse(readFileSync(packageJsonPath, 'utf8')) as unknown, packageJsonPath);
-      return [{
-        kind: directory === 'apps'
-          ? 'app'
-          : directory === 'automation'
-            ? 'automation'
-            : 'package',
-        name: requirePackageName(manifest.name, packageJsonPath),
-        relativePath: relative(repositoryRoot, workspacePath),
-        dependencyNames: collectDependencyNames(manifest, packageJsonPath),
-      } satisfies WorkspaceNode];
+      if (!existsSync(packageJsonPath)) {
+        return [];
+      }
+
+      const manifest = requireJsonObject(
+        JSON.parse(readFileSync(packageJsonPath, 'utf8')) as unknown,
+        packageJsonPath,
+      );
+
+      return [
+        {
+          kind:
+            directory === 'apps' ? 'app' : directory === 'automation' ? 'automation' : 'package',
+          name: requirePackageName(manifest.name, packageJsonPath),
+          relativePath: relative(repositoryRoot, workspacePath),
+          dependencyNames: collectDependencyNames(manifest, packageJsonPath),
+        } satisfies WorkspaceNode,
+      ];
     });
 }
 
@@ -95,6 +115,7 @@ export function discoverWorkspaceGraph(repositoryRoot: string): readonly Workspa
 
     names.add(workspace.name);
   }
+
   return graph;
 }
 
@@ -108,12 +129,15 @@ export function discoverWorkspaceGraph(repositoryRoot: string): readonly Workspa
 export function findForbiddenWorkspaceDependencies(
   workspaces: readonly WorkspaceNode[],
 ): readonly WorkspaceDependencyViolation[] {
-  if (workspaces.length === 0) return [];
+  if (workspaces.length === 0) {
+    return [];
+  }
+
   const violations: WorkspaceDependencyViolation[] = [];
 
   for (const workspaceSource of workspaces) {
     for (const dependencyName of workspaceSource.dependencyNames) {
-      const target = workspaces.find(workspace => workspace.name === dependencyName);
+      const target = workspaces.find((workspace) => workspace.name === dependencyName);
 
       if (target !== undefined && target.kind !== 'package') {
         const violation = {

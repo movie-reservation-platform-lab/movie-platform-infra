@@ -26,13 +26,13 @@ export function loadSecurityLakePrerequisitesConfig(
   environment: NodeJS.ProcessEnv,
   auditConfig: AuditAccountConfig,
 ): SecurityLakePrerequisitesConfig {
-  const configFilepath =
-    environment[SECURITY_LAKE_PREREQUISITES_CONFIG_ENVIRONMENT_VARIABLE];
+  const configFilepath = environment[SECURITY_LAKE_PREREQUISITES_CONFIG_ENVIRONMENT_VARIABLE];
   if (configFilepath === undefined || configFilepath.length === 0) {
     throw new SecurityLakePrerequisitesConfigError(
       `${SECURITY_LAKE_PREREQUISITES_CONFIG_ENVIRONMENT_VARIABLE} must name the config file.`,
     );
   }
+
   if (!isAbsolute(configFilepath)) {
     throw new SecurityLakePrerequisitesConfigError(
       `${SECURITY_LAKE_PREREQUISITES_CONFIG_ENVIRONMENT_VARIABLE} must be an absolute path.`,
@@ -53,8 +53,8 @@ export function parseSecurityLakePrerequisitesConfigJson(
   const value = parseJsonObject(contents);
   const expectedKeys = ['bucketArn', 'region'] as const;
   if (
-    Object.keys(value).length !== expectedKeys.length
-    || !expectedKeys.every((key) => key in value)
+    Object.keys(value).length !== expectedKeys.length ||
+    !expectedKeys.every((key) => key in value)
   ) {
     throw new SecurityLakePrerequisitesConfigError(
       `Security Lake prerequisite config must contain exactly: ${expectedKeys.join(', ')}.`,
@@ -69,11 +69,7 @@ export function parseSecurityLakePrerequisitesConfigJson(
   }
 
   const bucketArn = requireString(value.bucketArn, 'bucketArn');
-  if (
-    !/^arn:(?:aws|aws-us-gov|aws-cn):s3:::[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(
-      bucketArn,
-    )
-  ) {
+  if (!/^arn:(?:aws|aws-us-gov|aws-cn):s3:::[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucketArn)) {
     throw new SecurityLakePrerequisitesConfigError(
       'bucketArn must identify one S3 bucket without an object prefix.',
     );
@@ -95,19 +91,20 @@ function parseJsonObject(contents: string): Readonly<Record<string, unknown>> {
       'Security Lake prerequisite config must contain valid JSON.',
     );
   }
+
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new SecurityLakePrerequisitesConfigError(
       'Security Lake prerequisite config must be a JSON object.',
     );
   }
+
   return parsed as Readonly<Record<string, unknown>>;
 }
 
 function requireString(value: unknown, fieldName: string): string {
   if (typeof value !== 'string' || value.length === 0 || value.trim() !== value) {
-    throw new SecurityLakePrerequisitesConfigError(
-      `${fieldName} must be a nonblank string.`,
-    );
+    throw new SecurityLakePrerequisitesConfigError(`${fieldName} must be a nonblank string.`);
   }
+
   return value;
 }

@@ -8,7 +8,12 @@ import { Construct } from 'constructs';
 import type { ObservabilityConfig } from './config/foundation-config';
 import { COMPONENTS as APPLICATION_COMPONENTS, foundationOutput } from './stack-bindings';
 
-const AMP_QUERY_ACTIONS = ['aps:GetLabels', 'aps:GetMetricMetadata', 'aps:GetSeries', 'aps:QueryMetrics'];
+const AMP_QUERY_ACTIONS = [
+  'aps:GetLabels',
+  'aps:GetMetricMetadata',
+  'aps:GetSeries',
+  'aps:QueryMetrics',
+];
 const CLOUDWATCH_METRIC_READ_ACTIONS = ['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics'];
 const CLOUDWATCH_LOG_GLOBAL_READ_ACTIONS = [
   'logs:DescribeLogGroups',
@@ -47,6 +52,7 @@ export class ObservabilityStack extends cdk.Stack {
     const tagServiceResource = (resource: Construct): void => {
       cdk.Tags.of(resource).add('Service', platformConfig.serviceName);
     };
+
     const ampWorkspace = new aps.CfnWorkspace(this, 'AmpWorkspace', {
       alias: `${platformConfig.platformName}-${platformConfig.environmentName}`,
       workspaceConfiguration: {
@@ -174,6 +180,7 @@ export class ObservabilityStack extends cdk.Stack {
           removalPolicy: cdk.RemovalPolicy.DESTROY,
         });
         tagServiceResource(logGroup);
+
         return [componentId, logGroup];
       }),
     ) as Record<(typeof APPLICATION_COMPONENTS)[number], logs.LogGroup>;
@@ -190,7 +197,6 @@ export class ObservabilityStack extends cdk.Stack {
     });
     tagServiceResource(applicationMetricsLogGroup);
 
-
     const routerLogGroup = new logs.LogGroup(this, 'AuditRouterLogGroup', {
       logGroupName: `/movie-platform/${platformConfig.environmentName}/audit-router`,
       retention: logs.RetentionDays.ONE_WEEK,
@@ -199,12 +205,16 @@ export class ObservabilityStack extends cdk.Stack {
     const rejectedAuditMetric = new logs.MetricFilter(this, 'RejectedAuditEvents', {
       logGroup: routerLogGroup,
       filterPattern: logs.FilterPattern.stringValue('$.event', '=', 'audit_router.rejected'),
-      metricNamespace: 'MoviePlatform/AuditRouter', metricName: 'RejectedEvents', metricValue: '1',
+      metricNamespace: 'MoviePlatform/AuditRouter',
+      metricName: 'RejectedEvents',
+      metricValue: '1',
     });
     new cloudwatch.Alarm(this, 'RejectedAuditEventsAlarm', {
-      alarmDescription: 'Audit router rejected an invalid event; inspect producer schema tests and router diagnostics.',
+      alarmDescription:
+        'Audit router rejected an invalid event; inspect producer schema tests and router diagnostics.',
       metric: rejectedAuditMetric.metric({ statistic: 'Sum', period: cdk.Duration.minutes(1) }),
-      threshold: 1, evaluationPeriods: 1,
+      threshold: 1,
+      evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
     new logs.LogGroup(this, 'ContainerInsightsLogGroup', {
@@ -213,12 +223,20 @@ export class ObservabilityStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
     for (const [component, group] of Object.entries(componentLogGroups)) {
-      const name = component.split('-').map(part => part[0].toUpperCase() + part.slice(1)).join('');
+      const name = component
+        .split('-')
+        .map((part) => part[0].toUpperCase() + part.slice(1))
+        .join('');
       foundationOutput(this, `${name}LogGroupName`, group.logGroupName);
     }
+
     foundationOutput(this, 'AdotLogGroupName', adotLogGroup.logGroupName);
     foundationOutput(this, 'AuditRouterLogGroupName', routerLogGroup.logGroupName);
-    foundationOutput(this, 'ApplicationMetricsLogGroupName', applicationMetricsLogGroup.logGroupName);
+    foundationOutput(
+      this,
+      'ApplicationMetricsLogGroupName',
+      applicationMetricsLogGroup.logGroupName,
+    );
     foundationOutput(this, 'AmpWorkspaceId', ampWorkspace.attrWorkspaceId);
     foundationOutput(this, 'AmpWorkspaceArn', ampWorkspace.attrArn);
     foundationOutput(this, 'AmpPrometheusEndpoint', ampWorkspace.attrPrometheusEndpoint);

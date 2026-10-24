@@ -25,10 +25,15 @@ export type FirstSeen = Readonly<Record<StoreName, ReadonlyMap<string, Date>>>;
 export function compareEvent(login: AuditedLogin, firstSeen: FirstSeen): EventComparison {
   const presence = (store: StoreName): EventPresence => {
     const seenAt = firstSeen[store].get(login.auditEventId);
+
     return seenAt === undefined
       ? { found: false, delaySeconds: null }
-      : { found: true, delaySeconds: Math.round((seenAt.getTime() - login.sentAt.getTime()) / 1000) };
+      : {
+          found: true,
+          delaySeconds: Math.round((seenAt.getTime() - login.sentAt.getTime()) / 1000),
+        };
   };
+
   return {
     auditEventId: login.auditEventId,
     expectedOutcome: login.expectedOutcome,
@@ -37,10 +42,15 @@ export function compareEvent(login: AuditedLogin, firstSeen: FirstSeen): EventCo
   };
 }
 
-export function storeStatus(error: string | null, seen: ReadonlyMap<string, Date>, ids: readonly string[]): StoreEvidence['status'] {
+export function storeStatus(
+  error: string | null,
+  seen: ReadonlyMap<string, Date>,
+  ids: readonly string[],
+): StoreEvidence['status'] {
   if (error !== null) {
     return 'error';
   }
+
   return ids.every((id) => seen.has(id)) ? 'complete' : 'incomplete';
 }
 
@@ -49,11 +59,13 @@ export function isPassed(
   events: readonly EventComparison[],
   health: DeliveryHealthEvidence,
 ): boolean {
-  return logins.every((login) => isExpectedStatus(login) && isAudited(login))
-    && events.every(({ securityLake, legacy }) => securityLake.found && legacy.found)
-    && health.error === null
-    && health.deadLetterMessages === 0
-    && health.alarmsInAlarm.length === 0;
+  return (
+    logins.every((login) => isExpectedStatus(login) && isAudited(login)) &&
+    events.every(({ securityLake, legacy }) => securityLake.found && legacy.found) &&
+    health.error === null &&
+    health.deadLetterMessages === 0 &&
+    health.alarmsInAlarm.length === 0
+  );
 }
 
 /** Every UTC day from `from` to `to`: events and deliveries can cross midnight. */
@@ -64,5 +76,6 @@ export function utcDaysBetween(from: Date, to: Date): Date[] {
     days.push(new Date(day));
     day.setUTCDate(day.getUTCDate() + 1);
   }
+
   return days;
 }

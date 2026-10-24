@@ -19,24 +19,26 @@ export class ReliableFirehoseTarget implements events.IRuleTarget {
     private readonly props: ReliableFirehoseTargetProps,
   ) {}
 
-  public bind(
-    rule: Parameters<events.IRuleTarget['bind']>[0],
-  ): events.RuleTargetConfig {
+  public bind(rule: Parameters<events.IRuleTarget['bind']>[0]): events.RuleTargetConfig {
     const role = new iam.Role(this.stream, 'EventBridgeDeliveryRole', {
       assumedBy: new iam.ServicePrincipal('events.amazonaws.com'),
       description: 'Allows EventBridge to deliver audit events to Firehose',
     });
-    role.addToPolicy(new iam.PolicyStatement({
-      actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'],
-      resources: [this.stream.attrArn],
-    }));
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'],
+        resources: [this.stream.attrArn],
+      }),
+    );
 
-    this.props.deadLetterQueue.addToResourcePolicy(new iam.PolicyStatement({
-      actions: ['sqs:SendMessage'],
-      conditions: { ArnEquals: { 'aws:SourceArn': rule.ruleRef.ruleArn } },
-      principals: [new iam.ServicePrincipal('events.amazonaws.com')],
-      resources: [this.props.deadLetterQueue.queueArn],
-    }));
+    this.props.deadLetterQueue.addToResourcePolicy(
+      new iam.PolicyStatement({
+        actions: ['sqs:SendMessage'],
+        conditions: { ArnEquals: { 'aws:SourceArn': rule.ruleRef.ruleArn } },
+        principals: [new iam.ServicePrincipal('events.amazonaws.com')],
+        resources: [this.props.deadLetterQueue.queueArn],
+      }),
+    );
 
     return {
       arn: this.stream.attrArn,

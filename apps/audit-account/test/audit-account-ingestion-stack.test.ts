@@ -16,8 +16,7 @@ const TEST_CUSTOM_SOURCE = {
     bucketName: 'aws-security-data-lake-eu-central-1-example',
     providerRoleArn:
       'arn:aws:iam::222222222222:role/AmazonSecurityLake-Provider-MOVIEAUTH-eu-central-1',
-    providerRoleName:
-      'AmazonSecurityLake-Provider-MOVIEAUTH-eu-central-1',
+    providerRoleName: 'AmazonSecurityLake-Provider-MOVIEAUTH-eu-central-1',
     sourcePrefix: 'ext/MOVIE_AUTH/1.0/',
   },
   sourceName: 'MOVIE_AUTH',
@@ -25,18 +24,15 @@ const TEST_CUSTOM_SOURCE = {
 } as const satisfies SecurityLakeCustomSourceResponse;
 
 function createIngestionTemplate(config: AuditAccountConfig = TEST_CONFIG): Template {
-  const stack = new AuditAccountIngestionStack(
-    new App(),
-    'AuditAccountIngestionStack',
-    {
-      config,
-      customSource: TEST_CUSTOM_SOURCE,
-      env: {
-        account: TEST_CONFIG.auditAccountId,
-        region: TEST_CONFIG.region,
-      },
+  const stack = new AuditAccountIngestionStack(new App(), 'AuditAccountIngestionStack', {
+    config,
+    customSource: TEST_CUSTOM_SOURCE,
+    env: {
+      account: TEST_CONFIG.auditAccountId,
+      region: TEST_CONFIG.region,
     },
-  );
+  });
+
   return Template.fromStack(stack);
 }
 
@@ -132,8 +128,12 @@ describe('AuditAccountIngestionStack', () => {
   describe('delivery alarms', () => {
     const topicAction = [{ Ref: Match.stringLikeRegexp('^AuditDeliveryAlarmsAlarmTopic') }];
 
-    function alarmsMatching(template: Template, logicalIdFragment: string): Record<string, { Properties: Record<string, unknown> }> {
+    function alarmsMatching(
+      template: Template,
+      logicalIdFragment: string,
+    ): Record<string, { Properties: Record<string, unknown> }> {
       const alarms = template.findResources('AWS::CloudWatch::Alarm');
+
       return Object.fromEntries(
         Object.entries(alarms).filter(([logicalId]) => logicalId.includes(logicalIdFragment)),
       ) as Record<string, { Properties: Record<string, unknown> }>;
@@ -146,10 +146,12 @@ describe('AuditAccountIngestionStack', () => {
       ingestionTemplate.resourceCountIs('AWS::SNS::Subscription', 0);
       ingestionTemplate.hasResourceProperties('AWS::SNS::TopicPolicy', {
         PolicyDocument: Match.objectLike({
-          Statement: Match.arrayWith([Match.objectLike({
-            Condition: { Bool: { 'aws:SecureTransport': 'false' } },
-            Effect: 'Deny',
-          })]),
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Condition: { Bool: { 'aws:SecureTransport': 'false' } },
+              Effect: 'Deny',
+            }),
+          ]),
         }),
       });
       ingestionTemplate.hasOutput('AuditDeliveryAlarmTopicArn', {
@@ -178,10 +180,12 @@ describe('AuditAccountIngestionStack', () => {
       ingestionTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
         AlarmActions: topicAction,
         ComparisonOperator: 'GreaterThanThreshold',
-        Dimensions: [{
-          Name: 'QueueName',
-          Value: { 'Fn::GetAtt': [Match.stringLikeRegexp('TargetDeadLetterQueue'), 'QueueName'] },
-        }],
+        Dimensions: [
+          {
+            Name: 'QueueName',
+            Value: { 'Fn::GetAtt': [Match.stringLikeRegexp('TargetDeadLetterQueue'), 'QueueName'] },
+          },
+        ],
         EvaluationPeriods: 1,
         MetricName: 'ApproximateNumberOfMessagesVisible',
         Namespace: 'AWS/SQS',
@@ -194,10 +198,12 @@ describe('AuditAccountIngestionStack', () => {
 
     it('alarms on stale delivery, conversion failures, and sustained throttling', () => {
       const ingestionTemplate = createIngestionTemplate();
-      const streamDimension = [{
-        Name: 'DeliveryStreamName',
-        Value: { Ref: Match.stringLikeRegexp('DeliveryStream') },
-      }];
+      const streamDimension = [
+        {
+          Name: 'DeliveryStreamName',
+          Value: { Ref: Match.stringLikeRegexp('DeliveryStream') },
+        },
+      ];
 
       ingestionTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
         AlarmActions: topicAction,
@@ -246,12 +252,19 @@ describe('AuditAccountIngestionStack', () => {
 
       ingestionTemplate.resourceCountIs('AWS::CloudWatch::Alarm', 10);
       for (const accountId of ['333333333333', '444444444444']) {
-        const producerAlarms = Object.values(alarmsMatching(ingestionTemplate, `AuditDeliveryAlarmsProducer${accountId}`));
+        const producerAlarms = Object.values(
+          alarmsMatching(ingestionTemplate, `AuditDeliveryAlarmsProducer${accountId}`),
+        );
         expect(producerAlarms).toHaveLength(5);
         for (const { Properties } of producerAlarms) {
           expect(Properties.AlarmDescription).toContain(accountId);
-          expect(Properties.Tags).toContainEqual({ Key: 'movie-platform:workload-account', Value: accountId });
-          expect(Properties.AlarmActions).toEqual([{ Ref: expect.stringMatching(/^AuditDeliveryAlarmsAlarmTopic/) }]);
+          expect(Properties.Tags).toContainEqual({
+            Key: 'movie-platform:workload-account',
+            Value: accountId,
+          });
+          expect(Properties.AlarmActions).toEqual([
+            { Ref: expect.stringMatching(/^AuditDeliveryAlarmsAlarmTopic/) },
+          ]);
         }
       }
     });
