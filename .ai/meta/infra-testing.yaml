@@ -1,3 +1,0 @@
-type: skill
-skillName: infra-testing
-description: "Use when creating, refactoring, reviewing, or explaining Jest/CDK assertion tests, shell smoke-tool self-tests, dashboard validation, and offline synth contracts in this infrastructure repository."

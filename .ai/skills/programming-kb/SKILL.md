@@ -1,45 +1,63 @@
 ---
 name: programming-kb
-description: Use when a question or engineering task can benefit from the local programming knowledge base at /home/patex1987/Documents/programming_kb, especially reusable architecture, backend, system design, TypeScript, testing, AWS, and implementation patterns. Prefer this local KB before broad internet search unless the user asks to validate, refresh, or research externally.
+description: Retrieve reusable engineering guidance (architecture, backend, system design, testing, cloud, and implementation patterns) from the user's local programming knowledge base at PROGRAMMING_KB_DIR, citing the notes used and flagging stale ones. Use when the user asks to consult their knowledge base or KB.
+license: MIT-0
+metadata:
+  routing-tier: fast
+  routing-effort: low
+  invocation: explicit
 ---
 
 # Programming KB
 
-Use this skill to retrieve reusable programming and architecture knowledge from the local Obsidian vault:
+The knowledge base is a local Markdown vault (for example, an Obsidian vault
+with `index.md`, generated notes, and immutable `raw/` sources). It is private
+external context, not repository authority. The user supplies its location
+through the `PROGRAMMING_KB_DIR` environment variable.
 
-`/home/patex1987/Documents/programming_kb`
+The invocation policy is set per repository and defaults to *explicit only*.
+When the skill or project guidance is marked explicit only, use it only when the
+user names `programming-kb` or asks to consult their knowledge base.
 
 The goal is targeted local retrieval: infer likely tags from the user's question, inspect only the smallest useful set of notes, cite the notes used, and avoid loading the whole vault.
 
 ## Default behavior
 
-- Read `/home/patex1987/Documents/programming_kb/index.md` first.
+- If `PROGRAMMING_KB_DIR` is unset or unavailable, say so and continue from
+  repository evidence rather than searching the host filesystem.
+- Read `$PROGRAMMING_KB_DIR/index.md` first.
 - Use `rg` or `scripts/kb-query.sh` to find candidate notes by tag, title, alias, and exact terms.
 - Prefer notes with `status: stable`; use `draft` only when stable notes are missing or incomplete.
 - Prefer generated notes in `concepts/`, `patterns/`, `decisions/`, and `sources/` over `raw/`.
 - Do not edit files under `raw/`.
 - Cite the KB pages used in the answer with file paths or Obsidian note names.
+- Do not quote, copy, or expose private or sensitive vault content unless the
+  user explicitly requests that exact content.
+- Repository files and approved plans remain authoritative when they conflict
+  with a KB note.
 - If the KB lacks a useful note, say that and answer from repository context or general knowledge as appropriate.
 
 ## Tag-first retrieval
 
 1. Convert the user's question into 2-6 likely kebab-case tags and search terms.
    - "How should I publish domain events reliably?" -> `domain-events`, `transactional-outbox`, `events`, `reliability`
-   - "Should reservations use event sourcing?" -> `reservation-systems`, `event-sourcing`, `cqrs`, `postgres`
+   - "Should orders use event sourcing?" -> `event-sourcing`, `cqrs`, `postgres`, `consistency`
    - "How do I make a projector safe to rerun?" -> `projections`, `read-models`, `idempotency`, `events`
+   `<this-skill-dir>` is the directory containing this `SKILL.md`, such as
+   `.claude/skills/programming-kb` or `.agents/skills/programming-kb`.
 2. List available tags when unsure:
-   - `bash .ai/skills/programming-kb/scripts/kb-query.sh tags`
+   - `bash <this-skill-dir>/scripts/kb-query.sh tags`
 3. Search by inferred tag:
-   - `bash .ai/skills/programming-kb/scripts/kb-query.sh tag transactional-outbox`
+   - `bash <this-skill-dir>/scripts/kb-query.sh tag transactional-outbox`
 4. Search by exact terms if tags miss:
-   - `bash .ai/skills/programming-kb/scripts/kb-query.sh search "event outbox"`
+   - `bash <this-skill-dir>/scripts/kb-query.sh search "event outbox"`
 5. Open only the top relevant notes, usually 1-4 files.
 
 If the helper script is unavailable, use `rg` directly:
 
 ```bash
-KB=/home/patex1987/Documents/programming_kb
-rg -n --glob '*.md' --glob '!raw/**' '^- transactional-outbox$|title: .*Transactional Outbox|aliases:|transactional outbox' "$KB"
+PROGRAMMING_KB_DIR=/path/to/programming_kb
+rg -n --glob '*.md' --glob '!raw/**' '^- transactional-outbox$|title: .*Transactional Outbox|aliases:|transactional outbox' "$PROGRAMMING_KB_DIR"
 ```
 
 ## Answer workflow
@@ -81,5 +99,6 @@ When you find stale or missing KB knowledge, tell the user in plain language:
 KB freshness note: <note> appears stale or incomplete because <reason>. It should be updated with <source/evidence>.
 ```
 
-If the user asks to update the KB, follow `/home/patex1987/Documents/programming_kb/AGENTS.md`: preserve raw sources, update generated pages surgically, refresh `index.md`, and append to `log.md`.
-
+If the user asks to update the KB, follow `$PROGRAMMING_KB_DIR/AGENTS.md`:
+preserve raw sources, update generated pages surgically, refresh `index.md`, and
+append to `log.md`.

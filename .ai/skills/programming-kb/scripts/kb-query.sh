@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-KB_DIR="${KB_DIR:-/home/patex1987/Documents/programming_kb}"
+PROGRAMMING_KB_DIR="${PROGRAMMING_KB_DIR:-}"
 COMMAND="${1:-help}"
 
 usage() {
@@ -14,13 +14,17 @@ Usage:
   kb-query.sh stale [YYYY-MM-DD]
 
 Environment:
-  KB_DIR  Defaults to /home/patex1987/Documents/programming_kb
+  PROGRAMMING_KB_DIR  Required path to the user's local programming KB
 USAGE
 }
 
 require_kb() {
-  if [ ! -d "$KB_DIR" ]; then
-    echo "KB_DIR not found: $KB_DIR" >&2
+  if [ -z "$PROGRAMMING_KB_DIR" ]; then
+    echo "PROGRAMMING_KB_DIR is not set." >&2
+    exit 2
+  fi
+  if [ ! -d "$PROGRAMMING_KB_DIR" ]; then
+    echo "PROGRAMMING_KB_DIR not found: $PROGRAMMING_KB_DIR" >&2
     exit 2
   fi
 }
@@ -41,8 +45,8 @@ frontmatter_summary() {
 
 tags() {
   require_kb
-  find "$KB_DIR" \
-    -path "$KB_DIR/raw" -prune -o \
+  find "$PROGRAMMING_KB_DIR" \
+    -path "$PROGRAMMING_KB_DIR/raw" -prune -o \
     -name '*.md' -type f -exec awk '
     /^tags:[[:space:]]*$/ { in_tags = 1; next }
     in_tags && /^[[:space:]]*-[[:space:]]+/ {
@@ -73,7 +77,7 @@ tag_search() {
   mapfile -t files < <(
     rg -l --glob '*.md' --glob '!**/raw/**' \
       "^[[:space:]]*-[[:space:]]*${tag}[[:space:]]*$" \
-      "$KB_DIR"
+      "$PROGRAMMING_KB_DIR"
   )
 
   if [ "${#files[@]}" -eq 0 ]; then
@@ -94,14 +98,14 @@ text_search() {
     exit 2
   fi
 
-  rg -n -i --glob '*.md' --glob '!**/raw/**' "$terms" "$KB_DIR"
+  rg -n -i --glob '*.md' --glob '!**/raw/**' "$terms" "$PROGRAMMING_KB_DIR"
 }
 
 stale() {
   require_kb
   local cutoff="${1:-2025-01-01}"
-  find "$KB_DIR" \
-    -path "$KB_DIR/raw" -prune -o \
+  find "$PROGRAMMING_KB_DIR" \
+    -path "$PROGRAMMING_KB_DIR/raw" -prune -o \
     -name '*.md' -type f -exec awk -v cutoff="$cutoff" '
     FNR == 1 { file = FILENAME; title = ""; status = ""; updated = "" }
     /^title:[[:space:]]*/ { title = $0; sub(/^title:[[:space:]]*/, "", title) }

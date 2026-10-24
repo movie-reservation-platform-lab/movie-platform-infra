@@ -1,41 +1,24 @@
 ---
 name: aws-cdk-iac
-description: Use when designing, implementing, reviewing, or explaining AWS CDK infrastructure in this standalone repo, including construct choices, CloudFormation output, networking, IAM, ECS/Fargate, asset publishing, tests, synth/deploy workflow, and CDK best practices.
+description: Design, implement, review, or explain AWS CDK infrastructure in TypeScript, including construct levels, synthesized CloudFormation, networking and VPC endpoints, IAM, ECS/Fargate, assets, configuration boundaries, synth/diff/deploy safety, and CDK versioning.
+license: MIT-0
+metadata:
+  routing-tier: deep
+  routing-effort: high
 ---
 
 # AWS CDK IaC
 
-Use this skill for AWS CDK work in this standalone infrastructure repository.
+Pair it with `principal-engineer-planner` before non-trivial infrastructure
+changes, `typescript` for stack props and config types, and `cdk-infra-testing`
+for assertion tests.
 
-Pair it with:
+## Before you start
 
-- `.ai/rules/teaching-mode.md` when explaining CDK concepts.
-- `.ai/skills/principal-engineer-planner/SKILL.md` before non-trivial infrastructure changes.
-- `.ai/skills/typescript/SKILL.md` when changing TypeScript types, stack props, config boundaries, or tests.
-
-## Repository Context
-
-This repository uses a standalone npm package CDK app:
-
-```text
-bin/infra.ts
-lib/
-test/
-adot-collector/
-grafana/dashboards/
-cdk.json
-package.json
-```
-
-Run CDK commands from the repository root through npm scripts:
-
-```bash
-npm run build
-npm test
-npm run cdk -- synth -c allowedIngressCidr=203.0.113.10/32 -c applicationImageReference=<account>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<digest> -c applicationServiceVersion=<release-id>
-```
-
-Do not assume a global `cdk` binary.
+Find how this repository runs CDK: the app entrypoint (`cdk.json` `app`), the
+package scripts for build, test, and synth, and the required context values.
+Run CDK through the repository's scripts or a local `npx cdk`, not a global
+`cdk` binary. Record the commands you used.
 
 ## Core Mental Model
 
@@ -55,7 +38,7 @@ balancer configuration.
 
 AWS service behavior, CDK APIs, and package versions change frequently.
 
-Use the installed package types first when implementing against this repository:
+Use the installed package types first:
 
 ```bash
 rg -n "interface FargateServiceProps" node_modules/aws-cdk-lib
@@ -87,7 +70,7 @@ practical rule is: keep the CLI new enough to understand the cloud assembly
 schema emitted by the construct library. Newer CLI versions are generally the
 safe direction.
 
-For this repository, check versions with:
+Check versions with:
 
 ```bash
 npm outdated
@@ -108,8 +91,8 @@ Choose construct level deliberately:
   hide details that are important for learning, security review, or unusual
   networking.
 
-In this learning repo, explicit L2 composition is often better than an L3
-pattern for first implementations. Extract custom constructs only after the
+Explicit L2 composition is often better than an L3 pattern for a first
+implementation, for learning, and for security review. Extract custom constructs only after the
 resource graph works and the duplication is real.
 
 ## Naming Guidance
@@ -143,8 +126,8 @@ export interface PlatformConfig {
 }
 ```
 
-This is the infrastructure equivalent of the service's Zod config boundary:
-normalize once, pass typed data inward.
+Normalise once, validate, and pass typed data inward, as you would for an
+application's configuration boundary.
 
 ## Networking Guidance
 
@@ -170,7 +153,7 @@ Prometheus remote write.
 
 ## IAM Guidance
 
-Use the narrowest practical permissions at the current learning stage:
+Use the narrowest practical permissions:
 
 - Prefer CDK grant methods when a resource exposes them.
 - Keep task execution role and task role responsibilities distinct.
@@ -186,10 +169,7 @@ CDK Docker image assets hash the Docker build context. Keep `.dockerignore`
 accurate so docs, generated output, local tool directories, and unrelated
 workspaces do not perturb image hashes or slow synth/deploy.
 
-For this repository, the owned Docker image assets live in `adot-collector/`
-(telemetry collector) and `audit-router/` (FireLens/Fluent Bit routing).
-Application images are external artifacts supplied by digest-pinned private ECR
-references.
+Prefer digest-pinned image references for application images built elsewhere.
 
 ## Testing Guidance
 
@@ -210,19 +190,10 @@ subject under test.
 
 ## Validation Workflow
 
-Use the narrowest useful loop while editing:
-
-```bash
-npm run build
-npm test
-npm run synth:ecr-contract
-```
-
-For a broader helper, use:
-
-```bash
-.ai/skills/aws-cdk-iac/scripts/validate-stack.sh
-```
+Use the narrowest useful loop while editing: build (type-check), run the
+assertion tests, then synthesise with the required context values. Inspect the
+synthesised template for the resources you changed. Use `cdk diff` against a
+real environment only when the user has authorised access to it.
 
 ## Deployment Safety
 
@@ -239,4 +210,4 @@ operation.
 
 ## Reference Material
 
-Read `references/cdk-patterns.md` only when deeper pattern examples are useful.
+Read [references/cdk-patterns.md](references/cdk-patterns.md) only when deeper pattern examples are useful.
