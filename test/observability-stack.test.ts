@@ -21,10 +21,12 @@ function actions(statement: { readonly Action: string | string[] }): string[] {
 describe('ObservabilityStack (default configuration)', () => {
   let template: Template;
   beforeAll(() => {
-    template = Template.fromStack(new ObservabilityStack(new cdk.App(), 'ObservabilityTest', {
-      env: { account: '111111111111', region: 'eu-central-1' },
-      config: resolveObservabilityConfig({ allowedIngressPrefixListId: 'pl-0123456789abcdef0' }),
-    }));
+    template = Template.fromStack(
+      new ObservabilityStack(new cdk.App(), 'ObservabilityTest', {
+        env: { account: '111111111111', region: 'eu-central-1' },
+        config: resolveObservabilityConfig({ allowedIngressPrefixListId: 'pl-0123456789abcdef0' }),
+      }),
+    );
   });
 
   describe('log groups', () => {
@@ -35,6 +37,7 @@ describe('ObservabilityStack (default configuration)', () => {
       for (const component of APPLICATION_COMPONENT_INPUTS) {
         expect(names).toContain(`/movie-platform/aws-demo/${component.componentId}/app`);
       }
+
       expect(names).toEqual(
         expect.arrayContaining([
           '/movie-platform/aws-demo/adot',
@@ -62,7 +65,10 @@ describe('ObservabilityStack (default configuration)', () => {
         String(Properties?.PolicyName).includes('GrafanaDataAccessPolicy'),
       );
       const document = grafanaPolicy?.Properties?.PolicyDocument as {
-        readonly Statement: Array<{ readonly Action: string | string[]; readonly Resource: unknown }>;
+        readonly Statement: Array<{
+          readonly Action: string | string[];
+          readonly Resource: unknown;
+        }>;
       };
       const allActions = document.Statement.flatMap(actions);
       expect(allActions).toEqual(
@@ -77,25 +83,33 @@ describe('ObservabilityStack (default configuration)', () => {
       );
       expect(allActions.some((action) => /Put|Create|Delete|Update/.test(action))).toBe(false);
       expect(allActions.some((action) => action.includes('*'))).toBe(false);
-      const scopedLogs = document.Statement.find(({ Action }) => actions({ Action }).includes('logs:StartQuery'));
-      expect(JSON.stringify(scopedLogs?.Resource)).toContain('/movie-platform/aws-demo/reservation-agent/app');
+      const scopedLogs = document.Statement.find(({ Action }) =>
+        actions({ Action }).includes('logs:StartQuery'),
+      );
+      expect(JSON.stringify(scopedLogs?.Resource)).toContain(
+        '/movie-platform/aws-demo/reservation-agent/app',
+      );
       expect(scopedLogs?.Resource).not.toBe('*');
-      const xray = document.Statement.find(({ Action }) => actions({ Action }).includes('xray:BatchGetTraces'));
+      const xray = document.Statement.find(({ Action }) =>
+        actions({ Action }).includes('xray:BatchGetTraces'),
+      );
       expect(xray?.Resource).toBe('*');
       expect(xray).toMatchObject({ Effect: 'Allow' });
       const xrayActions = allActions.filter((action) => action.startsWith('xray:'));
-      expect(xrayActions.sort()).toEqual([
-        'xray:BatchGetTraces',
-        'xray:GetGroups',
-        'xray:GetInsight',
-        'xray:GetInsightEvents',
-        'xray:GetInsightImpactGraph',
-        'xray:GetInsightSummaries',
-        'xray:GetServiceGraph',
-        'xray:GetTimeSeriesServiceStatistics',
-        'xray:GetTraceGraph',
-        'xray:GetTraceSummaries',
-      ].sort());
+      expect(xrayActions.sort()).toEqual(
+        [
+          'xray:BatchGetTraces',
+          'xray:GetGroups',
+          'xray:GetInsight',
+          'xray:GetInsightEvents',
+          'xray:GetInsightImpactGraph',
+          'xray:GetInsightSummaries',
+          'xray:GetServiceGraph',
+          'xray:GetTimeSeriesServiceStatistics',
+          'xray:GetTraceGraph',
+          'xray:GetTraceSummaries',
+        ].sort(),
+      );
       expect(xray).toMatchObject({ Action: expect.arrayContaining(['xray:GetGroups']) });
     });
   });

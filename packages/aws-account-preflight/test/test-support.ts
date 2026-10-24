@@ -1,11 +1,4 @@
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { runCli } from '../src';
@@ -90,8 +83,7 @@ export function runFixturePreflight(
     AWS_STUB_PROFILE_REGION: 'eu-central-1',
     AWS_STUB_SSO_REGION: 'eu-central-1',
     AWS_STUB_CALLER_ACCOUNT: EXPECTED_ACCOUNT_ID,
-    AWS_STUB_CALLER_ARN:
-      `arn:aws:sts::${EXPECTED_ACCOUNT_ID}:assumed-role/${EXPECTED_ROLE_NAME}/${SESSION_NAME}`,
+    AWS_STUB_CALLER_ARN: `arn:aws:sts::${EXPECTED_ACCOUNT_ID}:assumed-role/${EXPECTED_ROLE_NAME}/${SESSION_NAME}`,
     AWS_STUB_AWS_MARKER: fixture.awsMarker,
     AWS_STUB_STS_MARKER: fixture.stsMarker,
   };
@@ -99,6 +91,7 @@ export function runFixturePreflight(
   for (const variableName of CREDENTIAL_ENVIRONMENT_VARIABLES) {
     delete environment[variableName];
   }
+
   Object.assign(environment, envOverrides);
   for (const [key, value] of Object.entries(envOverrides)) {
     if (value === undefined) {

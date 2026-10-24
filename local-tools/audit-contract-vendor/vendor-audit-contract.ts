@@ -39,14 +39,8 @@ export interface VendorAuditContractOptions {
  * is changed. The copied artifact hashes and producer revision are then written
  * to provenance.json so offline CI can verify the committed contract later.
  */
-export function vendorAuditContract(
-  options: VendorAuditContractOptions,
-): void {
-  const {
-    destinationContractDirectory,
-    sourceBundleDirectory,
-    sourceRevision,
-  } = options;
+export function vendorAuditContract(options: VendorAuditContractOptions): void {
+  const { destinationContractDirectory, sourceBundleDirectory, sourceRevision } = options;
 
   if (!/^[0-9a-f]{40}$/.test(sourceRevision)) {
     throw new Error('Source revision must be a 40-character lowercase Git SHA.');
@@ -55,9 +49,7 @@ export function vendorAuditContract(
   const manifestRawContent = readFileSync(join(sourceBundleDirectory, 'manifest.json'), 'utf8');
   const manifest = JSON.parse(manifestRawContent) as { readonly contract?: unknown };
   if (manifest.contract !== 'platform-audit/1') {
-    throw new Error(
-      `${basename(sourceBundleDirectory)} is not a platform-audit/1 bundle.`,
-    );
+    throw new Error(`${basename(sourceBundleDirectory)} is not a platform-audit/1 bundle.`);
   }
 
   const artifacts = CONTRACT_ARTIFACTS.map((relativePath) => ({
@@ -66,25 +58,25 @@ export function vendorAuditContract(
   }));
   const provenancePath = join(destinationContractDirectory, 'provenance.json');
   const provenanceRawContent = readFileSync(provenancePath, 'utf8');
-  const provenance = JSON.parse(provenanceRawContent,) as Provenance;
+  const provenance = JSON.parse(provenanceRawContent) as Provenance;
   const hashes: Record<string, string> = {};
 
   for (const { contents, relativePath } of artifacts) {
-    const destinationPath = join(
-      destinationContractDirectory,
-      'bundle',
-      relativePath,
-    );
+    const destinationPath = join(destinationContractDirectory, 'bundle', relativePath);
     mkdirSync(dirname(destinationPath), { recursive: true });
     writeFileSync(destinationPath, contents);
     hashes[relativePath] = createHash('sha256').update(contents).digest('hex');
   }
 
-  const serializedDestionationProvenance = JSON.stringify({
-    ...provenance,
-    artifact_sha256: hashes,
-    source_revision: sourceRevision,
-  }, null, 2)
+  const serializedDestionationProvenance = JSON.stringify(
+    {
+      ...provenance,
+      artifact_sha256: hashes,
+      source_revision: sourceRevision,
+    },
+    null,
+    2,
+  );
   const destinationProvenanceContent = `${serializedDestionationProvenance}\n`;
   writeFileSync(provenancePath, destinationProvenanceContent);
 }

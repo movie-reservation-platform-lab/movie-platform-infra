@@ -53,7 +53,9 @@ function cloudWatchDeclarations(): readonly CloudWatchDeclaration[] {
   const block = config
     .split('    metric_declarations:\n', 2)[1]
     ?.split('  prometheusremotewrite/application:\n', 1)[0];
-  if (block === undefined) throw new Error('missing CloudWatch metric declarations');
+  if (block === undefined) {
+    throw new Error('missing CloudWatch metric declarations');
+  }
 
   return block
     .split('      - dimensions:\n')
@@ -62,8 +64,9 @@ function cloudWatchDeclarations(): readonly CloudWatchDeclaration[] {
       const lines = declaration.split('\n');
       const dimensions = lines[0]?.match(/^          - \[(.*)]$/)?.[1]?.split(', ') ?? [];
       const selectors = lines
-        .filter(line => line.startsWith('          - ^'))
-        .map(line => line.slice('          - ^'.length, -1));
+        .filter((line) => line.startsWith('          - ^'))
+        .map((line) => line.slice('          - ^'.length, -1));
+
       return { dimensions, selectors };
     });
 }
@@ -79,7 +82,10 @@ test('routes every evidenced producer through one unique private OTLP receiver',
   expect(overlay).toContain(`      receivers: ${traceReceiverList}\n`);
 
   for (const producer of fixture.producers) {
-    const evidence = [producer.evidence, ...producer.metrics.flatMap(({ evidence }) => evidence ?? [])];
+    const evidence = [
+      producer.evidence,
+      ...producer.metrics.flatMap(({ evidence }) => evidence ?? []),
+    ];
     for (const { url, mergeCommit, source } of evidence) {
       expect(url).toMatch(/^https:\/\/github\.com\/movie-reservation-platform-lab\/.+\/pull\/\d+$/);
       expect(mergeCommit).toMatch(/^[0-9a-f]{40}$/);
@@ -137,7 +143,10 @@ test('maps every emitted metric to its exact bounded CloudWatch dimensions', () 
         expect(metric.attributes).toContain(dimension);
       }
     }
-    expect(actualDimensionsByMetric.get(escapeRegex(metric.name))).toEqual(metric.cloudWatchDimensions);
+
+    expect(actualDimensionsByMetric.get(escapeRegex(metric.name))).toEqual(
+      metric.cloudWatchDimensions,
+    );
   }
 });
 

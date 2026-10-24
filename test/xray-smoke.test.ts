@@ -196,6 +196,7 @@ function parseReport(stdout: string): SmokeReport {
   if (reportLine === undefined) {
     throw new Error(`smoke output did not contain a JSON report: ${stdout}`);
   }
+
   return JSON.parse(reportLine) as SmokeReport;
 }
 

@@ -8,14 +8,17 @@ test('runs its pure helper self-test without a target file or AWS credentials', 
   expect(result.stdout).toBe('AWS account preflight self-test passed\n');
 });
 
-test.each([['--help'], ['-h']])('prints standard help for %s without loading a target', (argument) => {
-  const result = runPreflightProcess([argument], {});
+test.each([['--help'], ['-h']])(
+  'prints standard help for %s without loading a target',
+  (argument) => {
+    const result = runPreflightProcess([argument], {});
 
-  expect(result.status).toBe(0);
-  expect(result.stderr).toBe('');
-  expect(result.stdout).toContain('Usage: aws-account-preflight [--self-test]');
-  expect(result.stdout).toContain('aws-target.json');
-});
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toContain('Usage: aws-account-preflight [--self-test]');
+    expect(result.stdout).toContain('aws-target.json');
+  },
+);
 
 test('rejects unknown options through the standard Node argument parser', () => {
   const result = runPreflightProcess(['--unknown'], {});

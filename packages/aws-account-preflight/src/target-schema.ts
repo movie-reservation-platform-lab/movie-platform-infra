@@ -66,12 +66,15 @@ function validateAwsTarget(value: unknown): AwsTarget {
   if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(profile)) {
     fail('the target profile has an unsupported format');
   }
+
   if (region !== REQUIRED_AWS_REGION) {
     fail(`the target region must be ${REQUIRED_AWS_REGION}`);
   }
+
   if (!/^[0-9]{12}$/.test(accountId)) {
     fail('the target accountId must contain exactly 12 digits');
   }
+
   if (!/^AWSReservedSSO_[A-Za-z0-9+=,.@_-]+_[0-9a-fA-F]{16}$/.test(expectedRoleName)) {
     fail('the target expectedRoleName must be an exact generated IAM Identity Center role name');
   }
@@ -92,5 +95,6 @@ function requireString(value: Readonly<Record<string, unknown>>, key: TargetKey)
   if (typeof field !== 'string') {
     fail(`the target ${key} must be a string`);
   }
+
   return field;
 }

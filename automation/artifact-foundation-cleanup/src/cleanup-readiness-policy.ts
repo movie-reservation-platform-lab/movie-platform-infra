@@ -1,8 +1,4 @@
-import {
-  CLEANUP_BLOCKER_CODES,
-  CLEANUP_READINESS,
-  CLEANUP_WARNING_CODES,
-} from './model';
+import { CLEANUP_BLOCKER_CODES, CLEANUP_READINESS, CLEANUP_WARNING_CODES } from './model';
 import type {
   ArtifactRepositoryDefinition,
   ArtifactRepositoryInspection,
@@ -27,9 +23,7 @@ export interface CleanupReadinessAssessment {
 }
 
 /** Applies the final-cleanup safety rules to already-inspected AWS state. */
-export function evaluateCleanupReadiness(
-  input: CleanupReadinessInput,
-): CleanupReadinessAssessment {
+export function evaluateCleanupReadiness(input: CleanupReadinessInput): CleanupReadinessAssessment {
   const blockers = findBlockingIssues(input);
   const warnings = findAdvisoryIssues(input);
 
@@ -56,6 +50,7 @@ function findBlockingIssues({
       ),
     );
   }
+
   if (foundationStack?.status.endsWith('_IN_PROGRESS') === true) {
     blockers.push(
       createInspectionIssue(
@@ -64,6 +59,7 @@ function findBlockingIssues({
       ),
     );
   }
+
   if (foundationStack !== undefined) {
     blockers.push(...findFoundationRepositoryBlockers(foundationStack, repositories));
   }
@@ -143,6 +139,7 @@ function findAdvisoryIssues({
         ),
       );
     }
+
     if (repository !== undefined) {
       warnings.push(...findRepositoryDriftWarnings(definition, repository));
     }
@@ -167,6 +164,7 @@ function findRepositoryDriftWarnings(
       ),
     );
   }
+
   if (repository.tagMutabilityExclusions.length > 0) {
     warnings.push(
       createInspectionIssue(
@@ -176,6 +174,7 @@ function findRepositoryDriftWarnings(
       ),
     );
   }
+
   if (repository.scanOnPush === true) {
     warnings.push(
       createInspectionIssue(
@@ -193,6 +192,7 @@ function findRepositoryDriftWarnings(
       ),
     );
   }
+
   if (repository.encryptionType !== 'AES256') {
     warnings.push(
       createInspectionIssue(
@@ -202,6 +202,7 @@ function findRepositoryDriftWarnings(
       ),
     );
   }
+
   if (!matchesExpectedLifecyclePolicy(repository.lifecyclePolicyText)) {
     warnings.push(
       createInspectionIssue(
@@ -211,6 +212,7 @@ function findRepositoryDriftWarnings(
       ),
     );
   }
+
   if (!hasExactTags(repository.tags, definition.expectedTags)) {
     warnings.push(
       createInspectionIssue(
@@ -231,12 +233,14 @@ function determineReadiness(
   if (blockers.length > 0) {
     return CLEANUP_READINESS.BLOCKED;
   }
+
   if (
     foundationStack === undefined &&
     repositories.every(({ repository }) => repository === undefined)
   ) {
     return CLEANUP_READINESS.NOTHING_TO_CLEAN;
   }
+
   return CLEANUP_READINESS.READY;
 }
 
@@ -248,6 +252,7 @@ function createInspectionIssue<Code extends string>(
   if (componentId === undefined) {
     return Object.freeze({ code, message });
   }
+
   return Object.freeze({ code, componentId, message });
 }
 
@@ -261,9 +266,7 @@ function hasExactTags(
   expectedTags: Readonly<Record<string, string>>,
 ): boolean {
   const expectedEntries = Object.entries(expectedTags);
-  const operatorManagedEntries = Object.entries(tags).filter(
-    ([key]) => !key.startsWith('aws:'),
-  );
+  const operatorManagedEntries = Object.entries(tags).filter(([key]) => !key.startsWith('aws:'));
 
   return (
     operatorManagedEntries.length === expectedEntries.length &&
@@ -287,6 +290,7 @@ function matchesExpectedLifecyclePolicy(policyText: string | undefined): boolean
   if (!isRecord(value) || !Array.isArray(value.rules) || value.rules.length !== 1) {
     return false;
   }
+
   const rule = value.rules[0];
   if (!isRecord(rule) || !isRecord(rule.selection) || !isRecord(rule.action)) {
     return false;

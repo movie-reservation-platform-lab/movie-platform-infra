@@ -5,8 +5,14 @@ export interface AuditConfig {
 }
 
 function contextBoolean(value: unknown, key: string): boolean {
-  if (value === undefined || value === false || value === 'false') return false;
-  if (value === true || value === 'true') return true;
+  if (value === undefined || value === false || value === 'false') {
+    return false;
+  }
+
+  if (value === true || value === 'true') {
+    return true;
+  }
+
   throw new Error(`CDK context "${key}" must be true or false.`);
 }
 
@@ -22,12 +28,17 @@ export function resolveAuditConfig(context: {
   ) {
     throw new Error('auditRetentionDays must be an integer from 1 through 3650.');
   }
+
   const days = Number(retentionInput);
   if (!Number.isInteger(days) || days < 1 || days > 3650) {
     throw new Error('auditRetentionDays must be an integer from 1 through 3650.');
   }
+
   return {
-    allowAuditDataDeletion: contextBoolean(context.allowAuditDataDeletion, 'allowAuditDataDeletion'),
+    allowAuditDataDeletion: contextBoolean(
+      context.allowAuditDataDeletion,
+      'allowAuditDataDeletion',
+    ),
     auditRetentionDays: days,
   };
 }

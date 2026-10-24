@@ -1,7 +1,4 @@
-import type {
-  AwsTarget,
-  ValidatedAwsAccess,
-} from '@movie-platform/aws-account-preflight';
+import type { AwsTarget, ValidatedAwsAccess } from '@movie-platform/aws-account-preflight';
 import { ARTIFACT_FOUNDATION_REPOSITORIES } from '../../../lib/artifact-foundation-repositories';
 import {
   ARTIFACT_FOUNDATION_STACK_NAME,
@@ -181,12 +178,13 @@ export function createReader(state: ReaderState): ArtifactFoundationReader {
       if (stackName === WORKLOAD_STACK_NAME) {
         return state.workloadStack;
       }
+
       if (stackName === ARTIFACT_FOUNDATION_STACK_NAME) {
         return state.foundationStack;
       }
+
       throw new Error(`Unexpected test stack name: ${stackName}`);
     },
-    inspectRepository: async (definition) =>
-      repositoriesByComponentId.get(definition.componentId),
+    inspectRepository: async (definition) => repositoriesByComponentId.get(definition.componentId),
   };
 }

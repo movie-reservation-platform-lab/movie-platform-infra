@@ -39,7 +39,11 @@ export interface CliDependencies {
   loadCredentials(path: string): DemoCredentials;
   validateAccess(targetFile: string, environment: NodeJS.ProcessEnv): ValidatedAwsAccess;
   verifySdkIdentity(access: ValidatedAwsAccess, label: string): Promise<void>;
-  createComparisonDependencies(config: RunConfig, workload: ValidatedAwsAccess, audit: ValidatedAwsAccess): ComparisonDependencies;
+  createComparisonDependencies(
+    config: RunConfig,
+    workload: ValidatedAwsAccess,
+    audit: ValidatedAwsAccess,
+  ): ComparisonDependencies;
   writeEvidence(path: string, contents: string): void;
   /** Evidence must never be written inside this public repository. */
   readonly repositoryRoot: string;
@@ -63,14 +67,18 @@ export async function runCli(
     const runFile = parseRunFileArgument(arguments_);
     if (runFile === null) {
       streams.stdout(USAGE);
+
       return EXIT_CODES.passed;
     }
+
     prepared = await prepareRun(runFile, environment, dependencies);
   } catch (error) {
     if (INPUT_ERRORS.some((type) => error instanceof type)) {
       streams.stderr(`audit transport comparison: ${describeError(error)}\n\n${USAGE}`);
+
       return EXIT_CODES.invalidInput;
     }
+
     throw error;
   }
 
@@ -81,10 +89,13 @@ export async function runCli(
     dependencies.writeEvidence(config.output, `${JSON.stringify(result, null, 2)}\n`);
   } catch (error) {
     streams.stderr(`audit transport comparison: evidence not written: ${describeError(error)}\n`);
+
     return EXIT_CODES.unexpectedError;
   }
+
   // The output path is private (it names the operator's directories), so it is not echoed.
-  streams.stdout('Evidence written to the run file\'s output path.\n');
+  streams.stdout("Evidence written to the run file's output path.\n");
+
   return result.status === 'passed' ? EXIT_CODES.passed : EXIT_CODES.comparisonFailed;
 }
 
@@ -108,12 +119,15 @@ function parseRunFileArgument(arguments_: readonly string[]): string | null {
     // parseArgs messages echo the offending argument; keep them out of the output.
     throw new UsageError('unsupported arguments');
   }
+
   if (values.help === true) {
     return null;
   }
+
   if (values['run-file'] === undefined) {
     throw new UsageError('--run-file is required');
   }
+
   return values['run-file'];
 }
 
@@ -132,16 +146,24 @@ async function prepareRun(
   if (workload.target.accountId === audit.target.accountId) {
     throw new UsageError('the workload and audit targets must be different accounts');
   }
+
   const queue = queueUrlLocation(config.deliveryHealth.deadLetterQueueUrl);
   if (queue.accountId !== audit.target.accountId || queue.region !== audit.target.region) {
-    throw new UsageError('deliveryHealth.deadLetterQueueUrl must belong to the audit target account and Region');
+    throw new UsageError(
+      'deliveryHealth.deadLetterQueueUrl must belong to the audit target account and Region',
+    );
   }
+
   await dependencies.verifySdkIdentity(workload, 'workload');
   await dependencies.verifySdkIdentity(audit, 'audit');
 
   return {
     config,
-    context: { credentials, workloadAccountId: workload.target.accountId, region: workload.target.region },
+    context: {
+      credentials,
+      workloadAccountId: workload.target.accountId,
+      region: workload.target.region,
+    },
     comparisonDependencies: dependencies.createComparisonDependencies(config, workload, audit),
   };
 }

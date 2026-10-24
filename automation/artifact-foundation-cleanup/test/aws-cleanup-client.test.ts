@@ -51,14 +51,17 @@ test('sends only the exact approved AWS SDK v3 mutation commands', async () => {
     TEST_TARGET,
     cloudFormationClient(async (command) => {
       cloudFormationCommands.push(command);
+
       return {};
     }),
     ecrClient(async (command) => {
       ecrCommands.push(command);
+
       return {};
     }),
     stsClient(async (command) => {
       stsCommands.push(command);
+
       return {
         Account: TEST_TARGET.accountId,
         Arn:

@@ -16,16 +16,12 @@ function serialize(rawValue: unknown): string {
 }
 
 function expectInvalidConfig(rawValue: unknown): void {
-  expect(() => parseAuditAccountConfigJson(serialize(rawValue))).toThrow(
-    AuditAccountConfigError,
-  );
+  expect(() => parseAuditAccountConfigJson(serialize(rawValue))).toThrow(AuditAccountConfigError);
 }
 
 describe('audit-account configuration', () => {
   test('accepts a valid account topology', () => {
-    expect(parseAuditAccountConfigJson(serialize(VALID_CONFIG))).toEqual(
-      VALID_CONFIG,
-    );
+    expect(parseAuditAccountConfigJson(serialize(VALID_CONFIG))).toEqual(VALID_CONFIG);
   });
 
   test.each([
@@ -91,9 +87,7 @@ describe('audit-account configuration', () => {
   });
 
   test('rejects invalid JSON', () => {
-    expect(() => parseAuditAccountConfigJson('{')).toThrow(
-      AuditAccountConfigError,
-    );
+    expect(() => parseAuditAccountConfigJson('{')).toThrow(AuditAccountConfigError);
   });
 
   test.each([

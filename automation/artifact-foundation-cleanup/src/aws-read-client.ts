@@ -79,6 +79,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
     if (response.Account === undefined || response.Arn === undefined) {
       failInspection('STS returned an unexpected caller identity shape');
     }
+
     validateAwsCallerIdentity(this.target, response.Account, response.Arn);
   }
 
@@ -96,6 +97,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
       if (isMissingStackError(error)) {
         return undefined;
       }
+
       failInspection('unable to inspect the CloudFormation stack');
     }
 
@@ -126,6 +128,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
       if (hasErrorName(error, 'RepositoryNotFoundException')) {
         return undefined;
       }
+
       failInspection('unable to inspect the ECR repository');
     }
 
@@ -168,7 +171,9 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
   /**
    * Reads repository tags into a deterministic map used by drift checks.
    */
-  private async readRepositoryTags(repositoryArn: string): Promise<Readonly<Record<string, string>>> {
+  private async readRepositoryTags(
+    repositoryArn: string,
+  ): Promise<Readonly<Record<string, string>>> {
     let response;
     try {
       response = await this.ecr.send(
@@ -183,9 +188,12 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
       if (tag.Key === undefined || tag.Value === undefined) {
         failInspection('ECR returned an unexpected repository tag');
       }
+
       tags.push([tag.Key, tag.Value]);
     }
+
     tags.sort(([left], [right]) => left.localeCompare(right));
+
     return Object.freeze(Object.fromEntries(tags));
   }
 
@@ -202,11 +210,13 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
           repositoryName: definition.repositoryName,
         }),
       );
+
       return response.lifecyclePolicyText;
     } catch (error: unknown) {
       if (hasErrorName(error, 'LifecyclePolicyNotFoundException')) {
         return undefined;
       }
+
       failInspection('unable to inspect the ECR lifecycle policy');
     }
   }
@@ -243,9 +253,11 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
       if (nextToken === undefined) {
         return groupImagesByDigest(imageIdentifiers);
       }
+
       if (seenTokens.has(nextToken)) {
         failInspection('ECR returned a repeated image pagination token');
       }
+
       seenTokens.add(nextToken);
     }
 
@@ -286,6 +298,7 @@ function stackArnMatchesTarget(stackId: string, expectedName: string, target: Aw
   const match = /^arn:[^:]+:cloudformation:([^:]+):([0-9]{12}):stack\/([^/]+)\/[^/]+$/.exec(
     stackId,
   );
+
   return (
     match !== null &&
     match[1] === target.region &&
@@ -338,6 +351,7 @@ function repositoryArnMatchesTarget(
   definition: ArtifactRepositoryDefinition,
 ): boolean {
   const match = /^arn:[^:]+:ecr:([^:]+):([0-9]{12}):repository\/(.+)$/.exec(arn);
+
   return (
     match !== null &&
     match[1] === target.region &&
@@ -361,17 +375,21 @@ function repositoryUriMatchesTarget(
 /**
  * Collapses ECR's one-row-per-tag image listing into one report row per digest.
  */
-function groupImagesByDigest(imageIdentifiers: readonly ImageIdentifier[]): readonly ImageInspection[] {
+function groupImagesByDigest(
+  imageIdentifiers: readonly ImageIdentifier[],
+): readonly ImageInspection[] {
   const tagsByDigest = new Map<string, Set<string>>();
 
   for (const image of imageIdentifiers) {
     if (image.imageDigest === undefined || !/^sha256:[0-9a-f]{64}$/.test(image.imageDigest)) {
       failInspection('ECR returned an unexpected image digest');
     }
+
     const tags = tagsByDigest.get(image.imageDigest) ?? new Set<string>();
     if (image.imageTag !== undefined) {
       tags.add(image.imageTag);
     }
+
     tagsByDigest.set(image.imageDigest, tags);
   }
 
@@ -394,9 +412,6 @@ function isMissingStackError(error: unknown): boolean {
 /** Checks AWS SDK service exception names while keeping caught errors typed as unknown. */
 function hasErrorName(error: unknown, expectedName: string): boolean {
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'name' in error &&
-    error.name === expectedName
+    typeof error === 'object' && error !== null && 'name' in error && error.name === expectedName
   );
 }

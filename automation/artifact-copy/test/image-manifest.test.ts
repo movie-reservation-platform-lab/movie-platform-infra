@@ -1,7 +1,4 @@
-import {
-  ARTIFACT_COPY_FAILURE_CODE,
-  ArtifactCopyFailure,
-} from '../src/artifact-copy-error';
+import { ARTIFACT_COPY_FAILURE_CODE, ArtifactCopyFailure } from '../src/artifact-copy-error';
 import {
   DOCKER_V2_IMAGE_MANIFEST_MEDIA_TYPE,
   assertEquivalentImageManifests,
@@ -9,12 +6,7 @@ import {
   inspectRawImageManifest,
 } from '../src/image-manifest';
 import type { ImageManifestIdentity } from '../src/model';
-import {
-  CONFIG_DIGEST,
-  LAYER_DIGEST_A,
-  LAYER_DIGEST_B,
-  createImageManifest,
-} from './test-support';
+import { CONFIG_DIGEST, LAYER_DIGEST_A, LAYER_DIGEST_B, createImageManifest } from './test-support';
 
 test('hashes and reads an exact OCI single-image manifest', () => {
   const rawManifest = createImageManifest();
@@ -62,10 +54,12 @@ test.each([
 
   expect(() =>
     inspectRawImageManifest(rawManifest, calculateSha256Digest(rawManifest), 'source'),
-  ).toThrow(expect.objectContaining({
-    code: ARTIFACT_COPY_FAILURE_CODE.MANIFEST_INVALID,
-    message: 'source mediaType is not a supported single-image manifest',
-  }));
+  ).toThrow(
+    expect.objectContaining({
+      code: ARTIFACT_COPY_FAILURE_CODE.MANIFEST_INVALID,
+      message: 'source mediaType is not a supported single-image manifest',
+    }),
+  );
 });
 
 test.each([
@@ -75,21 +69,13 @@ test.each([
     Buffer.from([0x7b, 0x22, 0x78, 0x22, 0x3a, 0x22, 0xff, 0x22, 0x7d]),
     'manifest is not valid UTF-8',
   ],
-  [
-    'schema version',
-    createImageManifest({ schemaVersion: 1 }),
-    'schemaVersion must equal 2',
-  ],
+  ['schema version', createImageManifest({ schemaVersion: 1 }), 'schemaVersion must equal 2'],
   [
     'config descriptor',
     createImageManifest({ config: null }),
     'config must be a descriptor object',
   ],
-  [
-    'layers collection',
-    createImageManifest({ layers: null }),
-    'layers must be an array',
-  ],
+  ['layers collection', createImageManifest({ layers: null }), 'layers must be an array'],
   [
     'layer digest',
     createImageManifest({
@@ -107,10 +93,12 @@ test.each([
 ])('rejects malformed %s with a sanitized reason', (_name, rawManifest, reason) => {
   expect(() =>
     inspectRawImageManifest(rawManifest, calculateSha256Digest(rawManifest), 'source'),
-  ).toThrow(expect.objectContaining({
-    code: ARTIFACT_COPY_FAILURE_CODE.MANIFEST_INVALID,
-    message: `source ${reason}`,
-  }));
+  ).toThrow(
+    expect.objectContaining({
+      code: ARTIFACT_COPY_FAILURE_CODE.MANIFEST_INVALID,
+      message: `source ${reason}`,
+    }),
+  );
 });
 
 test('hashes exact raw bytes rather than normalized JSON', () => {
@@ -121,10 +109,12 @@ test('hashes exact raw bytes rather than normalized JSON', () => {
 
   expect(() =>
     inspectRawImageManifest(reformatted, calculateSha256Digest(compact), 'destination'),
-  ).toThrow(expect.objectContaining({
-    code: ARTIFACT_COPY_FAILURE_CODE.MANIFEST_DIGEST_MISMATCH,
-    message: 'destination manifest bytes do not match the expected digest',
-  }));
+  ).toThrow(
+    expect.objectContaining({
+      code: ARTIFACT_COPY_FAILURE_CODE.MANIFEST_DIGEST_MISMATCH,
+      message: 'destination manifest bytes do not match the expected digest',
+    }),
+  );
 });
 
 test.each([

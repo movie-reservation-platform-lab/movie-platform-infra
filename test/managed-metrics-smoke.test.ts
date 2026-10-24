@@ -114,12 +114,16 @@ test('writes a sanitized dual-route success report with AMP and Container Insigh
     expect(awscurlArguments).not.toContain('AWS_ACCESS_KEY_ID');
     expect(awscurlArguments).not.toContain('AWS_SECRET_ACCESS_KEY');
 
-    const containerQueries = readFileSync(fixture.awsArguments, 'utf8').split('\n')
+    const containerQueries = readFileSync(fixture.awsArguments, 'utf8')
+      .split('\n')
       .filter((argument) => argument.startsWith('[{'))
-      .map((argument) => JSON.parse(argument) as Array<{
-        Id: string;
-        MetricStat: { Metric: { Dimensions: Array<{ Name: string; Value: string }> } };
-      }>)
+      .map(
+        (argument) =>
+          JSON.parse(argument) as Array<{
+            Id: string;
+            MetricStat: { Metric: { Dimensions: Array<{ Name: string; Value: string }> } };
+          }>,
+      )
       .find((queries) => queries.some(({ Id }) => Id === 'taskCpu'));
     expect(containerQueries).toHaveLength(4);
     for (const query of containerQueries ?? []) {
@@ -130,6 +134,7 @@ test('writes a sanitized dual-route success report with AMP and Container Insigh
       if (query.Id.startsWith('container')) {
         expectedDimensions.push({ Name: 'ContainerName', Value: 'movie-reservation-service' });
       }
+
       expect(query.MetricStat.Metric.Dimensions).toEqual(expectedDimensions);
     }
   } finally {
@@ -313,7 +318,11 @@ function withNodeOnPath(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   };
 }
 
-function parseReport(result: { readonly stdout: string; readonly stderr: string; readonly status: number | null }) {
+function parseReport(result: {
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly status: number | null;
+}) {
   const reportLine = result.stdout
     .trim()
     .split('\n')
@@ -324,6 +333,7 @@ function parseReport(result: { readonly stdout: string; readonly stderr: string;
       `smoke output did not contain a JSON report (status ${result.status}): ${result.stdout}\n${result.stderr}`,
     );
   }
+
   return JSON.parse(reportLine) as ManagedMetricsSmokeReport;
 }
 

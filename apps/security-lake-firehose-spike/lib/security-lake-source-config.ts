@@ -39,16 +39,14 @@ export function loadSecurityLakeSourceConfig(
       `${SECURITY_LAKE_FIREHOSE_SPIKE_CONFIG_ENVIRONMENT_VARIABLE} must name the config file.`,
     );
   }
+
   if (!isAbsolute(configFilepath)) {
     throw new SecurityLakeSourceConfigError(
       `${SECURITY_LAKE_FIREHOSE_SPIKE_CONFIG_ENVIRONMENT_VARIABLE} must be an absolute path.`,
     );
   }
 
-  return parseSecurityLakeSourceConfigJson(
-    readFileSync(configFilepath, 'utf8'),
-    auditConfig,
-  );
+  return parseSecurityLakeSourceConfigJson(readFileSync(configFilepath, 'utf8'), auditConfig);
 }
 
 /** Validate the untrusted response values needed by the Firehose delivery stack. */
@@ -59,8 +57,8 @@ export function parseSecurityLakeSourceConfigJson(
   const value = parseJsonObject(contents);
   const expectedKeys = ['providerRoleArn', 'sourceAccountId', 'sourceLocation'] as const;
   if (
-    Object.keys(value).length !== expectedKeys.length
-    || !expectedKeys.every((key) => key in value)
+    Object.keys(value).length !== expectedKeys.length ||
+    !expectedKeys.every((key) => key in value)
   ) {
     throw new SecurityLakeSourceConfigError(
       `custom-source config must contain exactly: ${expectedKeys.join(', ')}.`,
@@ -81,9 +79,9 @@ export function parseSecurityLakeSourceConfigJson(
     /^arn:(?:aws|aws-us-gov|aws-cn):iam::([0-9]{12}):role\/(AmazonSecurityLake-Provider-[A-Za-z0-9._:+,=@-]+)$/,
   );
   if (
-    roleMatch === null
-    || roleMatch[1] !== auditConfig.auditAccountId
-    || !roleMatch[2].endsWith(`-${auditConfig.region}`)
+    roleMatch === null ||
+    roleMatch[1] !== auditConfig.auditAccountId ||
+    !roleMatch[2].endsWith(`-${auditConfig.region}`)
   ) {
     throw new SecurityLakeSourceConfigError(
       'providerRoleArn must identify a Security Lake provider role in the audit account.',
@@ -106,9 +104,11 @@ function parseJsonObject(contents: string): Readonly<Record<string, unknown>> {
   } catch {
     throw new SecurityLakeSourceConfigError('custom-source config must contain valid JSON.');
   }
+
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new SecurityLakeSourceConfigError('custom-source config must be a JSON object.');
   }
+
   return parsed as Readonly<Record<string, unknown>>;
 }
 
@@ -116,6 +116,7 @@ function requireString(value: unknown, fieldName: string): string {
   if (typeof value !== 'string' || value.length === 0 || value.trim() !== value) {
     throw new SecurityLakeSourceConfigError(`${fieldName} must be a nonblank string.`);
   }
+
   return value;
 }
 
@@ -129,17 +130,19 @@ function parseSourceLocation(sourceLocation: string): {
   } catch {
     throw new SecurityLakeSourceConfigError('sourceLocation must be a valid S3 URL.');
   }
+
   const sourcePrefix = location.pathname.slice(1);
   if (
-    location.protocol !== 's3:'
-    || !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(location.hostname)
-    || !sourcePrefix.startsWith('ext/')
-    || !sourcePrefix.endsWith('/')
-    || sourcePrefix.includes('..')
+    location.protocol !== 's3:' ||
+    !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(location.hostname) ||
+    !sourcePrefix.startsWith('ext/') ||
+    !sourcePrefix.endsWith('/') ||
+    sourcePrefix.includes('..')
   ) {
     throw new SecurityLakeSourceConfigError(
       'sourceLocation must identify an assigned Security Lake ext/ prefix.',
     );
   }
+
   return { bucketName: location.hostname, sourcePrefix };
 }

@@ -64,6 +64,7 @@ function createArtifactRepository(
       'Expected the ECR repository L2 construct to contain an AWS::ECR::Repository resource.',
     );
   }
+
   cfnRepository.encryptionConfiguration = {
     encryptionType: 'AES256',
   };

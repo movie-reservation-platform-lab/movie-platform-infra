@@ -8,6 +8,7 @@ const TEST_TARGET = { account: '111111111111', region: 'eu-central-1' } as const
 
 function template(): Template {
   const app = new cdk.App();
+
   return Template.fromStack(
     new ArtifactFoundationStack(app, 'TestArtifactFoundationStack', { env: TEST_TARGET }),
   );
@@ -15,9 +16,7 @@ function template(): Template {
 
 test('creates one retained immutable repository for every demo component', () => {
   const synthesized = template();
-  const repositories = Object.values(
-    synthesized.findResources('AWS::ECR::Repository'),
-  ) as Array<{
+  const repositories = Object.values(synthesized.findResources('AWS::ECR::Repository')) as Array<{
     readonly Properties: Record<string, unknown>;
     readonly DeletionPolicy: string;
     readonly UpdateReplacePolicy: string;
@@ -41,12 +40,14 @@ test('creates one retained immutable repository for every demo component', () =>
 });
 
 test('expires only untagged images after seven days and applies persistent ownership tags', () => {
-  const repositories = Object.values(
-    template().findResources('AWS::ECR::Repository'),
-  ) as Array<{ readonly Properties: Record<string, unknown> }>;
+  const repositories = Object.values(template().findResources('AWS::ECR::Repository')) as Array<{
+    readonly Properties: Record<string, unknown>;
+  }>;
 
   for (const repository of repositories) {
-    const policy = repository.Properties.LifecyclePolicy as { readonly LifecyclePolicyText: string };
+    const policy = repository.Properties.LifecyclePolicy as {
+      readonly LifecyclePolicyText: string;
+    };
     expect(JSON.parse(policy.LifecyclePolicyText)).toEqual({
       rules: [
         {
@@ -62,7 +63,10 @@ test('expires only untagged images after seven days and applies persistent owner
         },
       ],
     });
-    const tags = repository.Properties.Tags as Array<{ readonly Key: string; readonly Value: string }>;
+    const tags = repository.Properties.Tags as Array<{
+      readonly Key: string;
+      readonly Value: string;
+    }>;
     expect(Object.fromEntries(tags.map(({ Key, Value }) => [Key, Value]))).toMatchObject({
       Lifecycle: 'persistent',
       ManagedBy: 'aws-cdk',

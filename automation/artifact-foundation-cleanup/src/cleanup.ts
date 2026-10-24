@@ -32,9 +32,7 @@ export function planArtifactFoundationCleanup(
 ): CleanupExecutionPlan {
   const expectedConfirmation = buildCleanupConfirmation(inspection.target);
   if (confirmation !== expectedConfirmation) {
-    failCleanup(
-      `confirmation must exactly match ${JSON.stringify(expectedConfirmation)}`,
-    );
+    failCleanup(`confirmation must exactly match ${JSON.stringify(expectedConfirmation)}`);
   }
 
   const assessment = evaluateCleanupReadiness({
@@ -48,10 +46,7 @@ export function planArtifactFoundationCleanup(
   }
 
   const foundationStack = inspection.foundationStack;
-  if (
-    foundationStack !== undefined &&
-    foundationStack.name !== ARTIFACT_FOUNDATION_STACK_NAME
-  ) {
+  if (foundationStack !== undefined && foundationStack.name !== ARTIFACT_FOUNDATION_STACK_NAME) {
     failCleanup('refusing to delete an unexpected CloudFormation stack');
   }
 
@@ -59,6 +54,7 @@ export function planArtifactFoundationCleanup(
     if (repository === undefined) {
       return [];
     }
+
     if (
       repository.componentId !== definition.componentId ||
       repository.name !== definition.repositoryName ||
@@ -66,6 +62,7 @@ export function planArtifactFoundationCleanup(
     ) {
       failCleanup('refusing to delete an ECR repository outside the inspected catalog target');
     }
+
     return [
       Object.freeze({
         componentId: repository.componentId,
@@ -75,12 +72,13 @@ export function planArtifactFoundationCleanup(
     ];
   });
 
-  const reportedFoundationStack = foundationStack === undefined
-    ? undefined
-    : Object.freeze({
-      name: foundationStack.name,
-      disableTerminationProtection: foundationStack.terminationProtection,
-    });
+  const reportedFoundationStack =
+    foundationStack === undefined
+      ? undefined
+      : Object.freeze({
+          name: foundationStack.name,
+          disableTerminationProtection: foundationStack.terminationProtection,
+        });
 
   return Object.freeze({
     target: inspection.target,
@@ -113,6 +111,7 @@ export async function executeArtifactFoundationCleanup(
     if (plan.foundationStack.disableTerminationProtection) {
       await cleaner.disableStackTerminationProtection(plan.foundationStack.name);
     }
+
     await cleaner.deleteStack(plan.foundationStack.name);
     await cleaner.waitForStackDeletion(plan.foundationStack.name);
   }

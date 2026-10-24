@@ -23,7 +23,9 @@ const platformConfig = resolvePlatformConfig(
     reservationMcpServiceVersion: app.node.tryGetContext('reservationMcpServiceVersion'),
     recommendationMcpImageReference: app.node.tryGetContext('recommendationMcpImageReference'),
     recommendationMcpServiceVersion: app.node.tryGetContext('recommendationMcpServiceVersion'),
-    recommendationServiceImageReference: app.node.tryGetContext('recommendationServiceImageReference'),
+    recommendationServiceImageReference: app.node.tryGetContext(
+      'recommendationServiceImageReference',
+    ),
     recommendationServiceVersion: app.node.tryGetContext('recommendationServiceVersion'),
     auditEventBusArn: app.node.tryGetContext('auditEventBusArn'),
     auditPublishTimeoutMs: app.node.tryGetContext('auditPublishTimeoutMs'),

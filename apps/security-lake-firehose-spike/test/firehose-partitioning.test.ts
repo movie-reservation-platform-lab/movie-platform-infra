@@ -13,24 +13,20 @@ const FIREHOSE_ERROR_OBJECT_PATH =
 
 function createTemplate(): Template {
   const app = new App();
+
   return Template.fromStack(
-    new SecurityLakeAuditIngestionStack(
-      app,
-      'FakeSecurityLakeAuditIngestionStack',
-      {
-        env: TEST_TARGET,
-        sourceConfig: {
-          bucketName: 'aws-security-data-lake-eu-central-1-example',
-          providerRoleArn:
-            'arn:aws:iam::222222222222:role/AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1',
-          providerRoleName: 'AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1',
-          sourceAccountId: '333333333333',
-          sourceLocation:
-            's3://aws-security-data-lake-eu-central-1-example/ext/MOVIE_AUTH/1.0/',
-          sourcePrefix: 'ext/MOVIE_AUTH/1.0/',
-        },
+    new SecurityLakeAuditIngestionStack(app, 'FakeSecurityLakeAuditIngestionStack', {
+      env: TEST_TARGET,
+      sourceConfig: {
+        bucketName: 'aws-security-data-lake-eu-central-1-example',
+        providerRoleArn:
+          'arn:aws:iam::222222222222:role/AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1',
+        providerRoleName: 'AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1',
+        sourceAccountId: '333333333333',
+        sourceLocation: 's3://aws-security-data-lake-eu-central-1-example/ext/MOVIE_AUTH/1.0/',
+        sourcePrefix: 'ext/MOVIE_AUTH/1.0/',
       },
-    ),
+    }),
   );
 }
 
@@ -46,54 +42,46 @@ describe('Firehose partitioning', () => {
    * without coupling the test to unrelated Firehose properties.
    */
   it('routes valid records by source Region, account, and UTC event day', () => {
-    template.hasResourceProperties(
-      'AWS::KinesisFirehose::DeliveryStream',
-      {
-        ExtendedS3DestinationConfiguration: {
-          DynamicPartitioningConfiguration: {
-            Enabled: true,
-          },
-          ProcessingConfiguration: {
-            Enabled: true,
-            Processors: Match.arrayWith([
-              Match.objectLike({
-                Type: 'MetadataExtraction',
-                Parameters: Match.arrayWith([
-                  Match.objectLike({
-                    ParameterName: 'JsonParsingEngine',
-                    ParameterValue: 'JQ-1.6',
-                  }),
-                  Match.objectLike({
-                    ParameterName: 'MetadataExtractionQuery',
-                    ParameterValue: EVENT_DAY_QUERY,
-                  }),
-                ]),
-              }),
-            ]),
-          },
-          Prefix: SECURITY_LAKE_PREFIX,
+    template.hasResourceProperties('AWS::KinesisFirehose::DeliveryStream', {
+      ExtendedS3DestinationConfiguration: {
+        DynamicPartitioningConfiguration: {
+          Enabled: true,
         },
+        ProcessingConfiguration: {
+          Enabled: true,
+          Processors: Match.arrayWith([
+            Match.objectLike({
+              Type: 'MetadataExtraction',
+              Parameters: Match.arrayWith([
+                Match.objectLike({
+                  ParameterName: 'JsonParsingEngine',
+                  ParameterValue: 'JQ-1.6',
+                }),
+                Match.objectLike({
+                  ParameterName: 'MetadataExtractionQuery',
+                  ParameterValue: EVENT_DAY_QUERY,
+                }),
+              ]),
+            }),
+          ]),
+        },
+        Prefix: SECURITY_LAKE_PREFIX,
       },
-    );
+    });
   });
 
   it('routes conversion failures outside the valid partition hierarchy', () => {
-    template.hasResourceProperties(
-      'AWS::KinesisFirehose::DeliveryStream',
-      {
-        ExtendedS3DestinationConfiguration: Match.objectLike({
-          ErrorOutputPrefix: FIREHOSE_ERROR_PREFIX,
-        }),
-      },
-    );
+    template.hasResourceProperties('AWS::KinesisFirehose::DeliveryStream', {
+      ExtendedS3DestinationConfiguration: Match.objectLike({
+        ErrorOutputPrefix: FIREHOSE_ERROR_PREFIX,
+      }),
+    });
   });
 
   it('keeps Security Lake delivery separate from conversion-schema access', () => {
     const providerRoleArn =
       'arn:aws:iam::222222222222:role/AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1';
-    const streams = Object.values(
-      template.findResources('AWS::KinesisFirehose::DeliveryStream'),
-    );
+    const streams = Object.values(template.findResources('AWS::KinesisFirehose::DeliveryStream'));
 
     expect(streams).toHaveLength(1);
     expect(streams[0]).toHaveProperty(
@@ -136,9 +124,7 @@ describe('Firehose partitioning', () => {
         }),
       ]),
     });
-    const providerPolicies = Object.values(
-      template.findResources('AWS::IAM::Policy'),
-    );
+    const providerPolicies = Object.values(template.findResources('AWS::IAM::Policy'));
     expect(providerPolicies).toHaveLength(1);
     expect(providerPolicies[0]).toMatchObject({
       Properties: {
@@ -153,9 +139,7 @@ describe('Firehose partitioning', () => {
         Roles: ['AmazonSecurityLake-Provider-MOVIE_AUTH-eu-central-1'],
       },
     });
-    expect(JSON.stringify(providerPolicies[0])).toContain(
-      FIREHOSE_ERROR_OBJECT_PATH,
-    );
+    expect(JSON.stringify(providerPolicies[0])).toContain(FIREHOSE_ERROR_OBJECT_PATH);
     template.resourceCountIs('AWS::Logs::LogGroup', 0);
     template.resourceCountIs('AWS::Logs::LogStream', 0);
   });
@@ -164,18 +148,12 @@ describe('Firehose partitioning', () => {
     const tables = Object.values(template.findResources('AWS::Glue::Table'));
 
     expect(tables).toHaveLength(1);
-    expect(tables[0]).not.toHaveProperty(
-      'Properties.TableInput.StorageDescriptor.Location',
-    );
+    expect(tables[0]).not.toHaveProperty('Properties.TableInput.StorageDescriptor.Location');
   });
 
   it('grants required access before Firehose', () => {
-    const permissions = template.findResources(
-      'AWS::LakeFormation::PrincipalPermissions',
-    );
-    const streams = Object.values(
-      template.findResources('AWS::KinesisFirehose::DeliveryStream'),
-    );
+    const permissions = template.findResources('AWS::LakeFormation::PrincipalPermissions');
+    const streams = Object.values(template.findResources('AWS::KinesisFirehose::DeliveryStream'));
 
     expect(Object.values(permissions)).toHaveLength(2);
     expect(Object.values(permissions)).toEqual(

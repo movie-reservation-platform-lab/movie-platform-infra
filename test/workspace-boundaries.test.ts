@@ -51,10 +51,7 @@ const obsDependingOnApp: WorkspaceNode = {
 
 describe('workspace dependency direction', () => {
   test('allows a deployable app to depend on a reusable package', () => {
-    const violations = findForbiddenWorkspaceDependencies([
-      auditApp,
-      auditPackage,
-    ]);
+    const violations = findForbiddenWorkspaceDependencies([auditApp, auditPackage]);
 
     expect(violations).toEqual([]);
   });
@@ -74,18 +71,12 @@ describe('workspace dependency direction', () => {
     };
 
     expect(
-      findForbiddenWorkspaceDependencies([
-        appDependingOnAutomation,
-        automationDependingOnApp,
-      ]),
+      findForbiddenWorkspaceDependencies([appDependingOnAutomation, automationDependingOnApp]),
     ).toHaveLength(2);
   });
 
   test('rejects a reusable package that depends on a deployable app', () => {
-    const violations = findForbiddenWorkspaceDependencies([
-      auditApp,
-      packageDependingOnApp,
-    ]);
+    const violations = findForbiddenWorkspaceDependencies([auditApp, packageDependingOnApp]);
 
     expect(violations).toHaveLength(1);
   });
@@ -110,43 +101,24 @@ describe('workspace dependency direction', () => {
     ];
 
     const toEdges = (violations: readonly WorkspaceDependencyViolation[]) =>
-      violations.map(violation => [
-        violation.source.name,
-        violation.target.name,
-      ]);
+      violations.map((violation) => [violation.source.name, violation.target.name]);
 
-    const forwardEdges = toEdges(
-      findForbiddenWorkspaceDependencies(forwardInput),
-    );
+    const forwardEdges = toEdges(findForbiddenWorkspaceDependencies(forwardInput));
 
-    const reversedEdges = toEdges(
-      findForbiddenWorkspaceDependencies(reversedInput),
-    );
+    const reversedEdges = toEdges(findForbiddenWorkspaceDependencies(reversedInput));
 
     expect(forwardEdges).toEqual(reversedEdges);
     expect(forwardEdges).toEqual([
-      [
-        '@movie-platform/audit-ingestion',
-        '@movie-platform/audit-account',
-      ],
-      [
-        '@movie-platform/observability-ingestion',
-        '@movie-platform/audit-account',
-      ],
-      [
-        '@movie-platform/observability-ingestion',
-        '@movie-platform/observability',
-      ],
+      ['@movie-platform/audit-ingestion', '@movie-platform/audit-account'],
+      ['@movie-platform/observability-ingestion', '@movie-platform/audit-account'],
+      ['@movie-platform/observability-ingestion', '@movie-platform/observability'],
     ]);
   });
 
   test('rejects package-to-app dependencies and ignores external dependencies', () => {
     const packageWithAppAndExternalDependencies: WorkspaceNode = {
       ...auditPackage,
-      dependencyNames: [
-        auditApp.name,
-        'aws-cdk-lib',
-      ],
+      dependencyNames: [auditApp.name, 'aws-cdk-lib'],
     };
 
     const violations = findForbiddenWorkspaceDependencies([
@@ -161,9 +133,7 @@ describe('workspace dependency direction', () => {
       source: packageWithAppAndExternalDependencies,
       target: auditApp,
     });
-    expect(auditViolation?.message).toContain(
-      packageWithAppAndExternalDependencies.name,
-    );
+    expect(auditViolation?.message).toContain(packageWithAppAndExternalDependencies.name);
     expect(auditViolation?.message).toContain(auditApp.name);
   });
 });

@@ -1,9 +1,5 @@
 import { inspectArtifactFoundation } from '../src/inspection';
-import {
-  CLEANUP_BLOCKER_CODES,
-  CLEANUP_READINESS,
-  CLEANUP_WARNING_CODES,
-} from '../src/model';
+import { CLEANUP_BLOCKER_CODES, CLEANUP_READINESS, CLEANUP_WARNING_CODES } from '../src/model';
 import {
   FOUNDATION_STACK,
   REPOSITORY,
@@ -115,7 +111,8 @@ test('recognizes a retained repository after stack deletion as a resumable state
   expect(inspection.warnings).toContainEqual({
     code: CLEANUP_WARNING_CODES.RETAINED_REPOSITORY_WITHOUT_STACK,
     componentId: RESERVATION_SERVICE_REPOSITORY_DEFINITION.componentId,
-    message: 'the stack is absent but retained ECR repository movie-reservation-service still exists',
+    message:
+      'the stack is absent but retained ECR repository movie-reservation-service still exists',
   });
 });
 

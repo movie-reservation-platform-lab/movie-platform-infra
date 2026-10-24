@@ -61,9 +61,8 @@ export function createCanaryService(
 ): ecs.FargateService {
   // Only the `breaker` profile uses the circuit breaker; `undefined` tells
   // CDK to omit DeploymentCircuitBreaker from the template entirely.
-  const circuitBreaker: ecs.DeploymentCircuitBreaker | undefined = props.profile === 'breaker'
-    ? { enable: true, rollback: false }
-    : undefined;
+  const circuitBreaker: ecs.DeploymentCircuitBreaker | undefined =
+    props.profile === 'breaker' ? { enable: true, rollback: false } : undefined;
 
   const service = new ecs.FargateService(scope, id, {
     cluster: props.cluster,

@@ -60,25 +60,35 @@ describe('Security Lake custom-source prerequisites', () => {
   });
 
   it('parses a data-lake bucket in the configured audit Region', () => {
-    expect(parseSecurityLakePrerequisitesConfigJson(JSON.stringify({
-      bucketArn: PREREQUISITES_CONFIG.bucketArn,
-      region: PREREQUISITES_CONFIG.region,
-    }), AUDIT_CONFIG)).toEqual(PREREQUISITES_CONFIG);
+    expect(
+      parseSecurityLakePrerequisitesConfigJson(
+        JSON.stringify({
+          bucketArn: PREREQUISITES_CONFIG.bucketArn,
+          region: PREREQUISITES_CONFIG.region,
+        }),
+        AUDIT_CONFIG,
+      ),
+    ).toEqual(PREREQUISITES_CONFIG);
   });
 
   it.each([
-    ['another Region', {
-      bucketArn: PREREQUISITES_CONFIG.bucketArn,
-      region: 'us-east-1',
-    }],
-    ['an object ARN instead of a bucket ARN', {
-      bucketArn: `${PREREQUISITES_CONFIG.bucketArn}/ext/MOVIE_AUTH/`,
-      region: PREREQUISITES_CONFIG.region,
-    }],
+    [
+      'another Region',
+      {
+        bucketArn: PREREQUISITES_CONFIG.bucketArn,
+        region: 'us-east-1',
+      },
+    ],
+    [
+      'an object ARN instead of a bucket ARN',
+      {
+        bucketArn: `${PREREQUISITES_CONFIG.bucketArn}/ext/MOVIE_AUTH/`,
+        region: PREREQUISITES_CONFIG.region,
+      },
+    ],
   ])('rejects %s', (_description, value) => {
-    expect(() => parseSecurityLakePrerequisitesConfigJson(
-      JSON.stringify(value),
-      AUDIT_CONFIG,
-    )).toThrow(SecurityLakePrerequisitesConfigError);
+    expect(() =>
+      parseSecurityLakePrerequisitesConfigJson(JSON.stringify(value), AUDIT_CONFIG),
+    ).toThrow(SecurityLakePrerequisitesConfigError);
   });
 });

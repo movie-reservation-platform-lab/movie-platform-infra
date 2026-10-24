@@ -70,19 +70,24 @@ export function runCli(
 
     if (options.help) {
       streams.stdout(USAGE);
+
       return 0;
     }
+
     if (options.selfTest) {
       runSelfTest();
       streams.stdout('AWS account preflight self-test passed\n');
+
       return 0;
     }
 
     streams.stdout(runPreflight(environment));
+
     return 0;
   } catch (error: unknown) {
     const message = error instanceof PreflightFailure ? error.message : 'unexpected internal error';
     streams.stderr(`AWS account preflight failed: ${message}\n`);
+
     return 1;
   }
 }
@@ -108,6 +113,7 @@ function parseCliOptions(arguments_: readonly string[]): CliOptions {
     if (error instanceof PreflightFailure) {
       throw error;
     }
+
     fail('invalid arguments; run with --help for usage');
   }
 }

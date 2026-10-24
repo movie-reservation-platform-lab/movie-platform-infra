@@ -1,11 +1,5 @@
 import { createHash } from 'node:crypto';
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { vendorAuditContract } from '../vendor-audit-contract';
@@ -42,10 +36,7 @@ describe('audit contract vendor', () => {
     });
 
     const provenance = JSON.parse(
-      readFileSync(
-        join(destinationContractDirectory, 'provenance.json'),
-        'utf8',
-      ),
+      readFileSync(join(destinationContractDirectory, 'provenance.json'), 'utf8'),
     ) as {
       readonly artifact_sha256: Readonly<Record<string, string>>;
       readonly source_revision: string;
@@ -53,12 +44,9 @@ describe('audit contract vendor', () => {
 
     expect(provenance.source_revision).toBe(SOURCE_REVISION);
     for (const [relativePath, contents] of Object.entries(ARTIFACTS)) {
-      expect(
-        readFileSync(
-          join(destinationContractDirectory, 'bundle', relativePath),
-          'utf8',
-        ),
-      ).toBe(contents);
+      expect(readFileSync(join(destinationContractDirectory, 'bundle', relativePath), 'utf8')).toBe(
+        contents,
+      );
       expect(provenance.artifact_sha256[relativePath]).toBe(
         createHash('sha256').update(contents).digest('hex'),
       );
@@ -81,19 +69,13 @@ describe('audit contract vendor', () => {
         sourceRevision: SOURCE_REVISION,
       }),
     ).toThrow('is not a platform-audit/1 bundle');
-    expect(
-      readFileSync(
-        join(destinationContractDirectory, 'provenance.json'),
-        'utf8',
-      ),
-    ).toContain('old-revision');
+    expect(readFileSync(join(destinationContractDirectory, 'provenance.json'), 'utf8')).toContain(
+      'old-revision',
+    );
   });
 });
 
-function writeArtifacts(
-  root: string,
-  artifacts: Readonly<Record<string, string>>,
-): void {
+function writeArtifacts(root: string, artifacts: Readonly<Record<string, string>>): void {
   for (const [relativePath, contents] of Object.entries(artifacts)) {
     const path = join(root, relativePath);
     mkdirSync(dirname(path), { recursive: true });

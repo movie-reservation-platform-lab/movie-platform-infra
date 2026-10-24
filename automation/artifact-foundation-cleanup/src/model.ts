@@ -135,8 +135,7 @@ export const CLEANUP_BLOCKER_CODES = {
   WORKLOAD_STACK_PRESENT: 'WORKLOAD_STACK_PRESENT',
 } as const;
 
-export type CleanupBlockerCode =
-  (typeof CLEANUP_BLOCKER_CODES)[keyof typeof CLEANUP_BLOCKER_CODES];
+export type CleanupBlockerCode = (typeof CLEANUP_BLOCKER_CODES)[keyof typeof CLEANUP_BLOCKER_CODES];
 
 /** Stable warning codes for drift and resumable partial-cleanup states. */
 export const CLEANUP_WARNING_CODES = {
@@ -151,8 +150,7 @@ export const CLEANUP_WARNING_CODES = {
   RETAINED_REPOSITORY_WITHOUT_STACK: 'RETAINED_REPOSITORY_WITHOUT_STACK',
 } as const;
 
-export type CleanupWarningCode =
-  (typeof CLEANUP_WARNING_CODES)[keyof typeof CLEANUP_WARNING_CODES];
+export type CleanupWarningCode = (typeof CLEANUP_WARNING_CODES)[keyof typeof CLEANUP_WARNING_CODES];
 
 /** Machine-readable issue code paired with human-readable report text. */
 export interface InspectionIssue<Code extends string> {

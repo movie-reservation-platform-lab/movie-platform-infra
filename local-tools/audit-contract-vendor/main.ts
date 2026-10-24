@@ -5,9 +5,9 @@ import { vendorAuditContract } from './vendor-audit-contract';
 function main(args: readonly string[]): void {
   const [sourceBundleDirectory, sourceRevision] = args;
   if (
-    sourceBundleDirectory === undefined
-    || !isAbsolute(sourceBundleDirectory)
-    || sourceRevision === undefined
+    sourceBundleDirectory === undefined ||
+    !isAbsolute(sourceBundleDirectory) ||
+    sourceRevision === undefined
   ) {
     throw new Error(
       'Usage: vendor:audit-contract -- <absolute-bundle-directory> <40-character-source-revision>',

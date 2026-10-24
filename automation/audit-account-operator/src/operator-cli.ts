@@ -58,6 +58,7 @@ const DEFAULT_DEPENDENCIES: OperatorDependencies = {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 60_000,
     });
+
     return { status: result.status, stdout: result.stdout };
   },
 };
@@ -78,17 +79,22 @@ export function runOperatorCli(
 
     if (options.command === 'preflight') {
       streams.stdout(renderPreflightSuccess(target));
+
       return 0;
     }
+
     if (options.command === 'status') {
       return runStatus(target, environment, streams, dependencies);
     }
+
     if (!options.execute) {
       streams.stdout(
         'Audit-account bootstrap plan passed preflight; rerun with --execute only during an authorized live operation.\n',
       );
+
       return 0;
     }
+
     return runBootstrap(target, environment, streams, dependencies);
   } catch (error: unknown) {
     const message =
@@ -100,6 +106,7 @@ export function runOperatorCli(
           ? error.message
           : 'unexpected internal error';
     streams.stderr(`Audit-account operation failed: ${message}\n`);
+
     return 1;
   }
 }
@@ -117,14 +124,17 @@ function parseOperatorArguments(arguments_: readonly string[]): ParsedOperatorAr
     if (positionals.length !== 1 || !isOperatorCommand(positionals[0])) {
       throw new Error('invalid arguments; expected preflight, status, or bootstrap');
     }
+
     if (values.execute === true && positionals[0] !== 'bootstrap') {
       throw new Error('invalid arguments; --execute is allowed only with bootstrap');
     }
+
     return { command: positionals[0], execute: values.execute ?? false };
   } catch (error: unknown) {
     if (error instanceof Error && error.message.startsWith('invalid arguments')) {
       throw error;
     }
+
     throw new Error('invalid arguments; expected preflight, status, or bootstrap');
   }
 }
@@ -160,9 +170,12 @@ function runStatus(
   const status = result.stdout.trim();
   if (result.status !== 0 || !/^[A-Z][A-Z_]+$/.test(status)) {
     streams.stderr('Audit-account CDK bootstrap status is unavailable.\n');
+
     return 1;
   }
+
   streams.stdout(`Audit-account CDK bootstrap status: ${status}\n`);
+
   return 0;
 }
 
@@ -184,9 +197,12 @@ function runBootstrap(
   );
   if (result.status !== 0) {
     streams.stderr('Audit-account CDK bootstrap failed; inspect the private operator terminal.\n');
+
     return 1;
   }
+
   streams.stdout('Audit-account CDK bootstrap completed.\n');
+
   return 0;
 }
 

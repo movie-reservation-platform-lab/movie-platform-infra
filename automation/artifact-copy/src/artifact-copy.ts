@@ -4,10 +4,7 @@ import {
   ARTIFACT_COPY_FAILURE_STAGE,
   failArtifactCopy,
 } from './artifact-copy-error';
-import {
-  assertEquivalentImageManifests,
-  inspectRawImageManifest,
-} from './image-manifest';
+import { assertEquivalentImageManifests, inspectRawImageManifest } from './image-manifest';
 import {
   ARTIFACT_COPY_VERIFICATION_METHOD,
   ARTIFACT_TRANSFER_OPERATION,
@@ -24,8 +21,7 @@ import {
 const SHA256_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const REGISTRY_HOST_PATTERN =
   /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?::[0-9]{1,5})?$/;
-const REPOSITORY_SEGMENT_PATTERN =
-  /^[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*$/;
+const REPOSITORY_SEGMENT_PATTERN = /^[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*$/;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
 
 interface ValidatedArtifactCopyRequest extends ArtifactCopyRequest {
@@ -40,11 +36,7 @@ export async function copyAndVerifyArtifact(
 ): Promise<ArtifactCopyVerification> {
   const validated = validateRequest(request);
 
-  const { sourceManifest, destinationManifest } = await inspectTransfer(
-    validated,
-    client,
-    true,
-  );
+  const { sourceManifest, destinationManifest } = await inspectTransfer(validated, client, true);
 
   return Object.freeze({
     verificationMethod: ARTIFACT_COPY_VERIFICATION_METHOD,
@@ -146,6 +138,7 @@ function validateTransferRequest(
   ) {
     failInvalidInput('operation must be copy-and-verify or verify-existing');
   }
+
   return Object.freeze({ ...validateRequest(request), operation: request.operation });
 }
 
@@ -180,6 +173,7 @@ function validateRequest(request: ArtifactCopyRequest): ValidatedArtifactCopyReq
   if (typeof request.sourceReference !== 'string') {
     failInvalidInput('sourceReference must be a fully qualified repository at expectedDigest');
   }
+
   const sourceParts = request.sourceReference.split('@');
   if (
     sourceParts.length !== 2 ||
@@ -188,6 +182,7 @@ function validateRequest(request: ArtifactCopyRequest): ValidatedArtifactCopyReq
   ) {
     failInvalidInput('sourceReference must be a fully qualified repository at expectedDigest');
   }
+
   if (
     typeof request.destinationRepository !== 'string' ||
     !isValidRepository(request.destinationRepository)
@@ -200,10 +195,8 @@ function validateRequest(request: ArtifactCopyRequest): ValidatedArtifactCopyReq
 
   return Object.freeze({
     ...request,
-    destinationCopyReference:
-      `${request.destinationRepository}:sha256-${request.expectedDigest.slice('sha256:'.length)}`,
-    destinationDigestReference:
-      `${request.destinationRepository}@${request.expectedDigest}`,
+    destinationCopyReference: `${request.destinationRepository}:sha256-${request.expectedDigest.slice('sha256:'.length)}`,
+    destinationDigestReference: `${request.destinationRepository}@${request.expectedDigest}`,
   });
 }
 
@@ -222,6 +215,7 @@ function isValidRepository(value: string): boolean {
   if (slashIndex <= 0 || slashIndex === value.length - 1) {
     return false;
   }
+
   const host = value.slice(0, slashIndex);
   const repositoryPath = value.slice(slashIndex + 1);
   if (!REGISTRY_HOST_PATTERN.test(host)) {
@@ -232,22 +226,19 @@ function isValidRepository(value: string): boolean {
   if (portText !== undefined && Number(portText) > 65_535) {
     return false;
   }
-  return repositoryPath.split('/').every((segment) =>
-    REPOSITORY_SEGMENT_PATTERN.test(segment),
-  );
+
+  return repositoryPath.split('/').every((segment) => REPOSITORY_SEGMENT_PATTERN.test(segment));
 }
 
-function validateAuthFile(
-  value: unknown,
-  fieldName: string,
-  required: boolean,
-): void {
+function validateAuthFile(value: unknown, fieldName: string, required: boolean): void {
   if (value === undefined) {
     if (required) {
       failInvalidInput(`${fieldName} is required`);
     }
+
     return;
   }
+
   if (
     typeof value !== 'string' ||
     value.length === 0 ||

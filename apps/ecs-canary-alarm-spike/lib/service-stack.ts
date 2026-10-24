@@ -1,4 +1,16 @@
-import { Annotations, CfnOutput, CfnParameter, CfnWaitCondition, CfnWaitConditionHandle, Duration, Fn, RemovalPolicy, Stack, Tags, type StackProps } from 'aws-cdk-lib';
+import {
+  Annotations,
+  CfnOutput,
+  CfnParameter,
+  CfnWaitCondition,
+  CfnWaitConditionHandle,
+  Duration,
+  Fn,
+  RemovalPolicy,
+  Stack,
+  Tags,
+  type StackProps,
+} from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import type * as ecr from 'aws-cdk-lib/aws-ecr';
@@ -9,7 +21,11 @@ import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import type { Construct } from 'constructs';
 import { createCanaryService } from './canary-service';
-import { BOOTSTRAP_RECIPE, type BridgeMissingData, type EcsCanarySpikeConfig } from './spike-config';
+import {
+  BOOTSTRAP_RECIPE,
+  type BridgeMissingData,
+  type EcsCanarySpikeConfig,
+} from './spike-config';
 
 /** Prefix for explicit alarm names, so operators can force them by name. */
 export const ALARM_NAME_PREFIX = 'EcsCanarySpike';
@@ -88,7 +104,11 @@ export class EcsCanarySpikeServiceStack extends Stack {
       allowAllOutbound: true,
       description: 'Spike tasks: container port from the ALB only',
     });
-    taskSecurityGroup.addIngressRule(albSecurityGroup, ec2.Port.tcp(CONTAINER_PORT), 'ALB to tasks');
+    taskSecurityGroup.addIngressRule(
+      albSecurityGroup,
+      ec2.Port.tcp(CONTAINER_PORT),
+      'ALB to tasks',
+    );
     albSecurityGroup.addEgressRule(taskSecurityGroup, ec2.Port.tcp(CONTAINER_PORT), 'ALB to tasks');
 
     const loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'LoadBalancer', {
@@ -110,12 +130,16 @@ export class EcsCanarySpikeServiceStack extends Stack {
 
     const blueTargetGroup = this.fixtureTargetGroup('BlueTargetGroup', vpc);
     const greenTargetGroup = this.fixtureTargetGroup('GreenTargetGroup', vpc);
-    const productionListenerRule = new elbv2.ApplicationListenerRule(this, 'ProductionListenerRule', {
-      listener,
-      priority: 10,
-      conditions: [elbv2.ListenerCondition.pathPatterns(['/*'])],
-      action: elbv2.ListenerAction.forward([blueTargetGroup]),
-    });
+    const productionListenerRule = new elbv2.ApplicationListenerRule(
+      this,
+      'ProductionListenerRule',
+      {
+        listener,
+        priority: 10,
+        conditions: [elbv2.ListenerCondition.pathPatterns(['/*'])],
+        action: elbv2.ListenerAction.forward([blueTargetGroup]),
+      },
+    );
 
     const cluster = new ecs.Cluster(this, 'Cluster', { vpc });
     // An infra-only change for run R5c-3: it touches the cluster, not the recipe.
@@ -142,9 +166,14 @@ export class EcsCanarySpikeServiceStack extends Stack {
     props.repository.grantPull(taskDefinition.obtainExecutionRole());
 
     const alarms = this.deploymentAlarms(loadBalancer, config.bridgeMissingData);
-    const deploymentAlarmNames = config.deploymentAlarmSet === 'all'
-      ? [alarms.errorRate.alarmName, alarms.watchVerdict.alarmName, alarms.rollbackComposite.alarmName]
-      : [alarms.errorRate.alarmName, alarms.watchVerdict.alarmName];
+    const deploymentAlarmNames =
+      config.deploymentAlarmSet === 'all'
+        ? [
+            alarms.errorRate.alarmName,
+            alarms.watchVerdict.alarmName,
+            alarms.rollbackComposite.alarmName,
+          ]
+        : [alarms.errorRate.alarmName, alarms.watchVerdict.alarmName];
 
     const service = createCanaryService(this, 'Service', {
       cluster,
@@ -200,7 +229,9 @@ export class EcsCanarySpikeServiceStack extends Stack {
     new CfnOutput(this, 'LoadBalancerDnsName', { value: loadBalancer.loadBalancerDnsName });
     new CfnOutput(this, 'ClusterName', { value: cluster.clusterName });
     new CfnOutput(this, 'ServiceName', { value: service.serviceName });
-    new CfnOutput(this, 'ProductionListenerRuleArn', { value: productionListenerRule.listenerRuleArn });
+    new CfnOutput(this, 'ProductionListenerRuleArn', {
+      value: productionListenerRule.listenerRuleArn,
+    });
     new CfnOutput(this, 'BlueTargetGroupArn', { value: blueTargetGroup.targetGroupArn });
     new CfnOutput(this, 'GreenTargetGroupArn', { value: greenTargetGroup.targetGroupArn });
     new CfnOutput(this, 'EcsEventsLogGroupName', { value: ecsEventsLogGroup.logGroupName });
@@ -226,12 +257,14 @@ export class EcsCanarySpikeServiceStack extends Stack {
   private pinServiceTaskDefinition(service: ecs.FargateService, active: string | undefined): void {
     if (active === undefined) {
       Annotations.of(this).addError(
-        'Missing context activeTaskDefinitionArn. Deploy this stack through '
-        + 'scripts/ecs-canary-spike/infra-deploy.sh, which passes the running revision; '
-        + 'a raw cdk deploy could reset the service to an older image.',
+        'Missing context activeTaskDefinitionArn. Deploy this stack through ' +
+          'scripts/ecs-canary-spike/infra-deploy.sh, which passes the running revision; ' +
+          'a raw cdk deploy could reset the service to an older image.',
       );
+
       return;
     }
+
     if (active !== BOOTSTRAP_RECIPE) {
       (service.node.defaultChild as ecs.CfnService).taskDefinition = active;
     }

@@ -15,6 +15,7 @@ function createRoutingTemplate(): Template {
     eventBus: bus,
     eventPattern: buildAuthenticationEventPattern(WORKLOAD_ACCOUNT_ID),
   });
+
   return Template.fromStack(stack);
 }
 
@@ -36,7 +37,7 @@ describe('Authentication routing', () => {
         ],
         'detail-type': ['ocsf.authentication.v1'],
         detail: {
-          'envelope_version': ['1'],
+          envelope_version: ['1'],
         },
       },
     });

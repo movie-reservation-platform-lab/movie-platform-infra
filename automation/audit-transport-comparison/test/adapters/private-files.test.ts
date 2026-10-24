@@ -2,7 +2,11 @@ import { mkdtempSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { PrivateFileError, readPrivateFile, writeNewPrivateFile } from '../../src/adapters/private-files';
+import {
+  PrivateFileError,
+  readPrivateFile,
+  writeNewPrivateFile,
+} from '../../src/adapters/private-files';
 
 const directory = mkdtempSync(join(tmpdir(), 'private-files-'));
 
@@ -15,8 +19,26 @@ describe('readPrivateFile', () => {
   });
 
   it.each([
-    ['readable by others', () => { const p = join(directory, 'open.json'); writeFileSync(p, '{}', { mode: 0o644 }); return p; }, 'must deny all group and other access'],
-    ['a symbolic link', () => { const p = join(directory, 'link.json'); symlinkSync(join(directory, 'run.json'), p); return p; }, 'not a symbolic link'],
+    [
+      'readable by others',
+      () => {
+        const p = join(directory, 'open.json');
+        writeFileSync(p, '{}', { mode: 0o644 });
+
+        return p;
+      },
+      'must deny all group and other access',
+    ],
+    [
+      'a symbolic link',
+      () => {
+        const p = join(directory, 'link.json');
+        symlinkSync(join(directory, 'run.json'), p);
+
+        return p;
+      },
+      'not a symbolic link',
+    ],
     ['relative', () => 'run.json', 'must be absolute'],
   ])('refuses a file that is %s, without naming its path', (_label, makePath, message) => {
     const path = makePath();
@@ -40,7 +62,9 @@ describe('writeNewPrivateFile', () => {
     const link = join(directory, 'evidence-link.json');
     symlinkSync(join(directory, 'elsewhere.json'), link);
 
-    expect(() => writeNewPrivateFile(existing, '{}', 'evidence file')).toThrow('must not exist yet');
+    expect(() => writeNewPrivateFile(existing, '{}', 'evidence file')).toThrow(
+      'must not exist yet',
+    );
     expect(() => writeNewPrivateFile(link, '{}', 'evidence file')).toThrow('must not exist yet');
   });
 });

@@ -10,29 +10,37 @@ import { createCopyFixture } from './test-support';
 
 function validRequest(overrides: Readonly<Record<string, unknown>> = {}): Buffer {
   const fixture = createCopyFixture();
-  return Buffer.from(JSON.stringify({
-    requestVersion: ARTIFACT_COPY_CLI_REQUEST_VERSION,
-    ...fixture.request,
-    ...overrides,
-  }));
+
+  return Buffer.from(
+    JSON.stringify({
+      requestVersion: ARTIFACT_COPY_CLI_REQUEST_VERSION,
+      ...fixture.request,
+      ...overrides,
+    }),
+  );
 }
 
 function validV2Request(overrides: Readonly<Record<string, unknown>> = {}): Buffer {
   const fixture = createCopyFixture();
-  return Buffer.from(JSON.stringify({
-    requestVersion: ARTIFACT_COPY_CLI_REQUEST_VERSION_V2,
-    ...fixture.request,
-    operation: ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING,
-    ...overrides,
-  }));
+
+  return Buffer.from(
+    JSON.stringify({
+      requestVersion: ARTIFACT_COPY_CLI_REQUEST_VERSION_V2,
+      ...fixture.request,
+      operation: ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING,
+      ...overrides,
+    }),
+  );
 }
 
 test('parses the exact versioned transport fields into the library request', () => {
   const fixture = createCopyFixture();
 
-  const request = parseArtifactCopyCliRequest(validRequest({
-    sourceAuthFile: '/tmp/movie-platform/ghcr-auth.json',
-  }));
+  const request = parseArtifactCopyCliRequest(
+    validRequest({
+      sourceAuthFile: '/tmp/movie-platform/ghcr-auth.json',
+    }),
+  );
 
   expect(request).toEqual({
     requestVersion: ARTIFACT_COPY_CLI_REQUEST_VERSION,
@@ -45,6 +53,7 @@ test('parses the exact versioned transport fields into the library request', () 
   if (request.requestVersion !== ARTIFACT_COPY_CLI_REQUEST_VERSION) {
     throw new Error('expected v1 request');
   }
+
   expect(Object.isFrozen(request)).toBe(true);
   expect(Object.isFrozen(request.copyRequest)).toBe(true);
 });
@@ -67,7 +76,7 @@ test.each([
   expect(Object.isFrozen(request)).toBe(true);
   expect(
     request.requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION_V2 &&
-    Object.isFrozen(request.transferRequest),
+      Object.isFrozen(request.transferRequest),
   ).toBe(true);
 });
 
@@ -76,14 +85,9 @@ test.each([
   ['malformed JSON', Buffer.from('{')],
   ['non-object JSON', Buffer.from('[]')],
   ['invalid UTF-8', Buffer.from([0xc3, 0x28])],
-  [
-    'oversized input',
-    Buffer.alloc(MAX_ARTIFACT_COPY_REQUEST_BYTES + 1, ' '),
-  ],
+  ['oversized input', Buffer.alloc(MAX_ARTIFACT_COPY_REQUEST_BYTES + 1, ' ')],
 ])('rejects %s', (_name, rawRequest) => {
-  expect(() => parseArtifactCopyCliRequest(rawRequest)).toThrow(
-    ArtifactCopyCliInputFailure,
-  );
+  expect(() => parseArtifactCopyCliRequest(rawRequest)).toThrow(ArtifactCopyCliInputFailure);
 });
 
 test.each([
@@ -100,9 +104,7 @@ test.each([
     '{"requestVersion":"artifact-copy-request-v1","extra":{"token":"a","token":"b"}}',
   ],
 ])('rejects a %s before JSON.parse can retain the last value', (_name, json) => {
-  expect(() => parseArtifactCopyCliRequest(Buffer.from(json))).toThrow(
-    ArtifactCopyCliInputFailure,
-  );
+  expect(() => parseArtifactCopyCliRequest(Buffer.from(json))).toThrow(ArtifactCopyCliInputFailure);
 });
 
 test.each([
@@ -121,9 +123,13 @@ test.each([
 });
 
 test('preserves the closed v1 contract by rejecting the v2 operation field', () => {
-  expect(() => parseArtifactCopyCliRequest(validRequest({
-    operation: ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING,
-  }))).toThrow(ArtifactCopyCliInputFailure);
+  expect(() =>
+    parseArtifactCopyCliRequest(
+      validRequest({
+        operation: ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING,
+      }),
+    ),
+  ).toThrow(ArtifactCopyCliInputFailure);
 });
 
 test.each([
@@ -139,13 +145,16 @@ test.each([
 });
 
 test('does not confuse braces or escaped quotes inside string values with JSON structure', () => {
-  const request = parseArtifactCopyCliRequest(validRequest({
-    sourceReference: 'ghcr.io/example/service-{quoted}@sha256:' + 'a'.repeat(64),
-  }));
+  const request = parseArtifactCopyCliRequest(
+    validRequest({
+      sourceReference: 'ghcr.io/example/service-{quoted}@sha256:' + 'a'.repeat(64),
+    }),
+  );
 
   expect(request.requestVersion).toBe(ARTIFACT_COPY_CLI_REQUEST_VERSION);
   if (request.requestVersion !== ARTIFACT_COPY_CLI_REQUEST_VERSION) {
     throw new Error('expected v1 request');
   }
+
   expect(request.copyRequest.sourceReference).toContain('{quoted}');
 });

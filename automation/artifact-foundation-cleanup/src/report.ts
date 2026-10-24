@@ -22,7 +22,11 @@ export function renderInspectionReport(inspection: ArtifactFoundationInspection)
     '',
     ...renderStack('Workload stack', inspection.workloadStack, inspection.target.accountId),
     '',
-    ...renderStack('Artifact foundation stack', inspection.foundationStack, inspection.target.accountId),
+    ...renderStack(
+      'Artifact foundation stack',
+      inspection.foundationStack,
+      inspection.target.accountId,
+    ),
     '',
     ...renderRepositories(inspection.repositories, inspection.target.accountId),
     '',
@@ -48,31 +52,40 @@ export function renderExecutionPlan(plan: CleanupExecutionPlan): string {
   let operationNumber = 1;
 
   if (plan.foundationStack === undefined && plan.repositories.length === 0) {
-    lines.push('  (none; the initial inspection already proved the artifact foundation is absent)', '');
+    lines.push(
+      '  (none; the initial inspection already proved the artifact foundation is absent)',
+      '',
+    );
+
     return lines.join('\n');
   }
+
   if (plan.foundationStack?.disableTerminationProtection === true) {
     lines.push(
       `  ${operationNumber}. Disable termination protection on ${plan.foundationStack.name}.`,
     );
     operationNumber += 1;
   }
+
   if (plan.foundationStack !== undefined) {
     lines.push(
       `  ${operationNumber}. Delete ${plan.foundationStack.name} and wait for confirmed absence.`,
     );
     operationNumber += 1;
   }
+
   for (const repository of plan.repositories) {
     lines.push(
       `  ${operationNumber}. Force-delete ECR repository ${repository.name} and every image it contains.`,
     );
     operationNumber += 1;
   }
+
   lines.push(
     `  ${operationNumber}. Re-inspect the target and require the stack and configured repositories to be absent.`,
     '',
   );
+
   return lines.join('\n');
 }
 
@@ -95,9 +108,11 @@ function renderExecutionGuidance(inspection: ArtifactFoundationInspection): stri
   if (inspection.readiness === CLEANUP_READINESS.BLOCKED) {
     return ['Execution unavailable until every blocker is resolved.'];
   }
+
   if (inspection.readiness === CLEANUP_READINESS.NOTHING_TO_CLEAN) {
     return ['No cleanup execution is required.'];
   }
+
   return [
     'Exact execution confirmation:',
     `  ${JSON.stringify(buildCleanupConfirmation(inspection.target))}`,
@@ -121,7 +136,9 @@ function renderStack(
     `  termination protection: ${stack.terminationProtection ? 'enabled' : 'disabled'}`,
     '  outputs:',
   ];
-  const outputs = Object.entries(stack.outputs).sort(([left], [right]) => left.localeCompare(right));
+  const outputs = Object.entries(stack.outputs).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
   if (outputs.length === 0) {
     lines.push('    (none)');
   } else {
@@ -132,6 +149,7 @@ function renderStack(
       );
     }
   }
+
   return lines;
 }
 
@@ -142,19 +160,18 @@ function renderRepositories(
   const lines = ['Artifact repositories:'];
   if (repositories.length === 0) {
     lines.push('  (none configured)');
+
     return lines;
   }
 
   for (const repositoryInspection of repositories) {
     lines.push(...renderRepository(repositoryInspection, accountId));
   }
+
   return lines;
 }
 
-function renderRepository(
-  inspection: ArtifactRepositoryInspection,
-  accountId: string,
-): string[] {
+function renderRepository(inspection: ArtifactRepositoryInspection, accountId: string): string[] {
   const { definition, repository } = inspection;
   const heading = `  ${definition.componentId} (${definition.repositoryName}):`;
 
@@ -188,6 +205,7 @@ function renderRepository(
       `    encryption key: ${JSON.stringify(redactAccount(repository.encryptionKey, accountId))}`,
     );
   }
+
   if (repository.tagMutabilityExclusions.length > 0) {
     lines.push('    mutability exclusion values:');
     for (const exclusion of repository.tagMutabilityExclusions) {
@@ -214,11 +232,10 @@ function renderRepository(
     const tagsText =
       image.tags.length === 0
         ? '(untagged)'
-        : image.tags
-            .map((tag) => JSON.stringify(redactAccount(tag, accountId)))
-            .join(', ');
+        : image.tags.map((tag) => JSON.stringify(redactAccount(tag, accountId))).join(', ');
     lines.push(`      ${image.digest} tags: ${tagsText}`);
   }
+
   return lines;
 }
 
@@ -230,6 +247,7 @@ function renderLifecyclePolicy(policyText: string | undefined, accountId: string
   if (policyText === undefined) {
     return '(absent)';
   }
+
   try {
     return redactAccount(JSON.stringify(JSON.parse(policyText) as unknown), accountId);
   } catch {
@@ -241,10 +259,12 @@ function renderMessages(heading: string, issues: readonly InspectionIssue<string
   if (issues.length === 0) {
     return [];
   }
+
   return [
     `${heading}:`,
     ...issues.map(({ code, componentId, message }) => {
       const scope = componentId === undefined ? '' : ` [${componentId}]`;
+
       return `  - [${code}]${scope} ${message}`;
     }),
     '',

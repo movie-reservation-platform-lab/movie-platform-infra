@@ -2,7 +2,8 @@ import { renderServiceGrafana, ServiceGrafanaConfig } from '../grafana/service';
 import { main } from '../scripts/render-service-grafana';
 
 const config: ServiceGrafanaConfig = {
-  ampUid: 'demo-amp', folderUid: 'service-observability',
+  ampUid: 'demo-amp',
+  folderUid: 'service-observability',
   grafanaUrl: 'https://grafana.example.test',
   runbookUrl: 'https://github.com/example/infra/blob/main/docs/operations/sre-investigation.md',
 };
@@ -18,12 +19,19 @@ describe('service Grafana artifacts', () => {
     expect(rule.for).toBe('30s');
     expect(rule.data[0].datasourceUid).toBe('demo-amp');
     expect(rule.data[1].model).toMatchObject({ expression: '$A >= 3', type: 'math' });
-    expect(rule.labels).toMatchObject({ exercise: 'service-observability', environment: 'aws-demo' });
+    expect(rule.labels).toMatchObject({
+      exercise: 'service-observability',
+      environment: 'aws-demo',
+    });
   });
 
   test('never activates a rule or suppresses telemetry failures as healthy', () => {
     const { ruleGroup, setup } = renderServiceGrafana(config);
-    expect(ruleGroup.rules[0]).toMatchObject({ isPaused: true, noDataState: 'NoData', execErrState: 'Error' });
+    expect(ruleGroup.rules[0]).toMatchObject({
+      isPaused: true,
+      noDataState: 'NoData',
+      execErrState: 'Error',
+    });
     expect(setup.notificationSafety).toContain('Pause before silence expiry');
     expect(JSON.stringify(ruleGroup)).not.toContain('notification_settings');
   });
@@ -48,12 +56,20 @@ describe('service Grafana artifacts', () => {
     const link = renderServiceGrafana({ ...config, tempoUid: 'demo-tempo' }).dashboard.links[2];
     const left = JSON.parse(new URL(link.url).searchParams.get('left')!);
     expect(left.datasource).toBe('demo-tempo');
-    expect(left.queries[0].query).toBe('{ resource.service.name = "movie-recommendation-service" }');
+    expect(left.queries[0].query).toBe(
+      '{ resource.service.name = "movie-recommendation-service" }',
+    );
     expect(left.range).toEqual({ from: 'now-15m', to: 'now' });
   });
 
   test('supports reviewed threshold/cadence adjustments and concrete environment selection', () => {
-    const { ruleGroup } = renderServiceGrafana({ ...config, environment: 'service', minimumErrors: 5, evaluationSeconds: 30, pendingSeconds: 60 });
+    const { ruleGroup } = renderServiceGrafana({
+      ...config,
+      environment: 'service',
+      minimumErrors: 5,
+      evaluationSeconds: 30,
+      pendingSeconds: 60,
+    });
     expect(ruleGroup.interval).toBe(30);
     expect(ruleGroup.rules[0].for).toBe('60s');
     expect(ruleGroup.rules[0].data[1].model.expression).toBe('$A >= 5');
@@ -61,23 +77,41 @@ describe('service Grafana artifacts', () => {
   });
 
   test.each([
-    { ampUid: '../unsafe' }, { folderUid: '' }, { environment: 'x"} or vector(1)' },
-    { tempoUid: 'bad uid' }, { grafanaUrl: 'http://grafana.test' },
-    { grafanaUrl: 'https://token@grafana.test' }, { runbookUrl: 'https://example.test/?token=private' },
-    { minimumErrors: 0 }, { minimumErrors: NaN }, { minimumErrors: 1.5 },
-    { evaluationSeconds: 0 }, { pendingSeconds: -1 },
-  ])('rejects invalid runtime inputs: %j', override => {
+    { ampUid: '../unsafe' },
+    { folderUid: '' },
+    { environment: 'x"} or vector(1)' },
+    { tempoUid: 'bad uid' },
+    { grafanaUrl: 'http://grafana.test' },
+    { grafanaUrl: 'https://token@grafana.test' },
+    { runbookUrl: 'https://example.test/?token=private' },
+    { minimumErrors: 0 },
+    { minimumErrors: NaN },
+    { minimumErrors: 1.5 },
+    { evaluationSeconds: 0 },
+    { pendingSeconds: -1 },
+  ])('rejects invalid runtime inputs: %j', (override) => {
     expect(() => renderServiceGrafana({ ...config, ...override })).toThrow();
   });
 
   test('CLI emits only parseable JSON and rejects unknown/missing arguments', () => {
     const output = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
     try {
-      main(['--amp-uid', 'demo-amp', '--folder-uid', 'service-observability', '--grafana-url', config.grafanaUrl, '--runbook-url', config.runbookUrl]);
+      main([
+        '--amp-uid',
+        'demo-amp',
+        '--folder-uid',
+        'service-observability',
+        '--grafana-url',
+        config.grafanaUrl,
+        '--runbook-url',
+        config.runbookUrl,
+      ]);
       const json = JSON.parse(String(output.mock.calls[0][0]));
       expect(json.ruleGroup.rules[0].isPaused).toBe(true);
       expect(() => main([])).toThrow('Missing --amp-uid');
       expect(() => main(['--publish'])).toThrow();
-    } finally { output.mockRestore(); }
+    } finally {
+      output.mockRestore();
+    }
   });
 });

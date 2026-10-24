@@ -8,9 +8,12 @@ test('defines exactly the four variants the runbook pushes', () => {
   expect(VARIANTS).toEqual(['good-1', 'good-2', 'bad-5xx', 'crash']);
 });
 
-test.each(VARIANTS)('keeps /healthz healthy for %s so only alarms can stop bad revisions', (variant) => {
-  expect(respond(variant, '/healthz').status).toBe(200);
-});
+test.each(VARIANTS)(
+  'keeps /healthz healthy for %s so only alarms can stop bad revisions',
+  (variant) => {
+    expect(respond(variant, '/healthz').status).toBe(200);
+  },
+);
 
 test.each(['good-1', 'good-2', 'crash'])('serves 200 on application paths for %s', (variant) => {
   expect(respond(variant, '/')).toEqual({ status: 200, body: `hello from ${variant}\n` });

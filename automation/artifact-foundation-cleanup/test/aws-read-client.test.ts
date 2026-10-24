@@ -1,7 +1,4 @@
-import {
-  CloudFormationClient,
-  DescribeStacksCommand,
-} from '@aws-sdk/client-cloudformation';
+import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
 import {
   DescribeRepositoriesCommand,
   ECRClient,
@@ -64,9 +61,7 @@ function stsClient(
   return { send: handler } as unknown as StsReadClient;
 }
 
-function inspectRepository(
-  reader: AwsSdkArtifactFoundationReader,
-): Promise<unknown> {
+function inspectRepository(reader: AwsSdkArtifactFoundationReader): Promise<unknown> {
   return reader.inspectRepository(RESERVATION_SERVICE_REPOSITORY_DEFINITION);
 }
 
@@ -78,6 +73,7 @@ test('verifies the exact SDK caller with one read-only STS command', async () =>
     ecrClient(async () => ({})),
     stsClient(async (command) => {
       commands.push(command);
+
       return {
         Account: TEST_TARGET.accountId,
         Arn:
@@ -131,6 +127,7 @@ test('inspects an exact CloudFormation stack with one read command', async () =>
     TEST_TARGET,
     cloudFormationClient(async (command) => {
       commands.push(command);
+
       return {
         Stacks: [
           {
@@ -230,12 +227,15 @@ test('inventories repository settings, tags, lifecycle, and paginated image dige
       if (command instanceof DescribeRepositoriesCommand) {
         return { repositories: [repositoryDescription()] };
       }
+
       if (command instanceof ListTagsForResourceCommand) {
         return { tags: [{ Key: 'Scope', Value: 'artifact-foundation' }] };
       }
+
       if (command instanceof GetLifecyclePolicyCommand) {
         return { lifecyclePolicyText: EXPECTED_LIFECYCLE_POLICY };
       }
+
       if (command instanceof ListImagesCommand && command.input.nextToken === undefined) {
         return {
           imageIds: [
@@ -245,11 +245,13 @@ test('inventories repository settings, tags, lifecycle, and paginated image dige
           nextToken: 'second-page',
         };
       }
+
       if (command instanceof ListImagesCommand && command.input.nextToken === 'second-page') {
         return {
           imageIds: [{ imageDigest: TEST_DIGEST_B }],
         };
       }
+
       throw new Error(`Unexpected command ${String(command)}`);
     }),
     stsClient(),
@@ -296,19 +298,19 @@ test('inventories repository settings, tags, lifecycle, and paginated image dige
     ) {
       expect(command.input.registryId).toBe(TEST_TARGET.accountId);
     }
-    if (
-      command instanceof GetLifecyclePolicyCommand ||
-      command instanceof ListImagesCommand
-    ) {
+
+    if (command instanceof GetLifecyclePolicyCommand || command instanceof ListImagesCommand) {
       expect(command.input.repositoryName).toBe(
         RESERVATION_SERVICE_REPOSITORY_DEFINITION.repositoryName,
       );
     }
+
     if (command instanceof DescribeRepositoriesCommand) {
       expect(command.input.repositoryNames).toEqual([
         RESERVATION_SERVICE_REPOSITORY_DEFINITION.repositoryName,
       ]);
     }
+
     if (command instanceof ListImagesCommand) {
       expect(command.input.filter).toEqual({ imageStatus: 'ANY' });
     }
@@ -353,6 +355,7 @@ test('refuses a repository identity outside the pinned target', async () => {
           ],
         };
       }
+
       throw new Error('follow-up commands must not run');
     }),
     stsClient(),
@@ -372,15 +375,19 @@ test('rejects malformed repository tags instead of creating an ambiguous tag map
       if (command instanceof DescribeRepositoriesCommand) {
         return { repositories: [repositoryDescription()] };
       }
+
       if (command instanceof ListTagsForResourceCommand) {
         return { tags: [{ Key: 'Scope' }] };
       }
+
       if (command instanceof GetLifecyclePolicyCommand) {
         return { lifecyclePolicyText: EXPECTED_LIFECYCLE_POLICY };
       }
+
       if (command instanceof ListImagesCommand) {
         return { imageIds: [] };
       }
+
       throw new Error('unexpected command');
     }),
     stsClient(),
@@ -399,15 +406,19 @@ test('sanitizes unexpected lifecycle-policy failures', async () => {
       if (command instanceof DescribeRepositoriesCommand) {
         return { repositories: [repositoryDescription()] };
       }
+
       if (command instanceof ListTagsForResourceCommand) {
         return { tags: [] };
       }
+
       if (command instanceof GetLifecyclePolicyCommand) {
         throw new Error('private lifecycle diagnostic for 111111111111');
       }
+
       if (command instanceof ListImagesCommand) {
         return { imageIds: [] };
       }
+
       throw new Error('unexpected command');
     }),
     stsClient(),
@@ -428,16 +439,21 @@ test('rejects a repeated ECR image pagination token', async () => {
       if (command instanceof DescribeRepositoriesCommand) {
         return { repositories: [repositoryDescription()] };
       }
+
       if (command instanceof ListTagsForResourceCommand) {
         return { tags: [] };
       }
+
       if (command instanceof GetLifecyclePolicyCommand) {
         return { lifecyclePolicyText: EXPECTED_LIFECYCLE_POLICY };
       }
+
       if (command instanceof ListImagesCommand) {
         imagePageCalls += 1;
+
         return { imageIds: [], nextToken: 'repeated-token' };
       }
+
       throw new Error('unexpected command');
     }),
     stsClient(),
@@ -459,15 +475,19 @@ test.each([undefined, 'sha256:not-a-digest'])(
         if (command instanceof DescribeRepositoriesCommand) {
           return { repositories: [repositoryDescription()] };
         }
+
         if (command instanceof ListTagsForResourceCommand) {
           return { tags: [] };
         }
+
         if (command instanceof GetLifecyclePolicyCommand) {
           return { lifecyclePolicyText: EXPECTED_LIFECYCLE_POLICY };
         }
+
         if (command instanceof ListImagesCommand) {
           return { imageIds: [{ imageDigest }] };
         }
+
         throw new Error('unexpected command');
       }),
       stsClient(),

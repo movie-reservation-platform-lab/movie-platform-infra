@@ -1,9 +1,5 @@
 import { inspectArtifactFoundation } from '../src/inspection';
-import {
-  renderExecutionPlan,
-  renderExecutionResult,
-  renderInspectionReport,
-} from '../src/report';
+import { renderExecutionPlan, renderExecutionResult, renderInspectionReport } from '../src/report';
 import { buildCleanupConfirmation, planArtifactFoundationCleanup } from '../src/cleanup';
 import { CLEANUP_EXECUTION_OUTCOME } from '../src/model';
 import {
@@ -40,10 +36,7 @@ test('renders destructive operations without exposing the full account ID', asyn
     createReader({ foundationStack: FOUNDATION_STACK, repositories: [REPOSITORY] }),
     TEST_ARTIFACT_REPOSITORY_CATALOG,
   );
-  const plan = planArtifactFoundationCleanup(
-    inspection,
-    buildCleanupConfirmation(TEST_TARGET),
-  );
+  const plan = planArtifactFoundationCleanup(inspection, buildCleanupConfirmation(TEST_TARGET));
 
   const report = renderExecutionPlan(plan);
 

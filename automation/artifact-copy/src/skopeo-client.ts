@@ -5,11 +5,7 @@ import {
   ARTIFACT_COPY_FAILURE_STAGE,
   failArtifactCopy,
 } from './artifact-copy-error';
-import type {
-  RawManifestReadRequest,
-  RegistryCopyRequest,
-  RegistryImageClient,
-} from './model';
+import type { RawManifestReadRequest, RegistryCopyRequest, RegistryImageClient } from './model';
 
 const INSPECT_TIMEOUT_MILLISECONDS = 30_000;
 const COPY_TIMEOUT_MILLISECONDS = 5 * 60_000;
@@ -42,40 +38,29 @@ export function createSkopeoRegistryClient(
   runner: ProcessRunner = runProcess,
 ): RegistryImageClient {
   const executablePath = validateExecutablePath(options.executablePath);
+
   return Object.freeze({
     readRawManifest: async (request: RawManifestReadRequest) => {
       const { reference, authFile } = request;
-      const authArguments = authFile === undefined
-        ? ['--no-creds']
-        : ['--authfile', authFile];
+      const authArguments = authFile === undefined ? ['--no-creds'] : ['--authfile', authFile];
       const result = runSkopeo(
         runner,
         executablePath,
-        [
-          'inspect',
-          '--raw',
-          '--tls-verify=true',
-          ...authArguments,
-          `docker://${reference}`,
-        ],
+        ['inspect', '--raw', '--tls-verify=true', ...authArguments, `docker://${reference}`],
         INSPECT_TIMEOUT_MILLISECONDS,
         'inspect',
       );
       if (result.stdout.length === 0) {
         failTool('skopeo inspect returned no manifest bytes');
       }
+
       return Buffer.from(result.stdout);
     },
     copy: async (request: RegistryCopyRequest) => {
-      const {
-        sourceReference,
-        destinationReference,
-        sourceAuthFile,
-        destinationAuthFile,
-      } = request;
-      const sourceAuthArguments = sourceAuthFile === undefined
-        ? ['--src-no-creds']
-        : ['--src-authfile', sourceAuthFile];
+      const { sourceReference, destinationReference, sourceAuthFile, destinationAuthFile } =
+        request;
+      const sourceAuthArguments =
+        sourceAuthFile === undefined ? ['--src-no-creds'] : ['--src-authfile', sourceAuthFile];
       runSkopeo(
         runner,
         executablePath,
@@ -105,16 +90,19 @@ function runSkopeo(
   timeoutMilliseconds: number,
   operation: 'copy' | 'inspect',
 ): ProcessResult {
-  const result = runner(Object.freeze({
-    executable: executablePath,
-    arguments: Object.freeze([...arguments_]),
-    timeoutMilliseconds,
-    maxOutputBytes: MAX_CAPTURED_OUTPUT_BYTES,
-    shell: false,
-  }));
+  const result = runner(
+    Object.freeze({
+      executable: executablePath,
+      arguments: Object.freeze([...arguments_]),
+      timeoutMilliseconds,
+      maxOutputBytes: MAX_CAPTURED_OUTPUT_BYTES,
+      shell: false,
+    }),
+  );
   if (result.error !== undefined || result.status !== 0) {
     failTool(`skopeo ${operation} failed`);
   }
+
   return result;
 }
 
@@ -127,6 +115,7 @@ function validateExecutablePath(value: string): string {
   ) {
     failTool('skopeo executable path must be a normalized absolute path');
   }
+
   return value;
 }
 
@@ -139,6 +128,7 @@ function runProcess(invocation: ProcessInvocation): ProcessResult {
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: invocation.timeoutMilliseconds,
   });
+
   return {
     status: result.status,
     stdout: result.stdout ?? Buffer.alloc(0),
