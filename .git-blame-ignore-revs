@@ -1,0 +1,8 @@
+# Formatting-only commits that git blame should skip, so each line still shows
+# the commit that last changed its meaning.
+#
+# GitHub reads this file automatically. Locally, enable it once with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: format committed TypeScript with Prettier and ESLint layout fixes
+00f19253b42b728566072fcbea97caf0f08b3264
