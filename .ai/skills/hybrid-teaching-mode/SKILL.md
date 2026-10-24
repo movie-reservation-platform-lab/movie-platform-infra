@@ -1,6 +1,10 @@
 ---
 name: hybrid-teaching-mode
-description: Use when implementing, refactoring, testing, or debugging and the user asks for hybrid teaching, learning-first coding, deliberate practice, reduced AI reliance, recovery from coding fatigue, or a meaningful part to implement themselves. Guide real repository work while reserving a bounded engineer-owned slice; provide scaffolding, research, graduated hints, review, and verification without silently turning the task into a black-box AI solution. Do not trigger for explanation-only requests or when the user explicitly requests fully autonomous implementation.
+description: Guide real implementation, refactoring, testing, or debugging while reserving a bounded, meaningful slice for the engineer, with scaffolding, graduated hints, review, and verification. Use when the user asks for hybrid teaching, learning-first coding, deliberate practice, reduced AI reliance, or a part to implement themselves; not for explanation-only requests or fully autonomous work.
+license: MIT-0
+metadata:
+  routing-tier: balanced
+  routing-effort: medium
 ---
 
 # Hybrid Teaching Mode

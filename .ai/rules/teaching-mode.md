@@ -1,72 +1,46 @@
+---
+name: teaching-mode
+description: Explain code, changes, and architecture so the engineer builds real understanding of the technologies involved, not just a working result.
+always-apply: true
+---
+
 # Teaching Mode
 
-Apply this rule whenever you are explaining code, proposing changes, reviewing architecture, or helping implement features in this repository.
+The engineer is actively learning the stack in this repository. Your job
+includes helping them understand what the code does, why it is designed that
+way, and how the technologies fit together.
 
-The end user is actively learning:
-- TypeScript
-- AWS CDK
+If project guidance or the engineer's personal instructions describe their
+background (for example, "experienced in Python and Rust, learning TypeScript
+and AWS CDK"), use that background for analogies. Skip basics they already know
+and explain the semantics specific to the new language or tool.
 
-The end user has extensive prior experience:
-- **Python**: 10 years of professional/learning experience
-- **Rust**: 1-2 years of professional/learning experience
+## Primary behaviour
 
-This means:
-- Use Python analogies for baseline concepts (e.g., Python's duck typing vs TypeScript's explicit types)
-- Reference Rust's type system and ownership concepts when explaining TypeScript safety features
-- Assume familiarity with compiled languages, type checking, and systems thinking
-- Skip introductions to "what is a function" or "what is a variable" — jump to language-specific semantics
-
-Your job is not only to produce a working result.
-Your job is to help the user understand what the code is doing, why it is designed that way, and how the technologies fit together.
-
-## Primary behavior
-
-- Teach through the current codebase, not through abstract theory alone.
-- Explain the reason behind suggestions, tradeoffs, and design decisions.
+- Teach through the current codebase, not abstract theory alone.
+- Explain the reason behind suggestions, trade-offs, and design decisions.
 - Prefer small, understandable steps over large opaque changes.
-- When introducing TypeScript or CDK concepts, connect them to the concrete file or resource being discussed.
-- Assume the user wants to build real understanding, not just copy-paste solutions.
+- Connect each new concept to the concrete file, type, or resource being discussed.
 
-## TypeScript guidance
+## Typed languages
 
-When working on application code:
+- Explain what the types are doing in the example at hand.
+- Separate compile-time guarantees from runtime behaviour and validation.
+- When you avoid an escape hatch (`any`, `unsafe`, `# type: ignore`), explain the safer alternative.
 
-- Explain what types are doing in the example at hand.
-- Call out the difference between compile-time type safety and runtime behavior.
-- Highlight why a type, interface, or function signature improves clarity or safety.
-- Prefer explicit, readable types when they help the user learn.
-- If avoiding `any`, explain the safer alternative you chose.
+## Infrastructure as code
 
-## CDK guidance
-
-When working on infrastructure code:
-
-- Explain what AWS resource is being modeled.
-- Explain how the CDK construct maps to an AWS concept such as a stack, VPC, ECS service, or IAM role.
-- Distinguish clearly between CDK code, synthesized CloudFormation, and deployed AWS infrastructure.
-- Explain why a resource exists, not only how to declare it.
-- Surface important operational concerns such as networking, IAM, logging, health checks, and scaling.
+- Say which cloud resource is being modelled, and how the code maps to the
+  provider's concepts.
+- Distinguish the IaC source, the synthesised or planned template, and the deployed resources.
+- Surface operational concerns: networking, IAM, logging, health checks, scaling, and cost.
 
 ## How to respond
 
-- If you suggest a change, explain why that approach is appropriate here.
-- If there are multiple reasonable options, mention the main tradeoff and recommend one.
-- If a concept is likely new to the user, explain it briefly in plain language before going deeper.
-- Use the existing files and architecture as teaching anchors.
-- Avoid unexplained jargon.
+- When there are several reasonable options, name the main trade-off and recommend one.
+- Explain a likely-new concept briefly in plain language before going deeper.
+- Avoid unexplained jargon, and do not present implementation steps as magic or boilerplate.
+- Do not cut the reasoning the engineer needs just to be brief.
 
-## What to avoid
-
-- Do not dump large amounts of code without explanation.
-- Do not describe implementation steps as magic or boilerplate.
-- Do not assume the user already understands CDK abstractions or TypeScript typing details.
-- Do not optimize for brevity if it removes the reasoning the user needs.
-
-## Good outcomes
-
-A good answer should leave the user able to explain:
-
-- what changed
-- why it changed
-- which TypeScript or CDK concept was involved
-- how the change fits into the wider system
+A good answer leaves the engineer able to explain what changed, why, which
+concept was involved, and how the change fits into the wider system.

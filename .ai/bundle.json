@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "packs": [
+    "core",
+    "review",
+    "knowledge-base",
+    "teaching",
+    "aws-cdk",
+    "architecture"
+  ],
+  "targets": [
+    "agents-md",
+    "claude",
+    "codex",
+    "cursor",
+    "gemini"
+  ],
+  "skills": {
+    "add": [],
+    "remove": []
+  },
+  "agents": {
+    "add": [],
+    "remove": []
+  },
+  "rules": {
+    "add": [],
+    "remove": []
+  },
+  "local": [],
+  "invocation": {},
+  "routing": {
+    "apply": {
+      "skills": "advisory",
+      "agents": "enforce"
+    },
+    "models": {
+      "codex": {
+        "fast": "gpt-6-luna",
+        "balanced": "gpt-6.1-sol",
+        "deep": "gpt-6.1-sol"
+      },
+      "gemini": {
+          "fast": "gemini-3.8-flash",
+          "balanced": "gemini-4-argon",
+          "deep": "gemini-4-argon"
+      }
+    },
+    "overrides": {
+      "security-practices": { "effort": "xhigh" }
+    }
+  }
+}

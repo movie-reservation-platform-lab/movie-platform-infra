@@ -10,24 +10,51 @@ of hiding them behind broad abstractions.
 
 ## Repository Layout
 
-- `bin/`: CDK app entrypoint.
-- `apps/`: independently buildable and synthesizable CDK application workspaces.
-- `packages/`: reusable workspace packages that deployable apps may consume.
+Root CDK apps (the original workload and its foundations):
+
+- `bin/`: CDK app entrypoints for the root stacks: workload (`infra.ts`),
+  artifact foundation, GitHub OIDC trust, and observability.
+- `lib/`: root stacks, the configuration boundary (`lib/config/`), and
+  infrastructure helpers.
+- `test/`: Jest tests for the root stacks using CDK assertions, plus script
+  self-tests.
+
+npm workspaces (each has its own `package.json`, build, and tests):
+
+- `apps/`: independently buildable and synthesizable CDK applications, each
+  with its own `bin/`, `lib/`, and `test/`.
+- `packages/`: reusable workspace packages that apps and automation may consume.
 - `automation/`: independently tested operator and CI commands; workspace tools
   consume packages without importing deployable apps.
 - `local-tools/`: committed developer-operated maintenance tools; CI tests their
   behavior but normal build, synth, and deploy flows do not perform their mutations.
-- `lib/`: stack, configuration boundary, and infrastructure helpers.
-- `adot-collector/`: repository-owned ADOT collector Docker image asset.
-- `grafana/dashboards/`: dashboard artifacts for managed observability.
+
+Repository-owned images and observability artifacts:
+
+- `adot-collector/`: ADOT collector Docker image asset.
+- `tempo/`: Grafana Tempo Docker image asset and configuration.
+- `audit-router/`: Fluent Bit image and routing configuration for audit logs.
+- `grafana/`: offline dashboard generation (`service.ts`) and dashboard
+  artifacts (`grafana/dashboards/`) for managed observability.
+
+Tooling and documentation:
+
 - `scripts/`: local validation and post-deploy smoke tooling.
-- `test/`: Jest tests using CDK assertions and script self-tests.
+- `.github/workflows/`: CI, which runs `npm run ci`.
 - `docs/plans/`: issue-level implementation plans and review notes.
 - `docs/architecture/`: durable infrastructure design notes and topology.
-- `docs/operations/`: deployment runbooks, teardown, smoke checks, and
+- `docs/operations/`: deployment workflow, teardown, smoke checks, and
   troubleshooting.
+- `docs/runbooks/`: alarm response runbooks.
+- `docs/contracts/` and `docs/observability/`: cross-repository data contracts
+  (platform audit event schema, service signal contract).
 - `.ai/`: source of truth for AI guidance, rules, skills, and review agents.
-  `AGENTS.md` is generated from this folder by `.ai/sync.sh`.
+  `python3 .ai/render.py` generates `AGENTS.md`, `GEMINI.md`, and the
+  `.claude/`, `.agents/`, `.codex/`, `.cursor/`, and `.gemini/` outputs from it;
+  `python3 .ai/render.py --check` reports stale outputs. Edit `.ai/`, never the
+  generated files. Skills come from a shared catalog pinned in
+  `.ai/bundle-lock.json`; put repository-specific additions to a catalog skill
+  in `.ai/overlays/<skill>.md` instead of editing the skill.
 
 ## Dev Environment Tips
 
@@ -115,9 +142,15 @@ Prefer these project-approved sources over generic tutorials:
 | Technology | Purpose | Preferred sources |
 | --- | --- | --- |
 | TypeScript + Node.js | CDK language/runtime | [TypeScript Handbook](https://www.typescriptlang.org/docs/), [TSConfig Reference](https://www.typescriptlang.org/tsconfig/), [Node.js Learn](https://nodejs.org/learn) |
+| ESLint + Prettier + TSDoc | Linting, formatting, and doc comments | [typescript-eslint getting started](https://typescript-eslint.io/getting-started/), [ESLint configuration files](https://eslint.org/docs/latest/use/configure/configuration-files), [Prettier rationale](https://prettier.io/docs/rationale), [TSDoc](https://tsdoc.org/) |
 | Jest + CDK assertions | Infrastructure tests | [Jest docs](https://jestjs.io/docs/getting-started), [CDK testing docs](https://docs.aws.amazon.com/cdk/v2/guide/testing.html) |
-| AWS CDK + Constructs | Infrastructure as code | [CDK v2 guide](https://docs.aws.amazon.com/cdk/v2/guide/home.html), [CDK best practices](https://docs.aws.amazon.com/cdk/v2/guide/best-practices.html), [CDK API reference](https://docs.aws.amazon.com/cdk/api/v2/) |
-| ECS/Fargate/ALB | Primary AWS deployment target | [ECS guide](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/Welcome.html), [Fargate guide](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html), [ECS load balancing](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-load-balancing.html) |
-| Docker | ADOT collector image asset | [Docker build best practices](https://docs.docker.com/build/building/best-practices/) |
+| AWS CDK + Constructs | Infrastructure as code | [CDK v2 guide](https://docs.aws.amazon.com/cdk/v2/guide/home.html), [CDK best practices](https://docs.aws.amazon.com/cdk/v2/guide/best-practices.html), [CDK API reference](https://docs.aws.amazon.com/cdk/api/v2/), [CDK Aspects](https://docs.aws.amazon.com/cdk/v2/guide/aspects.html) |
+| IAM | Least-privilege roles and policies in every stack | [Policy evaluation logic](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html), [Service Authorization Reference](https://docs.aws.amazon.com/service-authorization/latest/reference/reference.html) (actions, resource ARNs, condition keys), [IAM best practices](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html) |
+| ECS/Fargate/ALB | Primary AWS deployment target | [ECS guide](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/Welcome.html), [Fargate guide](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html), [ECS load balancing](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-load-balancing.html), [ECS deployment alarms](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/deployment-alarm-failure.html) |
+| Lambda + DynamoDB | Experiment sandbox control plane | [Lambda developer guide](https://docs.aws.amazon.com/lambda/latest/dg/welcome.html), [DynamoDB developer guide](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction.html) |
+| Firehose + Glue + Security Lake + OCSF | Audit event ingestion and storage | [Firehose record format conversion](https://docs.aws.amazon.com/firehose/latest/dev/record-format-conversion.html), [Security Lake custom sources](https://docs.aws.amazon.com/security-lake/latest/userguide/custom-sources.html), [OCSF schema browser](https://schema.ocsf.io/) |
+| Managed Prometheus + Managed Grafana + Tempo | Metrics, dashboards, and trace storage | [AMP user guide](https://docs.aws.amazon.com/prometheus/latest/userguide/what-is-Amazon-Managed-Service-Prometheus.html), [AMG user guide](https://docs.aws.amazon.com/grafana/latest/userguide/what-is-Amazon-Managed-Service-Grafana.html), [Grafana Tempo docs](https://grafana.com/docs/tempo/latest/) |
+| CloudWatch alarms + Fluent Bit | Alerting and audit log routing | [CloudWatch alarms](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/AlarmThatSendsEmail.html), [Fluent Bit manual](https://docs.fluentbit.io/manual) |
+| Docker | ADOT collector, Tempo, and audit router image assets | [Docker build best practices](https://docs.docker.com/build/building/best-practices/) |
 | GitHub Actions | Repository CI automation | [GitHub Actions docs](https://docs.github.com/en/actions) |
 | OpenTelemetry | Traces, metrics, and collector configuration | [OTel concepts](https://opentelemetry.io/docs/concepts/), [OTel Collector](https://opentelemetry.io/docs/collector/) |
