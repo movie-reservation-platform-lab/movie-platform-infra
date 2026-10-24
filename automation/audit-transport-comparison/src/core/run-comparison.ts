@@ -72,10 +72,12 @@ export async function runComparison(
   const logins = await sendLogins(settings, context, dependencies, runId);
   const audited = logins.filter(isAudited);
   const ids = audited.map(({ auditEventId }) => auditEventId);
+
   const polls: Record<StoreName, StorePoll> = {
     securityLake: { error: null, firstSeen: new Map() },
     legacy: { error: null, firstSeen: new Map() },
   };
+
   const catalogRefresh = { startedAt: null as Date | null, error: null as string | null };
 
   for (;;) {
@@ -84,11 +86,13 @@ export async function runComparison(
       workloadAccountId: context.workloadAccountId,
       region: context.region,
     };
+
     for (const store of ['securityLake', 'legacy'] as const) {
       await pollStore(dependencies.stores[store], polls[store], ids, window, deadline, clock);
     }
 
     const now = clock.now();
+
     if (!Object.values(polls).some((poll) => isAwaitingEvents(poll, ids)) || now >= deadline) {
       break;
     }
@@ -155,11 +159,14 @@ async function sendLogins(
     ...Array<LoginOutcome>(settings.attempts.accepted).fill('accepted'),
     ...Array<LoginOutcome>(settings.attempts.rejected).fill('rejected'),
   ];
+
   const attempts: LoginAttempt[] = [];
+
   for (const [index, expectedOutcome] of plan.entries()) {
     const requestId = `${runId}-${index + 1}`;
     const sentAt = dependencies.clock.now();
     let response: { httpStatus: number | null; auditEventId: string | null; error: string | null };
+
     try {
       response = {
         ...(await dependencies.login.login({
@@ -176,6 +183,7 @@ async function sendLogins(
     }
 
     const responseMs = dependencies.clock.now().getTime() - sentAt.getTime();
+
     attempts.push({ requestId, expectedOutcome, sentAt, responseMs, ...response });
   }
 
@@ -191,6 +199,7 @@ async function pollStore(
   clock: Clock,
 ): Promise<void> {
   const missing = ids.filter((id) => !poll.firstSeen.has(id));
+
   if (poll.error !== null || missing.length === 0) {
     return;
   }
@@ -198,6 +207,7 @@ async function pollStore(
   try {
     const found = await reader.findEventIds(missing, window, deadline);
     const seenAt = clock.now();
+
     missing.filter((id) => found.has(id)).forEach((id) => poll.firstSeen.set(id, seenAt));
   } catch (error) {
     if (error instanceof QueryDeadlineExceededError) {

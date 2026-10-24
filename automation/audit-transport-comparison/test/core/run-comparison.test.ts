@@ -21,6 +21,7 @@ describe('runComparison', () => {
     );
 
     expect(result.status).toBe('passed');
+
     expect(result.events).toEqual([
       {
         auditEventId: ID_ACCEPTED,
@@ -35,6 +36,7 @@ describe('runComparison', () => {
         legacy: { found: true, delaySeconds: 60 },
       },
     ]);
+
     expect(result.stores.securityLake.status).toBe('complete');
     expect(result.stores.legacy.status).toBe('complete');
     expect(result.logins.every(({ expectedStatus }) => expectedStatus)).toBe(true);
@@ -45,6 +47,7 @@ describe('runComparison', () => {
       { httpStatus: 200, auditEventId: ID_ACCEPTED },
       { httpStatus: 401, auditEventId: ID_REJECTED },
     );
+
     await runComparison(
       TEST_SETTINGS,
       TEST_CONTEXT,
@@ -55,7 +58,9 @@ describe('runComparison', () => {
       'demo-password',
       REJECTED_PASSWORD,
     ]);
+
     expect(logins.requests.map(({ requestId }) => requestId)).toEqual(['run12345-1', 'run12345-2']);
+
     expect(new Set(logins.requests.map(({ correlationId }) => correlationId))).toEqual(
       new Set(['transport-comparison-run12345']),
     );
@@ -63,6 +68,7 @@ describe('runComparison', () => {
 
   it('reports a store that is still missing events at the deadline as incomplete, not as an error', async () => {
     const clock = new FakeClock();
+
     const result = await runComparison(
       TEST_SETTINGS,
       TEST_CONTEXT,
@@ -81,6 +87,7 @@ describe('runComparison', () => {
 
   it('never sleeps past the deadline or longer than one poll interval', async () => {
     const clock = new FakeClock();
+
     await runComparison(
       TEST_SETTINGS,
       TEST_CONTEXT,
@@ -114,6 +121,7 @@ describe('runComparison', () => {
     const failure = new TypeError(
       'fetch failed: connect ECONNREFUSED http://internal-alb.example:80',
     );
+
     const result = await runComparison(
       TEST_SETTINGS,
       TEST_CONTEXT,
@@ -123,20 +131,24 @@ describe('runComparison', () => {
     );
 
     expect(result.status).toBe('failed');
+
     expect(result.logins[0]).toMatchObject({
       httpStatus: null,
       auditEventId: null,
       expectedStatus: false,
     });
+
     expect(result.logins[0]?.error).toBe('TypeError: fetch failed: connect ECONNREFUSED <url>');
   });
 
   it('stops polling a store after a query error and keeps the error', async () => {
     const clock = new FakeClock();
     const securityLake = availableAfter(clock, {});
+
     securityLake.failure = Object.assign(new Error('not authorized'), {
       name: 'AccessDeniedException',
     });
+
     const result = await runComparison(
       TEST_SETTINGS,
       TEST_CONTEXT,
@@ -149,22 +161,26 @@ describe('runComparison', () => {
     );
 
     expect(result.status).toBe('failed');
+
     expect(result.stores.securityLake).toMatchObject({
       status: 'error',
       error: 'AccessDeniedException: not authorized',
     });
+
     expect(securityLake.calls).toHaveLength(1);
   });
 
   describe('Security Lake crawler', () => {
     it('starts once, after the refresh delay, while Security Lake lags', async () => {
       const clock = new FakeClock();
+
       const dependencies = fakeComparisonDependencies(clock, {
         stores: {
           securityLake: availableAfter(clock, { [ID_ACCEPTED]: 300, [ID_REJECTED]: 300 }),
           legacy: availableAfter(clock, { [ID_ACCEPTED]: 60, [ID_REJECTED]: 60 }),
         },
       });
+
       const result = await runComparison(TEST_SETTINGS, TEST_CONTEXT, dependencies);
 
       expect(dependencies.crawlerStarts).toEqual([after(90)]);
@@ -173,12 +189,14 @@ describe('runComparison', () => {
 
     it('is not started when Security Lake already has every event', async () => {
       const clock = new FakeClock();
+
       const dependencies = fakeComparisonDependencies(clock, {
         stores: {
           securityLake: availableAfter(clock, { [ID_ACCEPTED]: 30, [ID_REJECTED]: 30 }),
           legacy: availableAfter(clock, { [ID_ACCEPTED]: 300, [ID_REJECTED]: 300 }),
         },
       });
+
       await runComparison(TEST_SETTINGS, TEST_CONTEXT, dependencies);
 
       expect(dependencies.crawlerStarts).toEqual([]);
@@ -186,6 +204,7 @@ describe('runComparison', () => {
 
     it('is never started when refreshCatalog is off', async () => {
       const dependencies = fakeComparisonDependencies(new FakeClock());
+
       await runComparison({ ...TEST_SETTINGS, refreshCatalog: false }, TEST_CONTEXT, dependencies);
 
       expect(dependencies.crawlerStarts).toEqual([]);
@@ -193,6 +212,7 @@ describe('runComparison', () => {
 
     it('records a failed start but keeps polling, because existing partitions stay readable', async () => {
       const clock = new FakeClock();
+
       const result = await runComparison(
         TEST_SETTINGS,
         TEST_CONTEXT,
@@ -213,6 +233,7 @@ describe('runComparison', () => {
         status: 'complete',
         catalogRefreshError: 'AccessDeniedException: denied',
       });
+
       expect(result.status).toBe('passed');
     });
   });
@@ -248,6 +269,7 @@ describe('runComparison', () => {
       );
 
       expect(result.status).toBe('failed');
+
       expect(result.deliveryHealth).toEqual({
         deadLetterMessages: null,
         alarmsInAlarm: [],

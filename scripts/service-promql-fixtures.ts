@@ -8,13 +8,17 @@ const query = renderServiceGrafana({
   grafanaUrl: 'https://grafana.example.test',
   runbookUrl: 'https://example.test/runbook',
 }).ruleGroup.rules[0].data[0].model.expr!;
+
 const counter = 'movie_recommendation_service_http_requests_total';
+
 const labels =
   'deployment_environment="aws-demo",service_name="movie-recommendation-service",http_route="/recommendations"';
+
 const series = (status: string, values: string) => ({
   series: `${counter}{${labels},http_status_code="${status}"}`,
   values,
 });
+
 const check = (eval_time: string, expected?: number) => ({
   expr: query,
   eval_time,

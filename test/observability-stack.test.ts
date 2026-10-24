@@ -20,6 +20,7 @@ function actions(statement: { readonly Action: string | string[] }): string[] {
 
 describe('ObservabilityStack (default configuration)', () => {
   let template: Template;
+
   beforeAll(() => {
     template = Template.fromStack(
       new ObservabilityStack(new cdk.App(), 'ObservabilityTest', {
@@ -32,8 +33,11 @@ describe('ObservabilityStack (default configuration)', () => {
   describe('log groups', () => {
     it('uses separate disposable one-week logs for every component, ADOT, metrics, and Container Insights', () => {
       const logGroups = resources(template, 'AWS::Logs::LogGroup');
+
       expect(logGroups).toHaveLength(10);
+
       const names = logGroups.map(({ Properties }) => Properties?.LogGroupName);
+
       for (const component of APPLICATION_COMPONENT_INPUTS) {
         expect(names).toContain(`/movie-platform/aws-demo/${component.componentId}/app`);
       }
@@ -45,6 +49,7 @@ describe('ObservabilityStack (default configuration)', () => {
           '/aws/ecs/containerinsights/movie-reservation-platform-aws-demo/performance',
         ]),
       );
+
       for (const logGroup of logGroups) {
         expect(logGroup.Properties?.RetentionInDays).toBe(7);
         expect(logGroup.DeletionPolicy).toBe('Delete');
@@ -60,17 +65,22 @@ describe('ObservabilityStack (default configuration)', () => {
         PermissionType: 'CUSTOMER_MANAGED',
         PluginAdminEnabled: true,
       });
+
       const policies = resources(template, 'AWS::IAM::Policy');
+
       const grafanaPolicy = policies.find(({ Properties }) =>
         String(Properties?.PolicyName).includes('GrafanaDataAccessPolicy'),
       );
+
       const document = grafanaPolicy?.Properties?.PolicyDocument as {
         readonly Statement: Array<{
           readonly Action: string | string[];
           readonly Resource: unknown;
         }>;
       };
+
       const allActions = document.Statement.flatMap(actions);
+
       expect(allActions).toEqual(
         expect.arrayContaining([
           'aps:QueryMetrics',
@@ -81,21 +91,29 @@ describe('ObservabilityStack (default configuration)', () => {
           'xray:GetTraceSummaries',
         ]),
       );
+
       expect(allActions.some((action) => /Put|Create|Delete|Update/.test(action))).toBe(false);
       expect(allActions.some((action) => action.includes('*'))).toBe(false);
+
       const scopedLogs = document.Statement.find(({ Action }) =>
         actions({ Action }).includes('logs:StartQuery'),
       );
+
       expect(JSON.stringify(scopedLogs?.Resource)).toContain(
         '/movie-platform/aws-demo/reservation-agent/app',
       );
+
       expect(scopedLogs?.Resource).not.toBe('*');
+
       const xray = document.Statement.find(({ Action }) =>
         actions({ Action }).includes('xray:BatchGetTraces'),
       );
+
       expect(xray?.Resource).toBe('*');
       expect(xray).toMatchObject({ Effect: 'Allow' });
+
       const xrayActions = allActions.filter((action) => action.startsWith('xray:'));
+
       expect(xrayActions.sort()).toEqual(
         [
           'xray:BatchGetTraces',
@@ -110,6 +128,7 @@ describe('ObservabilityStack (default configuration)', () => {
           'xray:GetTraceSummaries',
         ].sort(),
       );
+
       expect(xray).toMatchObject({ Action: expect.arrayContaining(['xray:GetGroups']) });
     });
   });

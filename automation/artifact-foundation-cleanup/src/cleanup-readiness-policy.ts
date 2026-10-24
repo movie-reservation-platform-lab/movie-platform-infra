@@ -83,6 +83,7 @@ function findFoundationRepositoryBlockers(
           definition.componentId,
         ),
       );
+
       continue;
     }
 
@@ -281,6 +282,7 @@ function matchesExpectedLifecyclePolicy(policyText: string | undefined): boolean
   }
 
   let value: unknown;
+
   try {
     value = JSON.parse(policyText) as unknown;
   } catch {
@@ -292,6 +294,7 @@ function matchesExpectedLifecyclePolicy(policyText: string | undefined): boolean
   }
 
   const rule = value.rules[0];
+
   if (!isRecord(rule) || !isRecord(rule.selection) || !isRecord(rule.action)) {
     return false;
   }

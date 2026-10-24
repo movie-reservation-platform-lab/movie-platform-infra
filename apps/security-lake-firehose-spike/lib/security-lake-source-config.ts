@@ -34,6 +34,7 @@ export function loadSecurityLakeSourceConfig(
   auditConfig: AuditAccountConfig,
 ): SecurityLakeSourceConfig {
   const configFilepath = environment[SECURITY_LAKE_FIREHOSE_SPIKE_CONFIG_ENVIRONMENT_VARIABLE];
+
   if (configFilepath === undefined || configFilepath.length === 0) {
     throw new SecurityLakeSourceConfigError(
       `${SECURITY_LAKE_FIREHOSE_SPIKE_CONFIG_ENVIRONMENT_VARIABLE} must name the config file.`,
@@ -56,6 +57,7 @@ export function parseSecurityLakeSourceConfigJson(
 ): SecurityLakeSourceConfig {
   const value = parseJsonObject(contents);
   const expectedKeys = ['providerRoleArn', 'sourceAccountId', 'sourceLocation'] as const;
+
   if (
     Object.keys(value).length !== expectedKeys.length ||
     !expectedKeys.every((key) => key in value)
@@ -66,6 +68,7 @@ export function parseSecurityLakeSourceConfigJson(
   }
 
   const sourceAccountId = requireString(value.sourceAccountId, 'sourceAccountId');
+
   if (!auditConfig.workloadAccountIds.includes(sourceAccountId)) {
     throw new SecurityLakeSourceConfigError(
       'sourceAccountId must be one of the configured workload accounts.',
@@ -75,9 +78,11 @@ export function parseSecurityLakeSourceConfigJson(
   const sourceLocation = requireString(value.sourceLocation, 'sourceLocation');
   const location = parseSourceLocation(sourceLocation);
   const providerRoleArn = requireString(value.providerRoleArn, 'providerRoleArn');
+
   const roleMatch = providerRoleArn.match(
     /^arn:(?:aws|aws-us-gov|aws-cn):iam::([0-9]{12}):role\/(AmazonSecurityLake-Provider-[A-Za-z0-9._:+,=@-]+)$/,
   );
+
   if (
     roleMatch === null ||
     roleMatch[1] !== auditConfig.auditAccountId ||
@@ -99,6 +104,7 @@ export function parseSecurityLakeSourceConfigJson(
 
 function parseJsonObject(contents: string): Readonly<Record<string, unknown>> {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(contents) as unknown;
   } catch {
@@ -125,6 +131,7 @@ function parseSourceLocation(sourceLocation: string): {
   readonly sourcePrefix: string;
 } {
   let location: URL;
+
   try {
     location = new URL(sourceLocation);
   } catch {
@@ -132,6 +139,7 @@ function parseSourceLocation(sourceLocation: string): {
   }
 
   const sourcePrefix = location.pathname.slice(1);
+
   if (
     location.protocol !== 's3:' ||
     !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(location.hostname) ||

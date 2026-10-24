@@ -35,6 +35,7 @@ export function loadSecurityLakeCustomSourceResponse(
   auditAccountId: string,
 ): SecurityLakeCustomSourceResponse {
   const responsePath = environment[SECURITY_LAKE_CUSTOM_SOURCE_RESPONSE_ENVIRONMENT_VARIABLE];
+
   if (responsePath === undefined || responsePath.length === 0) {
     throw new Error(
       `${SECURITY_LAKE_CUSTOM_SOURCE_RESPONSE_ENVIRONMENT_VARIABLE} must name the custom-source response file.`,
@@ -59,13 +60,16 @@ export function parseSecurityLakeCustomSourceResponse(
   const source = requireJsonObject(response.source, 'source');
   const provider = requireJsonObject(source.provider, 'source.provider');
   const sourceName = requireExactString(source.sourceName, CUSTOM_SOURCE_NAME, 'source.sourceName');
+
   const sourceVersion = requireExactString(
     source.sourceVersion,
     CUSTOM_SOURCE_VERSION,
     'source.sourceVersion',
   );
+
   const providerRoleArn = requireNonEmptyString(provider.roleArn, 'source.provider.roleArn');
   const providerRoleName = requireProviderRoleName(providerRoleArn, auditAccountId);
+
   const { bucketName, sourcePrefix } = parseSourceLocation(
     requireNonEmptyString(provider.location, 'source.provider.location'),
   );
@@ -121,11 +125,13 @@ function requireExactString<T extends string>(value: unknown, expected: T, field
 /** Validate provider-role ownership and extract its IAM role name. */
 function requireProviderRoleName(roleArn: string, auditAccountId: string): string {
   const match = /^arn:[^:]+:iam::([0-9]{12}):role\/(.+)$/.exec(roleArn);
+
   if (match === null || match[1] !== auditAccountId || match[2] === undefined) {
     throw new Error('source.provider.roleArn must belong to the audit account.');
   }
 
   const roleName = match[2].split('/').at(-1);
+
   if (roleName === undefined || roleName.length === 0) {
     throw new Error('source.provider.roleArn must contain a role name.');
   }
@@ -139,6 +145,7 @@ function parseSourceLocation(location: string): {
   readonly sourcePrefix: string;
 } {
   let parsed: URL;
+
   try {
     parsed = new URL(location);
   } catch {
@@ -146,6 +153,7 @@ function parseSourceLocation(location: string): {
   }
 
   const sourcePrefix = parsed.pathname.slice(1);
+
   if (
     parsed.protocol !== 's3:' ||
     parsed.hostname.length === 0 ||

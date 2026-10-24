@@ -7,7 +7,9 @@ export {
   type SecurityLakeDestination,
   WORKLOAD_ACCOUNT_TAG,
 } from './audit-ingestion';
+
 export { buildAuthenticationEventPattern } from './authentication-routing';
+
 export {
   AUDIT_EVENTBRIDGE_DETAIL_TYPE,
   AUDIT_EVENTBRIDGE_ENVELOPE_VERSION,

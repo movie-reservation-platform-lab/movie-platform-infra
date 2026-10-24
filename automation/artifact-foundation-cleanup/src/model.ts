@@ -6,6 +6,7 @@ import type {
 export type { ArtifactKind };
 
 export const ARTIFACT_FOUNDATION_STACK_NAME = 'ArtifactFoundationStack';
+
 export const WORKLOAD_STACK_NAME = 'MovieReservationWorkloadStack';
 
 export type ArtifactRepositoryDefinition = ArtifactFoundationRepositoryDefinition;

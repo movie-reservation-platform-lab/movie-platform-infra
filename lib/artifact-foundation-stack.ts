@@ -59,6 +59,7 @@ function createArtifactRepository(
   // the L2's ergonomic repository API while making the approved encryption
   // contract explicit in the synthesized template.
   const cfnRepository = repository.node.defaultChild;
+
   if (!(cfnRepository instanceof ecr.CfnRepository)) {
     throw new Error(
       'Expected the ECR repository L2 construct to contain an AWS::ECR::Repository resource.',
@@ -77,10 +78,12 @@ function createArtifactRepository(
     description: `Name of the ECR repository that receives admitted ${definition.displayName} artifacts`,
     value: repository.repositoryName,
   });
+
   new cdk.CfnOutput(scope, definition.outputNames.uri, {
     description: `URI of the ECR repository that receives admitted ${definition.displayName} artifacts`,
     value: repository.repositoryUri,
   });
+
   new cdk.CfnOutput(scope, definition.outputNames.arn, {
     description: `ARN of the ECR repository that receives admitted ${definition.displayName} artifacts`,
     value: repository.repositoryArn,

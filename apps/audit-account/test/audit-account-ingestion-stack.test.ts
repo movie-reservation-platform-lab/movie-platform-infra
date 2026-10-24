@@ -78,6 +78,7 @@ describe('AuditAccountIngestionStack', () => {
 
     ingestionTemplate.resourceCountIs('AWS::Events::Rule', 1);
     ingestionTemplate.resourceCountIs('AWS::KinesisFirehose::DeliveryStream', 1);
+
     ingestionTemplate.hasResourceProperties('AWS::Events::Rule', {
       EventPattern: Match.objectLike({ account: ['333333333333'] }),
     });
@@ -96,7 +97,9 @@ describe('AuditAccountIngestionStack', () => {
 
     for (const resourceType of ['AWS::Events::Archive', 'AWS::SQS::Queue']) {
       const resources = Object.values(ingestionTemplate.findResources(resourceType));
+
       expect(resources).not.toHaveLength(0);
+
       for (const resource of resources) {
         expect(resource).toMatchObject({
           DeletionPolicy: 'Delete',
@@ -110,6 +113,7 @@ describe('AuditAccountIngestionStack', () => {
     const ingestionTemplate = createIngestionTemplate();
 
     ingestionTemplate.resourceCountIs('AWS::S3::Bucket', 0);
+
     ingestionTemplate.hasResourceProperties('AWS::Athena::WorkGroup', {
       Name: 'movie-platform-audit-investigation',
       WorkGroupConfiguration: {
@@ -120,6 +124,7 @@ describe('AuditAccountIngestionStack', () => {
         PublishCloudWatchMetricsEnabled: true,
       },
     });
+
     ingestionTemplate.hasOutput('AuditInvestigationWorkGroupName', {
       Value: { Ref: Match.stringLikeRegexp('^AuditInvestigationWorkGroup') },
     });
@@ -144,6 +149,7 @@ describe('AuditAccountIngestionStack', () => {
 
       ingestionTemplate.resourceCountIs('AWS::SNS::Topic', 1);
       ingestionTemplate.resourceCountIs('AWS::SNS::Subscription', 0);
+
       ingestionTemplate.hasResourceProperties('AWS::SNS::TopicPolicy', {
         PolicyDocument: Match.objectLike({
           Statement: Match.arrayWith([
@@ -154,6 +160,7 @@ describe('AuditAccountIngestionStack', () => {
           ]),
         }),
       });
+
       ingestionTemplate.hasOutput('AuditDeliveryAlarmTopicArn', {
         Value: { Ref: Match.stringLikeRegexp('^AuditDeliveryAlarmsAlarmTopic') },
       });
@@ -177,6 +184,7 @@ describe('AuditAccountIngestionStack', () => {
         Threshold: 0,
         TreatMissingData: 'notBreaching',
       });
+
       ingestionTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
         AlarmActions: topicAction,
         ComparisonOperator: 'GreaterThanThreshold',
@@ -198,6 +206,7 @@ describe('AuditAccountIngestionStack', () => {
 
     it('alarms on stale delivery, conversion failures, and sustained throttling', () => {
       const ingestionTemplate = createIngestionTemplate();
+
       const streamDimension = [
         {
           Name: 'DeliveryStreamName',
@@ -217,6 +226,7 @@ describe('AuditAccountIngestionStack', () => {
         Threshold: 900,
         TreatMissingData: 'notBreaching',
       });
+
       ingestionTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
         AlarmActions: topicAction,
         ComparisonOperator: 'GreaterThanThreshold',
@@ -229,6 +239,7 @@ describe('AuditAccountIngestionStack', () => {
         Threshold: 0,
         TreatMissingData: 'notBreaching',
       });
+
       ingestionTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
         AlarmActions: topicAction,
         ComparisonOperator: 'GreaterThanThreshold',
@@ -251,17 +262,22 @@ describe('AuditAccountIngestionStack', () => {
       });
 
       ingestionTemplate.resourceCountIs('AWS::CloudWatch::Alarm', 10);
+
       for (const accountId of ['333333333333', '444444444444']) {
         const producerAlarms = Object.values(
           alarmsMatching(ingestionTemplate, `AuditDeliveryAlarmsProducer${accountId}`),
         );
+
         expect(producerAlarms).toHaveLength(5);
+
         for (const { Properties } of producerAlarms) {
           expect(Properties.AlarmDescription).toContain(accountId);
+
           expect(Properties.Tags).toContainEqual({
             Key: 'movie-platform:workload-account',
             Value: accountId,
           });
+
           expect(Properties.AlarmActions).toEqual([
             { Ref: expect.stringMatching(/^AuditDeliveryAlarmsAlarmTopic/) },
           ]);

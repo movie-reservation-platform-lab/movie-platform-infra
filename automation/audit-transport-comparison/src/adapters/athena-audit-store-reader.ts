@@ -41,7 +41,9 @@ export class AthenaAuditStoreReader implements AuditStoreReader {
         WorkGroup: this.workGroup,
       }),
     );
+
     const queryId = started.QueryExecutionId;
+
     if (queryId === undefined) {
       throw new Error('Athena returned no query execution ID');
     }
@@ -56,7 +58,9 @@ export class AthenaAuditStoreReader implements AuditStoreReader {
       const { QueryExecution } = await this.client.send(
         new GetQueryExecutionCommand({ QueryExecutionId: queryId }),
       );
+
       const state = QueryExecution?.Status?.State;
+
       if (state === QueryExecutionState.SUCCEEDED) {
         return;
       }
@@ -72,6 +76,7 @@ export class AthenaAuditStoreReader implements AuditStoreReader {
         await this.client
           .send(new StopQueryExecutionCommand({ QueryExecutionId: queryId }))
           .catch(() => undefined);
+
         throw new QueryDeadlineExceededError();
       }
 
@@ -84,12 +89,15 @@ export class AthenaAuditStoreReader implements AuditStoreReader {
     const uids = new Set<string>();
     let nextToken: string | undefined;
     let isHeaderRow = true;
+
     for (let page = 0; page < MAX_RESULT_PAGES; page += 1) {
       const result = await this.client.send(
         new GetQueryResultsCommand({ QueryExecutionId: queryId, NextToken: nextToken }),
       );
+
       for (const row of result.ResultSet?.Rows ?? []) {
         const uid = row.Data?.[0]?.VarCharValue;
+
         if (!isHeaderRow && uid !== undefined) {
           uids.add(uid);
         }
@@ -98,6 +106,7 @@ export class AthenaAuditStoreReader implements AuditStoreReader {
       }
 
       nextToken = result.NextToken;
+
       if (nextToken === undefined) {
         return uids;
       }

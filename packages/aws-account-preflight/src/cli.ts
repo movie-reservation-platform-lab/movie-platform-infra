@@ -86,6 +86,7 @@ export function runCli(
     return 0;
   } catch (error: unknown) {
     const message = error instanceof PreflightFailure ? error.message : 'unexpected internal error';
+
     streams.stderr(`AWS account preflight failed: ${message}\n`);
 
     return 1;

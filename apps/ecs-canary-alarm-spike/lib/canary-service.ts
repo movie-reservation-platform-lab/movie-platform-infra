@@ -95,6 +95,7 @@ export function createCanaryService(
       ),
     }),
   });
+
   target.attachToApplicationTargetGroup(props.blueTargetGroup);
 
   return service;

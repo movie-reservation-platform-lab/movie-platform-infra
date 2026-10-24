@@ -27,6 +27,7 @@ export function loadSecurityLakePrerequisitesConfig(
   auditConfig: AuditAccountConfig,
 ): SecurityLakePrerequisitesConfig {
   const configFilepath = environment[SECURITY_LAKE_PREREQUISITES_CONFIG_ENVIRONMENT_VARIABLE];
+
   if (configFilepath === undefined || configFilepath.length === 0) {
     throw new SecurityLakePrerequisitesConfigError(
       `${SECURITY_LAKE_PREREQUISITES_CONFIG_ENVIRONMENT_VARIABLE} must name the config file.`,
@@ -52,6 +53,7 @@ export function parseSecurityLakePrerequisitesConfigJson(
 ): SecurityLakePrerequisitesConfig {
   const value = parseJsonObject(contents);
   const expectedKeys = ['bucketArn', 'region'] as const;
+
   if (
     Object.keys(value).length !== expectedKeys.length ||
     !expectedKeys.every((key) => key in value)
@@ -62,6 +64,7 @@ export function parseSecurityLakePrerequisitesConfigJson(
   }
 
   const region = requireString(value.region, 'region');
+
   if (region !== auditConfig.region) {
     throw new SecurityLakePrerequisitesConfigError(
       'Security Lake prerequisite Region must match the configured audit Region.',
@@ -69,6 +72,7 @@ export function parseSecurityLakePrerequisitesConfigJson(
   }
 
   const bucketArn = requireString(value.bucketArn, 'bucketArn');
+
   if (!/^arn:(?:aws|aws-us-gov|aws-cn):s3:::[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucketArn)) {
     throw new SecurityLakePrerequisitesConfigError(
       'bucketArn must identify one S3 bucket without an object prefix.',
@@ -84,6 +88,7 @@ export function parseSecurityLakePrerequisitesConfigJson(
 
 function parseJsonObject(contents: string): Readonly<Record<string, unknown>> {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(contents) as unknown;
   } catch {

@@ -24,6 +24,7 @@ test('pins routing values to the reviewed audit SDK revision', () => {
 
   for (const [relativePath, expectedHash] of Object.entries(provenance.artifact_sha256)) {
     const contents = readFileSync(join(__dirname, '..', 'contract', 'bundle', relativePath));
+
     expect(createHash('sha256').update(contents).digest('hex')).toBe(expectedHash);
   }
 

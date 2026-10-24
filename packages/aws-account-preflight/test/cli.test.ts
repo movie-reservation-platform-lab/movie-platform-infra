@@ -25,6 +25,7 @@ test('rejects unknown options through the standard Node argument parser', () => 
 
   expect(result.status).toBe(1);
   expect(result.stdout).toBe('');
+
   expect(result.stderr).toBe(
     'AWS account preflight failed: invalid arguments; run with --help for usage\n',
   );

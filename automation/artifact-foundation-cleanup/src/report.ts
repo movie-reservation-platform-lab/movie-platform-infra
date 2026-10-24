@@ -49,6 +49,7 @@ export function renderExecutionPlan(plan: CleanupExecutionPlan): string {
     `Target: ${plan.target.profile}/${plan.target.region}/account-${plan.target.accountId.slice(-4)}`,
     'Operations:',
   ];
+
   let operationNumber = 1;
 
   if (plan.foundationStack === undefined && plan.repositories.length === 0) {
@@ -64,6 +65,7 @@ export function renderExecutionPlan(plan: CleanupExecutionPlan): string {
     lines.push(
       `  ${operationNumber}. Disable termination protection on ${plan.foundationStack.name}.`,
     );
+
     operationNumber += 1;
   }
 
@@ -71,6 +73,7 @@ export function renderExecutionPlan(plan: CleanupExecutionPlan): string {
     lines.push(
       `  ${operationNumber}. Delete ${plan.foundationStack.name} and wait for confirmed absence.`,
     );
+
     operationNumber += 1;
   }
 
@@ -78,6 +81,7 @@ export function renderExecutionPlan(plan: CleanupExecutionPlan): string {
     lines.push(
       `  ${operationNumber}. Force-delete ECR repository ${repository.name} and every image it contains.`,
     );
+
     operationNumber += 1;
   }
 
@@ -136,9 +140,11 @@ function renderStack(
     `  termination protection: ${stack.terminationProtection ? 'enabled' : 'disabled'}`,
     '  outputs:',
   ];
+
   const outputs = Object.entries(stack.outputs).sort(([left], [right]) =>
     left.localeCompare(right),
   );
+
   if (outputs.length === 0) {
     lines.push('    (none)');
   } else {
@@ -158,6 +164,7 @@ function renderRepositories(
   accountId: string,
 ): string[] {
   const lines = ['Artifact repositories:'];
+
   if (repositories.length === 0) {
     lines.push('  (none configured)');
 
@@ -208,6 +215,7 @@ function renderRepository(inspection: ArtifactRepositoryInspection, accountId: s
 
   if (repository.tagMutabilityExclusions.length > 0) {
     lines.push('    mutability exclusion values:');
+
     for (const exclusion of repository.tagMutabilityExclusions) {
       lines.push(`      ${JSON.stringify(redactAccount(exclusion, accountId))}`);
     }
@@ -216,6 +224,7 @@ function renderRepository(inspection: ArtifactRepositoryInspection, accountId: s
   lines.push('    tags:');
 
   const tags = Object.entries(repository.tags).sort(([left], [right]) => left.localeCompare(right));
+
   if (tags.length === 0) {
     lines.push('      (none)');
   } else {
@@ -228,11 +237,13 @@ function renderRepository(inspection: ArtifactRepositoryInspection, accountId: s
   }
 
   lines.push(`    image digests: ${repository.images.length}`);
+
   for (const image of repository.images) {
     const tagsText =
       image.tags.length === 0
         ? '(untagged)'
         : image.tags.map((tag) => JSON.stringify(redactAccount(tag, accountId))).join(', ');
+
     lines.push(`      ${image.digest} tags: ${tagsText}`);
   }
 

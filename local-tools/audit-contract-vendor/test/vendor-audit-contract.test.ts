@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { vendorAuditContract } from '../vendor-audit-contract';
 
 const SOURCE_REVISION = 'a'.repeat(40);
+
 const ARTIFACTS = {
   'manifest.json': '{"contract":"platform-audit/1"}\n',
   'platform-audit-event-v1.schema.json': '{"type":"object"}\n',
@@ -26,6 +27,7 @@ describe('audit contract vendor', () => {
   it('copies the reviewed bundle and records its revision and hashes', () => {
     const sourceBundleDirectory = join(temporaryDirectory, 'source');
     const destinationContractDirectory = join(temporaryDirectory, 'destination');
+
     writeArtifacts(sourceBundleDirectory, ARTIFACTS);
     writeProvenance(destinationContractDirectory);
 
@@ -43,10 +45,12 @@ describe('audit contract vendor', () => {
     };
 
     expect(provenance.source_revision).toBe(SOURCE_REVISION);
+
     for (const [relativePath, contents] of Object.entries(ARTIFACTS)) {
       expect(readFileSync(join(destinationContractDirectory, 'bundle', relativePath), 'utf8')).toBe(
         contents,
       );
+
       expect(provenance.artifact_sha256[relativePath]).toBe(
         createHash('sha256').update(contents).digest('hex'),
       );
@@ -56,10 +60,12 @@ describe('audit contract vendor', () => {
   it('rejects an unrelated bundle before changing the destination', () => {
     const sourceBundleDirectory = join(temporaryDirectory, 'unrelated');
     const destinationContractDirectory = join(temporaryDirectory, 'destination');
+
     writeArtifacts(sourceBundleDirectory, {
       ...ARTIFACTS,
       'manifest.json': '{"contract":"something-else/1"}\n',
     });
+
     writeProvenance(destinationContractDirectory);
 
     expect(() =>
@@ -69,6 +75,7 @@ describe('audit contract vendor', () => {
         sourceRevision: SOURCE_REVISION,
       }),
     ).toThrow('is not a platform-audit/1 bundle');
+
     expect(readFileSync(join(destinationContractDirectory, 'provenance.json'), 'utf8')).toContain(
       'old-revision',
     );
@@ -78,6 +85,7 @@ describe('audit contract vendor', () => {
 function writeArtifacts(root: string, artifacts: Readonly<Record<string, string>>): void {
   for (const [relativePath, contents] of Object.entries(artifacts)) {
     const path = join(root, relativePath);
+
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, contents);
   }
@@ -85,6 +93,7 @@ function writeArtifacts(root: string, artifacts: Readonly<Record<string, string>
 
 function writeProvenance(destinationContractDirectory: string): void {
   mkdirSync(destinationContractDirectory, { recursive: true });
+
   writeFileSync(
     join(destinationContractDirectory, 'provenance.json'),
     `${JSON.stringify({

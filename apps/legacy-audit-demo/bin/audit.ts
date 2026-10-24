@@ -4,6 +4,7 @@ import { AuditStack } from '../lib/audit-stack';
 import { resolveAuditConfig } from '../lib/audit-config';
 
 const app = new cdk.App();
+
 new AuditStack(app, 'AuditStack', {
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
   config: resolveAuditConfig({

@@ -115,6 +115,7 @@ test.each([
       expect(result.status).toBe(1);
       expect(result.stderr).toContain(expectedMessage);
       expect(readFileSync(fixture.stsMarker, 'utf8')).toBe('');
+
       expectPrivateValuesAbsent(result, Object.values(envOverrides));
     } finally {
       fixture.cleanup();
@@ -159,6 +160,7 @@ test.each([
       expect(result.status).toBe(1);
       expect(result.stderr).toContain(expectedMessage);
       expect(readFileSync(fixture.stsMarker, 'utf8')).toContain('sts get-caller-identity');
+
       expectPrivateValuesAbsent(result, Object.values(envOverrides));
     } finally {
       fixture.cleanup();
@@ -175,6 +177,7 @@ test('sanitizes an STS failure instead of forwarding AWS CLI diagnostics', () =>
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('STS GetCallerIdentity failed');
     expect(result.stderr).not.toContain('private AWS CLI diagnostic');
+
     expectPrivateValuesAbsent(result);
   } finally {
     fixture.cleanup();
@@ -188,6 +191,7 @@ test('passes only the exact SSO identity and prints the approved redacted fields
     const result = runFixturePreflight(fixture);
 
     expectSuccessfulRedactedResult(result);
+
     expect(result.stdout).toBe(
       [
         'AWS account preflight passed',
@@ -200,6 +204,7 @@ test('passes only the exact SSO identity and prints the approved redacted fields
     );
 
     const stsInvocation = readFileSync(fixture.stsMarker, 'utf8');
+
     expect(stsInvocation).toContain('sts get-caller-identity');
     expect(stsInvocation).toContain('--profile movie-platform-demo');
     expect(stsInvocation).toContain('--region eu-central-1');

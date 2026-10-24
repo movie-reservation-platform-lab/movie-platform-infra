@@ -43,6 +43,7 @@ export function createSkopeoRegistryClient(
     readRawManifest: async (request: RawManifestReadRequest) => {
       const { reference, authFile } = request;
       const authArguments = authFile === undefined ? ['--no-creds'] : ['--authfile', authFile];
+
       const result = runSkopeo(
         runner,
         executablePath,
@@ -50,6 +51,7 @@ export function createSkopeoRegistryClient(
         INSPECT_TIMEOUT_MILLISECONDS,
         'inspect',
       );
+
       if (result.stdout.length === 0) {
         failTool('skopeo inspect returned no manifest bytes');
       }
@@ -59,8 +61,10 @@ export function createSkopeoRegistryClient(
     copy: async (request: RegistryCopyRequest) => {
       const { sourceReference, destinationReference, sourceAuthFile, destinationAuthFile } =
         request;
+
       const sourceAuthArguments =
         sourceAuthFile === undefined ? ['--src-no-creds'] : ['--src-authfile', sourceAuthFile];
+
       runSkopeo(
         runner,
         executablePath,
@@ -99,6 +103,7 @@ function runSkopeo(
       shell: false,
     }),
   );
+
   if (result.error !== undefined || result.status !== 0) {
     failTool(`skopeo ${operation} failed`);
   }

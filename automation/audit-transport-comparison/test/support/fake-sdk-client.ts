@@ -11,6 +11,7 @@ export function fakeSdkClient(responses: ReadonlyArray<readonly [unknown, readon
     send: async (command: { constructor: unknown; input: unknown }) => {
       sent.push(command);
       const next = queues.get(command.constructor)?.shift();
+
       if (next === undefined) {
         throw new Error(`unexpected ${(command.constructor as { name: string }).name}`);
       }

@@ -8,6 +8,7 @@ import {
 import type { ImageManifestIdentity } from './model';
 
 export const OCI_IMAGE_MANIFEST_MEDIA_TYPE = 'application/vnd.oci.image.manifest.v1+json';
+
 export const DOCKER_V2_IMAGE_MANIFEST_MEDIA_TYPE =
   'application/vnd.docker.distribution.manifest.v2+json';
 
@@ -15,6 +16,7 @@ const SUPPORTED_IMAGE_MANIFEST_MEDIA_TYPES = new Set([
   OCI_IMAGE_MANIFEST_MEDIA_TYPE,
   DOCKER_V2_IMAGE_MANIFEST_MEDIA_TYPE,
 ]);
+
 const SHA256_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const DESCRIPTOR_MEDIA_TYPE_PATTERN = /^application\/[A-Za-z0-9][A-Za-z0-9.+-]*$/;
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
@@ -36,6 +38,7 @@ export function inspectRawImageManifest(
   location: ManifestLocation,
 ): ImageManifestIdentity {
   const actualDigest = calculateSha256Digest(rawManifest);
+
   if (actualDigest !== expectedDigest) {
     failArtifactCopy(
       ARTIFACT_COPY_FAILURE_CODE.MANIFEST_DIGEST_MISMATCH,
@@ -47,6 +50,7 @@ export function inspectRawImageManifest(
   }
 
   let manifestText: string;
+
   try {
     manifestText = UTF8_DECODER.decode(rawManifest);
   } catch {
@@ -54,6 +58,7 @@ export function inspectRawImageManifest(
   }
 
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(manifestText) as unknown;
   } catch {
@@ -76,6 +81,7 @@ export function inspectRawImageManifest(
   }
 
   const configDigest = readDescriptorDigest(parsed.config, location, 'config');
+
   if (!Array.isArray(parsed.layers)) {
     failInvalidManifest(location, 'layers must be an array');
   }

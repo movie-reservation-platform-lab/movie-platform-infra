@@ -24,8 +24,10 @@ export class AwsDeliveryHealthReader implements DeliveryHealthReader {
         AttributeNames: ['ApproximateNumberOfMessages', 'ApproximateNumberOfMessagesNotVisible'],
       }),
     );
+
     const visible = Attributes?.ApproximateNumberOfMessages;
     const inFlight = Attributes?.ApproximateNumberOfMessagesNotVisible;
+
     if (visible === undefined || inFlight === undefined) {
       throw new Error('SQS returned no message counts for the target DLQ');
     }

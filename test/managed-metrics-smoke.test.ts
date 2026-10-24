@@ -78,6 +78,7 @@ test('writes a sanitized dual-route success report with AMP and Container Insigh
     const report = parseReport(result);
 
     expect(result.status).toBe(0);
+
     expect(report).toMatchObject({
       result: 'success',
       failure_stage: null,
@@ -96,21 +97,26 @@ test('writes a sanitized dual-route success report with AMP and Container Insigh
       container_insights_task_datapoint_count: 2,
       container_insights_container_datapoint_count: 2,
     });
+
     expect(report.duration_ms).toBeGreaterThanOrEqual(0);
     expect(JSON.parse(readFileSync(reportPath, 'utf8'))).toEqual(report);
 
     const serializedReport = JSON.stringify(report);
+
     expect(serializedReport).not.toContain('request-1');
     expect(serializedReport).not.toContain('seat-1');
     expect(serializedReport).not.toContain('response');
 
     const awscurlArguments = readFileSync(fixture.awscurlArguments, 'utf8');
+
     expect(awscurlArguments).toContain('--profile\ntest-profile');
     expect(awscurlArguments).toContain('--region\neu-central-1');
     expect(awscurlArguments).toContain('--service\naps');
+
     expect(awscurlArguments).toContain(
       'https://aps-workspaces.eu-central-1.amazonaws.com/workspaces/ws-test/api/v1/query',
     );
+
     expect(awscurlArguments).not.toContain('AWS_ACCESS_KEY_ID');
     expect(awscurlArguments).not.toContain('AWS_SECRET_ACCESS_KEY');
 
@@ -125,12 +131,15 @@ test('writes a sanitized dual-route success report with AMP and Container Insigh
           }>,
       )
       .find((queries) => queries.some(({ Id }) => Id === 'taskCpu'));
+
     expect(containerQueries).toHaveLength(4);
+
     for (const query of containerQueries ?? []) {
       const expectedDimensions = [
         { Name: 'ClusterName', Value: 'movie-reservation-platform-aws-demo' },
         { Name: 'ServiceName', Value: 'movie-platform-demo' },
       ];
+
       if (query.Id.startsWith('container')) {
         expectedDimensions.push({ Name: 'ContainerName', Value: 'movie-reservation-service' });
       }
@@ -149,6 +158,7 @@ test('distinguishes a successful CloudWatch query from missing metric datapoints
     const result = runSmoke(fixture, {
       MANAGED_METRICS_SMOKE_METRIC_TIMEOUT_SECONDS: '1',
     });
+
     const report = parseReport(result);
 
     expect(result.status).toBe(1);
@@ -166,6 +176,7 @@ test('distinguishes a successful AMP query from an incomplete required metric se
     const result = runSmoke(fixture, {
       MANAGED_METRICS_SMOKE_METRIC_TIMEOUT_SECONDS: '1',
     });
+
     const report = parseReport(result);
 
     expect(result.status).toBe(1);
@@ -195,9 +206,12 @@ test('bounds a stalled AMP process and still emits a failure report', () => {
   const stalledAwscurl = `#!/usr/bin/env bash
 exec node -e 'setTimeout(() => process.exit(0), 5000)'
 `;
+
   const fixture = createFixture(successfulAws, successfulCurl, stalledAwscurl);
+
   try {
     const result = runSmoke(fixture, { MANAGED_METRICS_SMOKE_METRIC_TIMEOUT_SECONDS: '1' });
+
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(1);
     expect(parseReport(result).failure_stage).toBe('amp_query');
@@ -214,6 +228,7 @@ test('requires all four enhanced Container Insights metrics', () => {
     const result = runSmoke(fixture, {
       MANAGED_METRICS_SMOKE_METRIC_TIMEOUT_SECONDS: '1',
     });
+
     const report = parseReport(result);
 
     expect(result.status).toBe(1);
@@ -246,6 +261,7 @@ function createFixture(
   const awscurlArguments = path.join(directory, 'awscurl-arguments');
   const curlMarker = path.join(directory, 'curl-called');
   const requestCounter = path.join(directory, 'request-counter');
+
   writeFileSync(awsMarker, '');
   writeFileSync(awsArguments, '');
   writeFileSync(awscurlMarker, '');
@@ -296,6 +312,7 @@ function runSmoke(
     MANAGED_METRICS_SMOKE_METRIC_POLL_SECONDS: '1',
     ...envOverrides,
   });
+
   for (const [key, value] of Object.entries(envOverrides)) {
     if (value === undefined) {
       delete env[key];
@@ -328,6 +345,7 @@ function parseReport(result: {
     .split('\n')
     .reverse()
     .find((line) => line.startsWith('{'));
+
   if (reportLine === undefined) {
     throw new Error(
       `smoke output did not contain a JSON report (status ${result.status}): ${result.stdout}\n${result.stderr}`,
@@ -417,6 +435,7 @@ const ampBaseLabels = {
   aws_ecs_task_family: 'aws-demo-movie-platform-demo',
   cloud_region: 'eu-central-1',
 };
+
 const successfulAmpResponse = JSON.stringify({
   status: 'success',
   data: {

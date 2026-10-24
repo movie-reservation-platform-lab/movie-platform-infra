@@ -23,6 +23,7 @@ export function resolveObservabilityConfig(context: {
   enableGrafana?: unknown;
 }): ObservabilityConfig {
   const prefixList = context.allowedIngressPrefixListId;
+
   if (typeof prefixList !== 'string' || !/^pl-(?:[0-9a-f]{8}|[0-9a-f]{17})$/.test(prefixList)) {
     throw new Error('allowedIngressPrefixListId must be a concrete EC2 prefix list ID.');
   }

@@ -18,6 +18,7 @@ export function main(args: string[]): void {
       'pending-seconds': { type: 'string' },
     },
   });
+
   if (values.help) {
     process.stdout.write(
       'Render offline Grafana JSON (dashboard + paused HTTP alert rule group).\nRequired: --amp-uid UID --folder-uid UID --grafana-url HTTPS_URL --runbook-url HTTPS_URL\nOptional: --environment aws-demo --tempo-uid demo-tempo --minimum-errors 3 --evaluation-seconds 15 --pending-seconds 30\nNo API calls or credential inputs. Import/activation requires separate operator approval.\n',
@@ -46,6 +47,7 @@ export function main(args: string[]): void {
     pendingSeconds:
       values['pending-seconds'] === undefined ? undefined : Number(values['pending-seconds']),
   });
+
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 

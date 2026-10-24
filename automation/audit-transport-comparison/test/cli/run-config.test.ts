@@ -34,6 +34,7 @@ describe('parseRunConfig', () => {
     const config = parseRunConfig(JSON.stringify(VALID));
 
     expect(config.loginUrl.href).toBe(`http://demo.example.test${RUN_CONFIG_DEFAULTS.loginPath}`);
+
     expect(config.settings).toEqual({
       attempts: RUN_CONFIG_DEFAULTS.attempts,
       timeoutSeconds: RUN_CONFIG_DEFAULTS.timeoutSeconds,
@@ -47,12 +48,15 @@ describe('parseRunConfig', () => {
     expect(parse({ allowInsecureHttp: undefined })).toThrow(
       'must use https unless allowInsecureHttp is true',
     );
+
     expect(
       parse({ endpoint: 'https://demo.example.test', allowInsecureHttp: undefined }),
     ).not.toThrow();
+
     expect(parse({ endpoint: 'http://user:pw@demo.example.test' })).toThrow(
       'must not contain credentials',
     );
+
     expect(parse({ loginPath: '//evil.example.test/login' })).toThrow(
       'loginPath has an unsupported format',
     );

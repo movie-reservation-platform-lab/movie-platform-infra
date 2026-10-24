@@ -5,6 +5,7 @@ export {
   type ArtifactCopyFailureCode,
   type ArtifactCopyFailureStage,
 } from './artifact-copy-error';
+
 export {
   ARTIFACT_COPY_CLI_EXIT_CODE,
   ARTIFACT_COPY_CLI_FAILURE,
@@ -12,7 +13,9 @@ export {
   type ArtifactCopyCliDependencies,
   type ArtifactCopyCliStreams,
 } from './cli';
+
 export { copyAndVerifyArtifact, transferAndVerifyArtifact } from './artifact-copy';
+
 export {
   DOCKER_V2_IMAGE_MANIFEST_MEDIA_TYPE,
   OCI_IMAGE_MANIFEST_MEDIA_TYPE,
@@ -20,6 +23,7 @@ export {
   calculateSha256Digest,
   inspectRawImageManifest,
 } from './image-manifest';
+
 export {
   ARTIFACT_COPY_VERIFICATION_METHOD,
   ARTIFACT_TRANSFER_OPERATION,
@@ -36,6 +40,7 @@ export {
   type RegistryCopyRequest,
   type RegistryImageClient,
 } from './model';
+
 export {
   createSkopeoRegistryClient,
   type ProcessInvocation,

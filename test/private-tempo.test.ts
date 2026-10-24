@@ -10,6 +10,7 @@ interface SynthesizedResource {
 }
 
 const target = { account: '111111111111', region: 'eu-central-1' };
+
 const baseContext = {
   auditEventBusArn: 'arn:aws:events:eu-central-1:222222222222:event-bus/movie-platform-audit',
   allowedIngressPrefixListId: 'pl-0123456789abcdef0',
@@ -23,6 +24,7 @@ const baseContext = {
     ]),
   ),
 };
+
 function template(enableTempo: unknown = false): Template {
   return Template.fromStack(
     new MovieReservationWorkloadStack(new cdk.App(), 'Test', {
@@ -34,16 +36,21 @@ function template(enableTempo: unknown = false): Template {
 
 test('Tempo is disabled by default and context fails closed', () => {
   const t = template();
+
   t.resourceCountIs('AWS::ECS::TaskDefinition', 1);
   t.resourceCountIs('AWS::ServiceDiscovery::PrivateDnsNamespace', 0);
+
   expect(t.toJSON().Outputs.TempoQueryUrl).toBeUndefined();
   expect(() => template('yes')).toThrow('enableTempo');
 });
+
 test('enabled Tempo is a separate private task with non-root readiness and stable contracts', () => {
   const t = template(true);
+
   t.resourceCountIs('AWS::ECS::TaskDefinition', 2);
   t.resourceCountIs('AWS::EC2::NatGateway', 0);
   const resources = t.toJSON().Resources;
+
   expect(resources.TempoTaskDefinition.Properties).toMatchObject({
     Family: 'aws-demo-tempo',
     Cpu: '512',
@@ -58,6 +65,7 @@ test('enabled Tempo is a separate private task with non-root readiness and stabl
       }),
     ],
   });
+
   expect(resources.TempoService.Properties).toMatchObject({
     ServiceName: 'aws-demo-tempo',
     DesiredCount: 1,
@@ -69,23 +77,29 @@ test('enabled Tempo is a separate private task with non-root readiness and stabl
       AwsvpcConfiguration: expect.objectContaining({ AssignPublicIp: 'DISABLED' }),
     },
   });
+
   t.hasResourceProperties('AWS::ServiceDiscovery::PrivateDnsNamespace', {
     Name: 'aws-demo.internal',
   });
+
   expect(t.toJSON().Outputs.TempoQueryUrl.Value).toBe('http://tempo.aws-demo.internal:3200');
   expect(t.toJSON().Outputs.GrafanaVpcSubnetIds.Value['Fn::Join'][1]).toHaveLength(2);
+
   for (const port of [3200, 4317]) {
     const rules = (Object.values(resources) as SynthesizedResource[]).filter(
       (resource) =>
         resource.Type === 'AWS::EC2::SecurityGroupIngress' && resource.Properties.FromPort === port,
     );
+
     expect(rules).toHaveLength(1);
     expect(rules[0].Properties.SourceSecurityGroupId).toBeDefined();
     expect(rules[0].Properties.CidrIp).toBeUndefined();
   }
 });
+
 test('AMG can reach existing AWS query APIs and only its own AssumeRole target', () => {
   const t = template(true);
+
   for (const suffix of ['monitoring', 'ec2', 'aps']) {
     t.hasResourceProperties('AWS::EC2::VPCEndpoint', {
       ServiceName: `com.amazonaws.eu-central-1.${suffix}`,
@@ -105,13 +119,17 @@ test('AMG can reach existing AWS query APIs and only its own AssumeRole target',
       Version: '2012-10-17',
     },
   });
+
   const json = JSON.stringify(t.toJSON());
+
   for (const action of ['aps:QueryMetrics', 'xray:BatchGetTraces']) {
     expect(json).toContain(action);
   }
 });
+
 test('optional collector overlay keeps X-Ray and bounds failed Tempo export', () => {
   const t = template(true);
+
   t.hasResourceProperties('AWS::ECS::TaskDefinition', {
     ContainerDefinitions: Match.arrayWith([
       Match.objectLike({
@@ -123,7 +141,9 @@ test('optional collector overlay keeps X-Ray and bounds failed Tempo export', ()
       }),
     ]),
   });
+
   const overlay = readFileSync('adot-collector/tempo-overlay.yaml', 'utf8');
+
   expect(overlay).toContain('queue_size: 128');
   expect(overlay).toContain('max_elapsed_time: 15s');
   expect(overlay).toContain('otlp/reservation_mcp');
@@ -135,6 +155,7 @@ test('Tempo generator writes only to retained AMP using its task role', () => {
   const resources = t.toJSON().Resources;
   const task = resources.TempoTaskDefinition.Properties;
   const roleId = task.TaskRoleArn['Fn::GetAtt'][0];
+
   t.hasResourceProperties('AWS::IAM::Policy', {
     Roles: [{ Ref: roleId }],
     PolicyDocument: {
@@ -148,6 +169,7 @@ test('Tempo generator writes only to retained AMP using its task role', () => {
       ],
     },
   });
+
   expect(task.ContainerDefinitions[0].Environment).toEqual(
     expect.arrayContaining([
       { Name: 'AWS_REGION', Value: target.region },

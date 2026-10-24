@@ -13,6 +13,7 @@ const AUDIT_CONFIG: AuditAccountConfig = {
   workloadAccountIds: ['333333333333'],
   region: 'eu-central-1',
 };
+
 const PREREQUISITES_CONFIG = {
   bucketArn: 'arn:aws:s3:::aws-security-data-lake-eu-central-1-example',
   region: 'eu-central-1',
@@ -22,6 +23,7 @@ const PREREQUISITES_CONFIG = {
 describe('Security Lake custom-source prerequisites', () => {
   it('creates a Glue crawler role scoped to the Authentication source prefix', () => {
     const app = new App();
+
     const template = Template.fromStack(
       new SecurityLakeCustomSourcePrerequisitesStack(
         app,
@@ -44,8 +46,11 @@ describe('Security Lake custom-source prerequisites', () => {
         ]),
       },
     });
+
     const roles = template.findResources('AWS::IAM::Role');
+
     expect(JSON.stringify(roles)).toContain('AWSGlueServiceRole');
+
     template.hasResourceProperties('AWS::IAM::Policy', {
       PolicyDocument: {
         Statement: Match.arrayWith([
@@ -56,6 +61,7 @@ describe('Security Lake custom-source prerequisites', () => {
         ]),
       },
     });
+
     template.hasOutput('CrawlerRoleArn', { Value: Match.anyValue() });
   });
 

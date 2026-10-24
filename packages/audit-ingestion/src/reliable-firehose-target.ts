@@ -24,6 +24,7 @@ export class ReliableFirehoseTarget implements events.IRuleTarget {
       assumedBy: new iam.ServicePrincipal('events.amazonaws.com'),
       description: 'Allows EventBridge to deliver audit events to Firehose',
     });
+
     role.addToPolicy(
       new iam.PolicyStatement({
         actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'],

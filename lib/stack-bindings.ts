@@ -1,8 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
 
 export const PLATFORM_NAME = 'movie-reservation-platform';
+
 export const ENVIRONMENT_NAME = 'aws-demo';
+
 export const EXPORT_PREFIX = 'MoviePlatformAwsDemo';
+
 export const COMPONENTS = [
   'reservation-web',
   'reservation-agent',

@@ -26,14 +26,18 @@ export function buildFirehosePartitioning(
     {
       enabled: true,
     };
+
   const errorObjectPrefix = `${sourcePrefix.slice(0, -1)}-errors/`;
+
   const errorOutputPrefix =
     errorObjectPrefix + '!{firehose:error-output-type}/' + '!{timestamp:yyyy/MM/dd/HH}/';
+
   const prefix =
     `${sourcePrefix}` +
     `region=${region}/` +
     `accountId=${sourceAccountId}/` +
     `eventDay=!{partitionKeyFromQuery:eventDay}/`;
+
   const processingConfiguration: CfnDeliveryStream.ProcessingConfigurationProperty = {
     enabled: true,
     processors: [

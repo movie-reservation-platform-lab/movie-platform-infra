@@ -14,17 +14,21 @@ const AMP_QUERY_ACTIONS = [
   'aps:GetSeries',
   'aps:QueryMetrics',
 ];
+
 const CLOUDWATCH_METRIC_READ_ACTIONS = ['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics'];
+
 const CLOUDWATCH_LOG_GLOBAL_READ_ACTIONS = [
   'logs:DescribeLogGroups',
   'logs:GetQueryResults',
   'logs:StopQuery',
 ];
+
 const CLOUDWATCH_LOG_SCOPED_READ_ACTIONS = [
   'logs:GetLogEvents',
   'logs:GetLogGroupFields',
   'logs:StartQuery',
 ];
+
 const XRAY_READ_ACTIONS = [
   'xray:BatchGetTraces',
   'xray:GetGroups',
@@ -47,8 +51,10 @@ export class ObservabilityStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ObservabilityStackProps) {
     super(scope, id, props);
     const platformConfig = props.config;
+
     cdk.Tags.of(this).add('Platform', platformConfig.platformName);
     cdk.Tags.of(this).add('Environment', platformConfig.environmentName);
+
     const tagServiceResource = (resource: Construct): void => {
       cdk.Tags.of(resource).add('Service', platformConfig.serviceName);
     };
@@ -59,6 +65,7 @@ export class ObservabilityStack extends cdk.Stack {
         retentionPeriodInDays: 7,
       },
     });
+
     ampWorkspace.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
     tagServiceResource(ampWorkspace);
 
@@ -68,8 +75,10 @@ export class ObservabilityStack extends cdk.Stack {
         `/movie-platform/${platformConfig.environmentName}/${componentId}/app`,
       ]),
     ) as Record<(typeof APPLICATION_COMPONENTS)[number], string>;
+
     const adotLogGroupName = `/movie-platform/${platformConfig.environmentName}/adot`;
     const applicationMetricsLogGroupName = `/movie-platform/${platformConfig.environmentName}/metrics`;
+
     const grafanaReadableLogGroupArns = [
       ...Object.values(componentLogGroupNames),
       adotLogGroupName,
@@ -87,6 +96,7 @@ export class ObservabilityStack extends cdk.Stack {
     let grafanaId = 'disabled';
     let grafanaUrl = 'disabled';
     let grafanaRoleArn = 'disabled';
+
     if (platformConfig.enableGrafana) {
       // The workspace ARN is deliberately wildcarded in the trust policy to
       // avoid a CloudFormation cycle: Grafana needs this role ARN while creating
@@ -101,6 +111,7 @@ export class ObservabilityStack extends cdk.Stack {
         cdk.Aws.ACCOUNT_ID,
         ':/workspaces/*',
       ]);
+
       const grafanaDataAccessRole = new iam.Role(this, 'GrafanaDataAccessRole', {
         description: 'Allows Managed Grafana to read demo metrics, logs, and traces',
         assumedBy: new iam.ServicePrincipal('grafana.amazonaws.com', {
@@ -114,6 +125,7 @@ export class ObservabilityStack extends cdk.Stack {
           },
         }),
       });
+
       const grafanaDataAccessPolicy = new iam.Policy(this, 'GrafanaDataAccessPolicy', {
         roles: [grafanaDataAccessRole],
         statements: [
@@ -142,6 +154,7 @@ export class ObservabilityStack extends cdk.Stack {
           }),
         ],
       });
+
       grafanaRoleArn = grafanaDataAccessRole.roleArn;
 
       const grafanaWorkspace = new grafana.CfnWorkspace(this, 'GrafanaWorkspace', {
@@ -158,6 +171,7 @@ export class ObservabilityStack extends cdk.Stack {
         pluginAdminEnabled: true,
         roleArn: grafanaDataAccessRole.roleArn,
       });
+
       // roleArn creates a dependency on the role itself, not on its separately
       // synthesized AWS::IAM::Policy. Wait for both before Grafana validates and
       // starts using the customer-managed role.
@@ -174,27 +188,33 @@ export class ObservabilityStack extends cdk.Stack {
           .split('-')
           .map((part) => part[0].toUpperCase() + part.slice(1))
           .join('')}LogGroup`;
+
         const logGroup = new logs.LogGroup(this, constructId, {
           logGroupName: componentLogGroupNames[componentId],
           retention: logs.RetentionDays.ONE_WEEK,
           removalPolicy: cdk.RemovalPolicy.DESTROY,
         });
+
         tagServiceResource(logGroup);
 
         return [componentId, logGroup];
       }),
     ) as Record<(typeof APPLICATION_COMPONENTS)[number], logs.LogGroup>;
+
     const adotLogGroup = new logs.LogGroup(this, 'AdotLogGroup', {
       logGroupName: adotLogGroupName,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
     tagServiceResource(adotLogGroup);
+
     const applicationMetricsLogGroup = new logs.LogGroup(this, 'ApplicationMetricsLogGroup', {
       logGroupName: applicationMetricsLogGroupName,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
     tagServiceResource(applicationMetricsLogGroup);
 
     const routerLogGroup = new logs.LogGroup(this, 'AuditRouterLogGroup', {
@@ -202,6 +222,7 @@ export class ObservabilityStack extends cdk.Stack {
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
     const rejectedAuditMetric = new logs.MetricFilter(this, 'RejectedAuditEvents', {
       logGroup: routerLogGroup,
       filterPattern: logs.FilterPattern.stringValue('$.event', '=', 'audit_router.rejected'),
@@ -209,6 +230,7 @@ export class ObservabilityStack extends cdk.Stack {
       metricName: 'RejectedEvents',
       metricValue: '1',
     });
+
     new cloudwatch.Alarm(this, 'RejectedAuditEventsAlarm', {
       alarmDescription:
         'Audit router rejected an invalid event; inspect producer schema tests and router diagnostics.',
@@ -217,26 +239,31 @@ export class ObservabilityStack extends cdk.Stack {
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
+
     new logs.LogGroup(this, 'ContainerInsightsLogGroup', {
       logGroupName: `/aws/ecs/containerinsights/${platformConfig.platformName}-${platformConfig.environmentName}/performance`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
     for (const [component, group] of Object.entries(componentLogGroups)) {
       const name = component
         .split('-')
         .map((part) => part[0].toUpperCase() + part.slice(1))
         .join('');
+
       foundationOutput(this, `${name}LogGroupName`, group.logGroupName);
     }
 
     foundationOutput(this, 'AdotLogGroupName', adotLogGroup.logGroupName);
     foundationOutput(this, 'AuditRouterLogGroupName', routerLogGroup.logGroupName);
+
     foundationOutput(
       this,
       'ApplicationMetricsLogGroupName',
       applicationMetricsLogGroup.logGroupName,
     );
+
     foundationOutput(this, 'AmpWorkspaceId', ampWorkspace.attrWorkspaceId);
     foundationOutput(this, 'AmpWorkspaceArn', ampWorkspace.attrArn);
     foundationOutput(this, 'AmpPrometheusEndpoint', ampWorkspace.attrPrometheusEndpoint);

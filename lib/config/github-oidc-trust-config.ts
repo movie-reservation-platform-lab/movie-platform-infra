@@ -18,6 +18,7 @@ export interface GitHubOidcTrustConfig {
 }
 
 const CONFIG_KEYS = ['schemaVersion', 'bootstrapQualifier', 'admission', 'deployment'] as const;
+
 const IDENTITY_KEYS = [
   'subject',
   'repository',
@@ -27,6 +28,7 @@ const IDENTITY_KEYS = [
   'ref',
   'environment',
 ] as const;
+
 const BOOTSTRAP_QUALIFIER_PATTERN = /^[a-z0-9]{9}$/;
 const GITHUB_REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const GITHUB_ID_PATTERN = /^[1-9][0-9]*$/;
@@ -44,6 +46,7 @@ export function loadGitHubOidcTrustConfig(configPath: unknown): GitHubOidcTrustC
   }
 
   let value: unknown;
+
   try {
     value = JSON.parse(contents) as unknown;
   } catch {
@@ -55,6 +58,7 @@ export function loadGitHubOidcTrustConfig(configPath: unknown): GitHubOidcTrustC
 
 export function parseGitHubOidcTrustConfig(value: unknown): GitHubOidcTrustConfig {
   const config = parseObject(value, 'configuration');
+
   assertExactKeys(config, CONFIG_KEYS, 'configuration');
 
   if (config.schemaVersion !== '1') {
@@ -62,6 +66,7 @@ export function parseGitHubOidcTrustConfig(value: unknown): GitHubOidcTrustConfi
   }
 
   const bootstrapQualifier = parseExactClaim(config.bootstrapQualifier, 'bootstrapQualifier');
+
   if (!BOOTSTRAP_QUALIFIER_PATTERN.test(bootstrapQualifier)) {
     throw new Error(
       'GitHub OIDC trust configuration "bootstrapQualifier" must contain exactly nine lowercase letters or digits.',
@@ -99,10 +104,12 @@ export function parseGitHubOidcTrustConfig(value: unknown): GitHubOidcTrustConfi
 
 function parseIdentity(value: unknown, key: string): GitHubOidcIdentityConfig {
   const identity = parseObject(value, key);
+
   assertExactKeys(identity, IDENTITY_KEYS, key);
 
   const subject = parseExactClaim(identity.subject, `${key}.subject`);
   const repository = parseExactClaim(identity.repository, `${key}.repository`);
+
   if (!GITHUB_REPOSITORY_PATTERN.test(repository)) {
     throw new Error(
       `GitHub OIDC trust configuration "${key}.repository" must use the owner/repository format.`,
@@ -113,6 +120,7 @@ function parseIdentity(value: unknown, key: string): GitHubOidcIdentityConfig {
   const repositoryOwnerId = parseGitHubId(identity.repositoryOwnerId, `${key}.repositoryOwnerId`);
   const workflow = parseExactClaim(identity.workflow, `${key}.workflow`);
   const ref = parseExactClaim(identity.ref, `${key}.ref`);
+
   if (ref !== 'refs/heads/main') {
     throw new Error(`GitHub OIDC trust configuration "${key}.ref" must be "refs/heads/main".`);
   }
@@ -132,6 +140,7 @@ function parseIdentity(value: unknown, key: string): GitHubOidcIdentityConfig {
 
 function parseGitHubId(value: unknown, key: string): string {
   const id = parseExactClaim(value, key);
+
   if (!GITHUB_ID_PATTERN.test(id)) {
     throw new Error(`GitHub OIDC trust configuration "${key}" must be a positive numeric ID.`);
   }
@@ -141,6 +150,7 @@ function parseGitHubId(value: unknown, key: string): string {
 
 function parseExactClaim(value: unknown, key: string): string {
   const claim = parseRequiredString(value, key);
+
   if (FORBIDDEN_EXACT_CLAIM_CHARACTERS.test(claim) || PLACEHOLDER_PATTERN.test(claim)) {
     throw new Error(
       `GitHub OIDC trust configuration "${key}" must be an exact non-placeholder value without wildcards or templates.`,
@@ -173,16 +183,19 @@ function assertExactKeys(
 ): void {
   const actualKeys = Object.keys(value).sort();
   const expected = [...expectedKeys].sort();
+
   if (
     actualKeys.length !== expected.length ||
     actualKeys.some((item, index) => item !== expected[index])
   ) {
     const missing = expected.filter((item) => !actualKeys.includes(item));
     const unexpected = actualKeys.filter((item) => !expected.includes(item));
+
     const details = [
       missing.length > 0 ? `missing keys: ${missing.join(', ')}` : undefined,
       unexpected.length > 0 ? `unexpected keys: ${unexpected.join(', ')}` : undefined,
     ].filter((item): item is string => item !== undefined);
+
     throw new Error(
       `GitHub OIDC trust configuration "${key}" has invalid keys (${details.join('; ')}).`,
     );

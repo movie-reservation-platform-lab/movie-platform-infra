@@ -58,6 +58,7 @@ interface HarnessOptions {
 function harness(options: HarnessOptions = {}) {
   const output = { stdout: '', stderr: '' };
   const evidence: string[] = [];
+
   const dependencies: CliDependencies = {
     loadRunConfig: () => options.config ?? RUN_CONFIG,
     loadCredentials: () => ({ username: 'demo-user', password: 'demo-password' }),
@@ -72,6 +73,7 @@ function harness(options: HarnessOptions = {}) {
     repositoryRoot: '/repo/movie-platform-infra',
     ...options.overrides,
   };
+
   const streams = {
     stdout: (text: string) => {
       output.stdout += text;
@@ -177,6 +179,7 @@ describe('runCli', () => {
       await expect(run(args === undefined ? undefined : [...args], environment)).resolves.toBe(
         EXIT_CODES.invalidInput,
       );
+
       expect(output.stderr).toContain(message);
       expect(evidence).toEqual([]);
     });
@@ -203,9 +206,11 @@ describe('runCli', () => {
       ),
       { name: 'AccessDeniedException' },
     );
+
     const { output, evidence, run } = harness({
       comparison: (clock) => {
         const securityLake = availableAfter(clock, {});
+
         securityLake.failure = denied;
 
         return fakeComparisonDependencies(clock, {
@@ -215,7 +220,9 @@ describe('runCli', () => {
     });
 
     await run();
+
     expect(output.stdout).toContain('AccessDeniedException: User: <arn> is not authorized');
+
     expect(output.stdout + evidence.join('')).not.toMatch(
       /jane@example\.com|arn:aws|AWSReservedSSO/,
     );

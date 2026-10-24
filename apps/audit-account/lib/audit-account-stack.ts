@@ -31,17 +31,20 @@ export class AuditAccountStack extends Stack {
       ],
       path: '/service-role/',
     });
+
     const dataLake = new securitylake.CfnDataLake(this, 'DataLake', {
       encryptionConfiguration: { kmsKeyId: 'S3_MANAGED_KEY' },
       lifecycleConfiguration: { expiration: { days: 30 } },
       metaStoreManagerRoleArn: metastoreManagerRole.roleArn,
     });
+
     const cloudTrailSource = new securitylake.CfnAwsLogSource(this, 'CloudTrailManagementSource', {
       accounts: [props.config.auditAccountId, ...props.config.workloadAccountIds],
       dataLakeArn: dataLake.attrArn,
       sourceName: 'CLOUD_TRAIL_MGMT',
       sourceVersion: '2.0',
     });
+
     cloudTrailSource.addResourceDependency(dataLake);
 
     const crawlerRole = new iam.Role(this, 'CustomSourceCrawlerRole', {
@@ -51,6 +54,7 @@ export class AuditAccountStack extends Stack {
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSGlueServiceRole'),
       ],
     });
+
     crawlerRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['s3:GetBucketLocation', 's3:ListBucket'],
@@ -62,6 +66,7 @@ export class AuditAccountStack extends Stack {
         resources: [dataLake.attrS3BucketArn],
       }),
     );
+
     crawlerRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['s3:GetObject', 's3:PutObject'],
@@ -73,10 +78,12 @@ export class AuditAccountStack extends Stack {
       description: 'Regional Security Lake data-lake ARN.',
       value: dataLake.attrArn,
     });
+
     new CfnOutput(this, 'SecurityLakeBucketArn', {
       description: 'Bucket ARN needed by the guarded custom-source handoff.',
       value: dataLake.attrS3BucketArn,
     });
+
     new CfnOutput(this, 'CustomSourceCrawlerRoleArn', {
       description: 'Crawler role passed to CreateCustomLogSource.',
       value: crawlerRole.roleArn,

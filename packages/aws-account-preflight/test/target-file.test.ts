@@ -75,6 +75,7 @@ test.each([
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(message);
     expect(readFileSync(fixture.awsMarker, 'utf8')).toBe('');
+
     expectPrivateValuesAbsent(result);
   } finally {
     fixture.cleanup();
@@ -99,6 +100,7 @@ test('requires an absolute path for the target-file override', () => {
 
 test('rejects target files readable by group or other users', () => {
   const fixture = createFixture();
+
   chmodSync(fixture.targetFile, 0o640);
 
   try {
@@ -115,6 +117,7 @@ test('rejects target files readable by group or other users', () => {
 test('rejects a symbolic-link target before reading it', () => {
   const fixture = createFixture();
   const linkPath = path.join(fixture.directory, 'linked-target.json');
+
   symlinkSync(fixture.targetFile, linkPath);
 
   try {

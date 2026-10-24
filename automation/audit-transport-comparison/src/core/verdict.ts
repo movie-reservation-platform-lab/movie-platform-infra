@@ -72,6 +72,7 @@ export function isPassed(
 export function utcDaysBetween(from: Date, to: Date): Date[] {
   const days: Date[] = [];
   const day = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
+
   while (day.getTime() <= to.getTime()) {
     days.push(new Date(day));
     day.setUTCDate(day.getUTCDate() + 1);

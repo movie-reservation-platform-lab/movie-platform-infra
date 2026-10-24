@@ -31,6 +31,7 @@ describe('AuditAccountStack', () => {
       LifecycleConfiguration: { Expiration: { Days: 30 } },
       MetaStoreManagerRoleArn: Match.anyValue(),
     });
+
     foundationTemplate.hasOutput('CustomSourceCrawlerRoleArn', {
       Description: 'Crawler role passed to CreateCustomLogSource.',
       Value: Match.anyValue(),

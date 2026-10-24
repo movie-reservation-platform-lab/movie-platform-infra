@@ -143,7 +143,9 @@ export class AuditIngestion extends Construct {
 
     const stack = Stack.of(this);
     const removalPolicy = props.removalPolicy ?? RemovalPolicy.DESTROY;
+
     this.eventBus = new events.EventBus(this, 'EventBus');
+
     this.archive = createAuditArchive(
       this,
       this.eventBus,
@@ -154,6 +156,7 @@ export class AuditIngestion extends Construct {
 
     const conversionSchema = createConversionSchema(this, stack);
     const quarantinePolicy = createProviderQuarantinePolicy(this, stack, props.destination);
+
     this.producers = props.producers.map((producer) =>
       createProducerResources(this, {
         bufferInterval: props.bufferInterval ?? Duration.seconds(300),
@@ -191,6 +194,7 @@ function createAuditArchive(
     retention: retention ?? Duration.days(7),
     sourceEventBus: eventBus,
   });
+
   archive.applyRemovalPolicy(removalPolicy);
 
   return archive;
@@ -213,6 +217,7 @@ function createConversionCatalog(scope: Construct, stack: Stack): ConversionCata
       description: 'Firehose conversion schema for platform audit events',
     },
   });
+
   const table = new glue.CfnTable(scope, 'ConversionTable', {
     catalogId: stack.account,
     databaseName: database.ref,
@@ -297,6 +302,7 @@ function createLakeFormationAccess(
       },
     },
   );
+
   const tableAccess = new lakeformation.CfnPrincipalPermissions(scope, 'ConversionTableAccess', {
     permissions: ['DESCRIBE'],
     permissionsWithGrantOption: [],
@@ -365,17 +371,21 @@ function createProducerResources(
     retryAttempts,
     stack,
   } = options;
+
   // Keyed by account, not list position: logical IDs derive from this path, so a
   // positional key would replace later accounts' resources whenever an account
   // is removed or reordered.
   const producerScope = new Construct(scope, `Producer${producer.workloadAccountId}`);
+
   Tags.of(producerScope).add(WORKLOAD_ACCOUNT_TAG, producer.workloadAccountId);
+
   const deadLetterQueue = new sqs.Queue(producerScope, 'TargetDeadLetterQueue', {
     encryption: sqs.QueueEncryption.SQS_MANAGED,
     enforceSSL: true,
     removalPolicy,
     retentionPeriod: deadLetterRetention ?? Duration.days(14),
   });
+
   const deliveryStream = createDeliveryStream(producerScope, {
     bufferInterval,
     conversionSchema,
@@ -383,6 +393,7 @@ function createProducerResources(
     producer,
     stack,
   });
+
   deliveryStream.addResourceDependency(conversionSchema.databaseAccess);
   deliveryStream.addResourceDependency(conversionSchema.tableAccess);
   deliveryStream.addResourceDependency(quarantinePolicy);
@@ -391,12 +402,14 @@ function createProducerResources(
     eventBus,
     eventPattern: buildAuthenticationEventPattern(producer.workloadAccountId),
   });
+
   const reliableFirehoseTarget = new ReliableFirehoseTarget(deliveryStream, {
     deadLetterQueue,
     maxEventAge,
     message: events.RuleTargetInput.fromEventPath('$.detail.event'),
     retryAttempts,
   });
+
   rule.addTarget(reliableFirehoseTarget);
 
   return {
@@ -414,6 +427,7 @@ function createDeliveryStream(
   options: DeliveryStreamOptions,
 ): firehose.CfnDeliveryStream {
   const { bufferInterval, conversionSchema, destination, producer, stack } = options;
+
   const partitioning = buildFirehosePartitioning(
     destination.sourcePrefix,
     stack.region,
@@ -517,6 +531,7 @@ function validateProps(props: AuditIngestionProps): void {
   }
 
   const accountIds = props.producers.map(({ workloadAccountId }) => workloadAccountId);
+
   if (
     accountIds.some((accountId) => !/^[0-9]{12}$/.test(accountId)) ||
     new Set(accountIds).size !== accountIds.length
@@ -525,6 +540,7 @@ function validateProps(props: AuditIngestionProps): void {
   }
 
   const bufferSeconds = props.bufferInterval?.toSeconds();
+
   if (bufferSeconds !== undefined && (bufferSeconds < 60 || bufferSeconds > 900)) {
     // Dynamic partitioning requires at least 60 s; Firehose allows at most 900 s.
     throw new Error('AuditIngestion bufferInterval must be between 60 and 900 seconds.');

@@ -15,10 +15,12 @@ test('observability has no workload or audit imports and optional Grafana is tru
       }),
     }),
   );
+
   template.resourceCountIs('AWS::APS::Workspace', 1);
   template.resourceCountIs('AWS::Logs::LogGroup', 10);
   template.resourceCountIs('AWS::Grafana::Workspace', 0);
   template.resourceCountIs('AWS::ECS::Service', 0);
+
   expect(JSON.stringify(template.toJSON())).not.toContain('Fn::ImportValue');
 });
 

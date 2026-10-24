@@ -4,6 +4,7 @@ import { AuditStack } from '../lib/audit-stack';
 import { resolveAuditConfig } from '../lib/audit-config';
 
 const env = { account: '111111111111', region: 'eu-central-1' };
+
 const audit = (disposable = false): Template =>
   Template.fromStack(
     new AuditStack(new cdk.App(), 'AuditTest', {
@@ -46,6 +47,7 @@ test.each<{ name: string; value: unknown }>([
 
 test('audit foundation is independent of workload networking, images and observability', () => {
   const template = audit();
+
   for (const type of [
     'AWS::ECS::Service',
     'AWS::EC2::VPC',
@@ -58,6 +60,7 @@ test('audit foundation is independent of workload networking, images and observa
   }
 
   expect(JSON.stringify(template.toJSON())).not.toContain('Fn::ImportValue');
+
   template.resourceCountIs('AWS::KinesisFirehose::DeliveryStream', 1);
   template.resourceCountIs('AWS::Glue::Table', 3);
   template.resourceCountIs('AWS::S3::Bucket', 3);
@@ -65,6 +68,7 @@ test('audit foundation is independent of workload networking, images and observa
 
 test('audit buckets are private, encrypted, versioned and retained unless explicitly disposable', () => {
   const template = audit();
+
   for (const bucket of Object.values(template.findResources('AWS::S3::Bucket'))) {
     expect(bucket).toMatchObject({
       DeletionPolicy: 'Retain',
@@ -79,12 +83,15 @@ test('audit buckets are private, encrypted, versioned and retained unless explic
         },
       },
     });
+
     expect(JSON.stringify(bucket)).toContain('AES256');
     expect(JSON.stringify(bucket)).toContain('NoncurrentVersionExpiration');
   }
 
   const disposable = audit(true);
+
   disposable.resourceCountIs('Custom::S3AutoDeleteObjects', 3);
+
   for (const bucket of Object.values(disposable.findResources('AWS::S3::Bucket'))) {
     expect(bucket.DeletionPolicy).toBe('Delete');
   }
@@ -92,6 +99,7 @@ test('audit buckets are private, encrypted, versioned and retained unless explic
 
 test('Firehose archives gzip JSONL with no Lambda processor and exposes freshness alarm', () => {
   const template = audit();
+
   template.hasResourceProperties('AWS::IAM::Role', {
     AssumeRolePolicyDocument: Match.objectLike({
       Statement: Match.arrayWith([
@@ -102,6 +110,7 @@ test('Firehose archives gzip JSONL with no Lambda processor and exposes freshnes
       ]),
     }),
   });
+
   template.hasResourceProperties('AWS::KinesisFirehose::DeliveryStream', {
     DeliveryStreamType: 'DirectPut',
     DeliveryStreamEncryptionConfigurationInput: { KeyType: 'AWS_OWNED_CMK' },
@@ -111,27 +120,33 @@ test('Firehose archives gzip JSONL with no Lambda processor and exposes freshnes
       ProcessingConfiguration: Match.absent(),
     }),
   });
+
   template.hasResourceProperties('AWS::CloudWatch::Alarm', {
     Namespace: 'AWS/Firehose',
     MetricName: 'DeliveryToS3.DataFreshness',
     Threshold: 300,
   });
+
   const roles = template.findResources('AWS::IAM::Policy');
+
   const deliveryPolicy = Object.entries(roles).find(([key]) =>
     key.includes('FirehoseDeliveryRole'),
   )?.[1];
+
   expect(JSON.stringify(deliveryPolicy)).toContain('s3:PutObject');
   expect(JSON.stringify(deliveryPolicy)).not.toContain('s3:DeleteObject');
 });
 
 test('Athena scans projected date partitions with a one GiB per-query ceiling', () => {
   const template = audit();
+
   template.hasResourceProperties('AWS::Athena::WorkGroup', {
     WorkGroupConfiguration: Match.objectLike({
       BytesScannedCutoffPerQuery: 1073741824,
       EnforceWorkGroupConfiguration: true,
     }),
   });
+
   template.hasResourceProperties('AWS::Glue::Table', {
     TableInput: Match.objectLike({
       Name: 'authentication',

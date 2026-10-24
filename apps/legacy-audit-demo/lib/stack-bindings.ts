@@ -1,7 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 
 export const PLATFORM_NAME = 'movie-reservation-platform';
+
 export const ENVIRONMENT_NAME = 'aws-demo';
+
 const EXPORT_PREFIX = 'MoviePlatformAwsDemo';
 
 /** Preserve the output names consumed by the existing workload app. */

@@ -16,6 +16,7 @@ test('renders stable issue codes together with human-readable explanations', asy
     ...REPOSITORY,
     tagMutability: 'MUTABLE',
   };
+
   const inspection = await inspectArtifactFoundation(
     TEST_INSPECTION_ACCESS,
     createReader({ foundationStack: FOUNDATION_STACK, repositories: [repository] }),
@@ -27,6 +28,7 @@ test('renders stable issue codes together with human-readable explanations', asy
   expect(report).toContain(
     '  - [REPOSITORY_TAG_MUTABILITY_DRIFT] [reservation-service] repository tags are not fully immutable',
   );
+
   expect(report).not.toContain('[object Object]');
 });
 
@@ -36,6 +38,7 @@ test('renders destructive operations without exposing the full account ID', asyn
     createReader({ foundationStack: FOUNDATION_STACK, repositories: [REPOSITORY] }),
     TEST_ARTIFACT_REPOSITORY_CATALOG,
   );
+
   const plan = planArtifactFoundationCleanup(inspection, buildCleanupConfirmation(TEST_TARGET));
 
   const report = renderExecutionPlan(plan);

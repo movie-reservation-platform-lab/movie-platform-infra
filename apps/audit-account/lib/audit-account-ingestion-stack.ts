@@ -82,15 +82,18 @@ export class AuditAccountIngestionStack extends Stack {
       exportName: 'MoviePlatformAuditEventBusArn',
       value: ingestion.eventBus.eventBusArn,
     });
+
     new CfnOutput(this, 'AuditEventBusName', {
       description: 'Central event-bus name used by operational tooling.',
       exportName: 'MoviePlatformAuditEventBusName',
       value: ingestion.eventBus.eventBusName,
     });
+
     new CfnOutput(this, 'AuditInvestigationWorkGroupName', {
       description: 'Athena workgroup for Security Lake audit queries and the transport comparison.',
       value: investigationWorkGroup.ref,
     });
+
     new CfnOutput(this, 'AuditDeliveryAlarmTopicArn', {
       description: 'Unsubscribed delivery-alarm topic for a future incident-provider subscription.',
       value: deliveryAlarms.alarmTopic.topicArn,

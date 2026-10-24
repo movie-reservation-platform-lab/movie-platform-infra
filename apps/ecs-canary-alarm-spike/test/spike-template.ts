@@ -23,6 +23,7 @@ export function synthServiceStack(
   overrides: Partial<EcsCanarySpikeConfig> = {},
 ): EcsCanarySpikeServiceStack {
   const app = new App();
+
   const repositoryStack = new EcsCanarySpikeImageRepositoryStack(app, 'TestRepositoryStack', {
     env: ENV,
   });
