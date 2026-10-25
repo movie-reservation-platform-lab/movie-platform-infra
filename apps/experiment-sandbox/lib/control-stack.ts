@@ -65,6 +65,8 @@ interface ControlOutputParts {
 export class ExperimentControlStack extends Stack {
   readonly state: dynamodb.Table;
   readonly inventory: s3.Bucket;
+  /** Logs of the recommendation service, trial tasks and delegate; see {@link createTaskLogGroup}. */
+  readonly taskLogGroup: logs.LogGroup;
   readonly launcher: NodejsFunction;
   readonly admission: NodejsFunction;
   readonly admissionProvider: cr.Provider;
@@ -78,6 +80,7 @@ export class ExperimentControlStack extends Stack {
 
     this.state = this.createStateTable();
     this.inventory = this.createInventoryBucket();
+    this.taskLogGroup = this.createTaskLogGroup(config);
 
     const permissionScope = this.permissionScope(config, names);
     const deletionRole = createWorkloadDeletionRole(permissionScope);
@@ -131,6 +134,22 @@ export class ExperimentControlStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
       versioned: true,
       autoDeleteObjects: true,
+    });
+  }
+
+  /**
+   * Log group the workload's tasks write to.
+   *
+   * It lives here, not in the workload stack, because it holds the trial's evidence (for
+   * example the release step's `reverted: true`). Automatic cleanup deletes the workload at
+   * lease expiry; these logs stay until the operator exports evidence and destroys the
+   * control stack.
+   */
+  private createTaskLogGroup(config: SandboxConfig): logs.LogGroup {
+    return new logs.LogGroup(this, 'TaskLogs', {
+      logGroupName: `/experiment/${config.experimentId}/tasks`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: RemovalPolicy.DESTROY,
     });
   }
 
