@@ -1,0 +1,14 @@
+{
+  "experimentId": "exp-synthetic",
+  "accountId": "111111111111",
+  "region": "eu-central-1",
+  "expiresAt": "2030-01-01T04:00:00Z",
+  "launchCutoffAt": "2030-01-01T03:00:00Z",
+  "allowedIngressCidrs": ["192.0.2.1/32"],
+  "goodImage": "public.ecr.aws/example/recommendation@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "badImage": "public.ecr.aws/example/recommendation@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "toolsImage": "public.ecr.aws/example/trial-tools@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "delegateImage": "public.ecr.aws/example/harness-delegate@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "delegateTokenSecretArn": "arn:aws:secretsmanager:eu-central-1:111111111111:secret:experiment/exp-synthetic/delegate-AbCd12",
+  "harnessAccountId": "synthetic-account"
+}
