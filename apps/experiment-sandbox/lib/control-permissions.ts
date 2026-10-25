@@ -165,24 +165,8 @@ export function createWorkloadDeletionRole(scope: ControlPermissionScope): iam.R
     }),
   );
 
-  // CloudWatch Logs discovery does not support resource-level permissions.
-  role.addToPolicy(
-    new iam.PolicyStatement({ actions: ['logs:DescribeLogGroups'], resources: ['*'] }),
-  );
-
-  role.addToPolicy(
-    new iam.PolicyStatement({
-      actions: ['logs:DeleteLogGroup'],
-      resources: [
-        stack.formatArn({
-          service: 'logs',
-          resource: 'log-group',
-          resourceName: `/experiment/${config.experimentId}/*`,
-          arnFormat: ArnFormat.COLON_RESOURCE_NAME,
-        }),
-      ],
-    }),
-  );
+  // No log permissions: the workload stack owns no log groups. Task logs live in the
+  // control stack, and this role must not be able to delete that evidence.
 
   role.addToPolicy(
     new iam.PolicyStatement({
