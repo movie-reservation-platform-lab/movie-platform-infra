@@ -21,8 +21,7 @@ lease/task caps and malformed evidence. TypeScript interfaces alone cannot
 validate a file loaded from disk. Every timestamp must be UTC ISO 8601 with a
 trailing `Z` (for example `2026-10-24T10:00:00Z`, the output of
 `toISOString()`); values without a zone, with an offset, or with impossible
-dates are rejected. `isUtcTimestamp` exposes the same check to hand-written
-validators.
+dates are rejected.
 
 `allocationBlockers(record, now)` keeps current artifact verification,
 zero-charge Harness entitlement (the plan is free through lease expiry), a
@@ -35,11 +34,15 @@ attestation nor these functions establishes that a live AWS guardrail was
 deployed. The operator verifies deployed schedule, outputs and notification
 subscription before installing an admission lease.
 
-`isDigestImageReference` is the shared immutable image syntax check. The CDK app
-owns its narrower synth-input contract and independently validates rendered
-configuration; the operator and trial tool never import deployable app code.
+`parseSandboxConfig(unknown)` validates the CDK app's input file, and
+`parseSandboxRenderInputs(unknown)` validates the small operator inputs file it
+is rendered from. The operator CLI checks the rendered config and the CDK app
+checks it again before synth; both use the same schema in `src/sandbox-config.ts`,
+so the checks stay independent without copying rules. `isDigestImageReference`
+is the shared immutable image syntax check. The operator and trial tool never
+import deployable app code.
 
 Tests: `test/admission-policy.test.ts` changes one field of an approved record
 per case and expects exactly one blocker; `test/sandbox-record.test.ts` covers
 timestamps, lease bounds, caps, images, accounts and the retired-control
-manifest. No live calls are made.
+manifest; `test/sandbox-config.test.ts` covers the CDK config and render inputs. No live calls are made.

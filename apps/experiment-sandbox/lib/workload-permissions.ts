@@ -1,7 +1,9 @@
-// IAM for the trial steps in the workload stack. The gate step has no AWS
-// permissions; watch and release share a read-only view of the deployment, and
-// each adds only what its job needs. Kept apart from `workload-stack.ts` so every
-// permission can be reviewed in one file.
+/**
+ * IAM for the trial steps in the workload stack. The gate step has no AWS
+ * permissions; watch and release share a read-only view of the deployment, and
+ * each adds only what its job needs. Kept apart from `workload-stack.ts` so every
+ * permission can be reviewed in one file.
+ */
 
 import { SANDBOX_CASE_IDS, SANDBOX_PROBE_METRIC } from '@movie-platform/experiment-sandbox';
 import { Stack } from 'aws-cdk-lib';

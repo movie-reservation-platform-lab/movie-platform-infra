@@ -4,6 +4,9 @@ const MAX_TEXT_LENGTH = 2048;
 // eslint-disable-next-line no-control-regex -- reject control characters in operator input
 const CONTROL_CHARACTERS = /[\x00-\x1f]/;
 
+const DIGEST_IMAGE_REFERENCE =
+  /^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?\/[a-z0-9][a-z0-9/_.-]*@sha256:[a-f0-9]{64}$/;
+
 /**
  * Non-empty operator text of at most 2048 characters with no control
  * characters. Every string field in the record builds on this, so a value
@@ -27,6 +30,9 @@ export function textMatching(pattern: RegExp): z.ZodString {
 /** Twelve-digit AWS account ID. */
 export const awsAccountIdSchema = textMatching(/^\d{12}$/);
 
+/** Experiment ID such as `exp-harness-buy-check`; it prefixes every resource name. */
+export const experimentIdSchema = textMatching(/^exp-[a-z0-9-]{3,24}$/);
+
 /** Absolute filesystem path, used for operator target files. */
 export const absolutePathSchema = textMatching(/^\//);
 
@@ -44,13 +50,23 @@ export const isoTimestampSchema = z.iso.datetime({
 });
 
 /**
- * Whether `value` is a UTC ISO 8601 timestamp accepted by
- * {@link isoTimestampSchema}. For hand-written validators that cannot use the
- * schema directly, such as the CDK app's config check.
+ * Whether `value` is a registry image pinned by `sha256` digest, never by a
+ * mutable tag such as `:latest`.
  */
-export function isUtcTimestamp(value: string): boolean {
-  return isoTimestampSchema.safeParse(value).success;
+export function isDigestImageReference(value: string): boolean {
+  return DIGEST_IMAGE_REFERENCE.test(value);
 }
+
+/** Container image reference pinned by digest; see {@link isDigestImageReference}. */
+export const digestImageReferenceSchema = boundedTextSchema.refine(
+  isDigestImageReference,
+  'must be an image pinned by sha256 digest',
+);
+
+/** One IPv4 address written as a `/32` CIDR, such as `192.0.2.1/32`. */
+export const ipv4HostCidrSchema = z
+  .cidrv4({ error: 'must be an IPv4 CIDR such as 192.0.2.1/32' })
+  .refine((value) => value.endsWith('/32'), 'must be a single /32 address');
 
 /**
  * Finite number that is zero or greater, such as a dollar amount. In zod 4,

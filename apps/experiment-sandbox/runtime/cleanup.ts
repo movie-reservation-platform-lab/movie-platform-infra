@@ -38,6 +38,7 @@ export type CleanupStep =
   | 'stop tasks'
   | 'remove task definitions'
   | 'delete stack'
+  | 'cancel stack update'
   | 'confirm removal';
 
 /** Everything cleanup needs from AWS, so its decisions can be tested with fakes. */
@@ -47,8 +48,13 @@ export interface CleanupPorts {
   inventory(): Promise<string[]>;
   discover(): Promise<WorkloadDiscovery>;
   stopTasks(): Promise<void>;
+  /** Cancels a running stack update, so the stack rolls back to a deletable state. No-op otherwise. */
+  cancelStackUpdate(): Promise<void>;
   deleteStack(): Promise<void>;
-  /** Task definition revisions the release step registered outside CloudFormation. */
+  /**
+   * Deregisters task definition revisions the release step registered outside
+   * CloudFormation; revisions the stack owns are left to stack deletion.
+   */
   removeExternalTaskDefinitions(): Promise<void>;
   save(state: CleanupState): Promise<void>;
   /** Records why a step failed, in the protected cleanup log. */
@@ -92,7 +98,15 @@ export async function cleanup(experimentId: string, ports: CleanupPorts): Promis
   return state;
 }
 
-/** Stops, deregisters and deletes, then records what a fresh look still finds. Mutates `state`. */
+/**
+ * Stops, deregisters and deletes, then records what a fresh look still finds. Mutates `state`.
+ *
+ * While the stack is still being created, updated or rolled back, cleanup only cancels a
+ * running update and reports `BLOCKED`: stopping tasks or deregistering task definitions
+ * under an in-progress deployment causes churn and unpredictable stack states. Admission
+ * is already disabled, so nothing new starts; the next schedule run tears down once the
+ * stack has settled.
+ */
 async function removeWorkload(state: CleanupState, ports: CleanupPorts): Promise<void> {
   let step: CleanupStep = 'read inventory';
 
@@ -105,15 +119,21 @@ async function removeWorkload(state: CleanupState, ports: CleanupPorts): Promise
 
     state.resources = [...new Set([...inventory, ...found.resources])];
 
+    if (found.provisioning) {
+      step = 'cancel stack update';
+      await ports.cancelStackUpdate();
+      state.blockers.push(CLEANUP_BLOCKERS.provisioningActive);
+
+      return;
+    }
+
     step = 'stop tasks';
     await ports.stopTasks();
 
     step = 'remove task definitions';
     await ports.removeExternalTaskDefinitions();
 
-    if (found.provisioning) {
-      state.blockers.push(CLEANUP_BLOCKERS.provisioningActive);
-    } else if (found.stackExists) {
+    if (found.stackExists) {
       step = 'delete stack';
       await ports.deleteStack();
     }
