@@ -33,8 +33,15 @@ export const SANDBOX_LIMITS = Object.freeze({
   maxConcurrentTasks: 4,
   /** Trial task launches allowed over the whole lease. */
   maxTotalLaunches: 16,
-  /** Longest wait for one trial step. */
+  /** Longest a trial step may run; the trial code stops waiting after this. */
   maxRunMinutes: 45,
+  /**
+   * Extra time before the expiry schedule stops a trial step that is still running past
+   * `maxRunMinutes`, so a step finishing on its own is never cut off.
+   */
+  runLimitGraceMinutes: 5,
+  /** A watch heartbeat older than this means the watcher is stale; release is refused. */
+  watchHeartbeatMaxAgeSeconds: 30,
 } as const);
 
 export type SandboxLimits = typeof SANDBOX_LIMITS;

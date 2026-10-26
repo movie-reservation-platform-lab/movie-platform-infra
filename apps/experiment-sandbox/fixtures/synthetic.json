@@ -10,5 +10,6 @@
   "toolsImage": "public.ecr.aws/example/trial-tools@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "delegateImage": "public.ecr.aws/example/harness-delegate@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   "delegateTokenSecretArn": "arn:aws:secretsmanager:eu-central-1:111111111111:secret:experiment/exp-synthetic/delegate-AbCd12",
-  "harnessAccountId": "synthetic-account"
+  "harnessAccountId": "synthetic-account",
+  "harnessManagerUrl": "https://app.harness.io"
 }

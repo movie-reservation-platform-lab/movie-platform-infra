@@ -2,7 +2,8 @@
  * The cleanup Lambda: connects cleanup's decisions (`cleanup.ts`) to AWS.
  *
  * The expiry schedule calls it every five minutes and the operator can call it directly.
- * It disables the lease, stops trial tasks, removes task definitions, deletes the
+ * Before lease expiry a schedule run only stops trial steps past their run limit
+ * (`run-limit.ts`). After expiry it disables the lease, stops trial tasks, removes task definitions, deletes the
  * workload stack with the delete-only role, and saves each run's result in the
  * inventory bucket.
  */
@@ -14,15 +15,17 @@ import {
   StopTaskCommand,
 } from '@aws-sdk/client-ecs';
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { parseCleanupRequest } from '@movie-platform/experiment-sandbox';
+import { parseCleanupRequest, sandboxTrialTaskFamilies } from '@movie-platform/experiment-sandbox';
 import { z } from 'zod';
 
 import { cloudFormation, ecs, s3 } from './aws-clients';
 import { cleanup, type CleanupPorts, type CleanupState, type CleanupStep } from './cleanup';
 import { controlEnvironment } from './control-environment';
+import { overdueTrialTaskArns } from './run-limit';
 import { disableLease } from './state-table';
 import {
   describeWorkloadStack,
+  describeWorkloadTasks,
   listExperimentTaskDefinitions,
   listStackResourceIds,
   listWorkloadTaskArns,
@@ -62,6 +65,8 @@ export async function cleanupHandler(event: unknown): Promise<CleanupState | Wai
   }
 
   if (request.scheduled && Date.now() < Date.parse(expiresAt)) {
+    await stopOverdueTrialTasks();
+
     return {
       experimentId,
       status: 'WAITING_FOR_EXPIRY',
@@ -100,7 +105,8 @@ function awsCleanupPorts(): CleanupPorts {
         provisioning: stackStatus.endsWith('_IN_PROGRESS') && stackStatus !== 'DELETE_IN_PROGRESS',
       };
     },
-    stopTasks: stopTrialTasks,
+    stopTasks: stopWorkloadTasks,
+    cancelStackUpdate: cancelWorkloadStackUpdate,
     deleteStack: deleteWorkloadStack,
     removeExternalTaskDefinitions: removeReleaseTaskDefinitions,
     save: saveCleanupState,
@@ -130,20 +136,47 @@ async function readSavedInventory(): Promise<string[]> {
   }
 }
 
-/** Stops every task in the cluster and cancels an in-progress stack update. */
-async function stopTrialTasks(): Promise<void> {
-  const { clusterArn, workloadStackName } = controlEnvironment();
+/**
+ * Stops trial steps that have run past their limit, so a hung step fails instead of
+ * blocking the trial until lease expiry. Service tasks are never touched.
+ */
+async function stopOverdueTrialTasks(): Promise<void> {
+  const { clusterArn, experimentId } = controlEnvironment();
+  const tasks = await describeWorkloadTasks(await listWorkloadTaskArns());
+  const trialFamilies = new Set(sandboxTrialTaskFamilies(experimentId));
+
+  for (const task of overdueTrialTaskArns(tasks, trialFamilies, Date.now())) {
+    await ecs.send(
+      new StopTaskCommand({
+        cluster: clusterArn,
+        task,
+        reason: 'Trial step exceeded its run limit',
+      }),
+    );
+
+    console.log(JSON.stringify({ event: 'trial-task-stopped', reason: 'run limit', task }));
+  }
+}
+
+/** Stops every task in the workload cluster: trial steps, the service and the delegate. */
+async function stopWorkloadTasks(): Promise<void> {
+  const { clusterArn } = controlEnvironment();
 
   for (const task of await listWorkloadTaskArns()) {
     await ecs.send(
       new StopTaskCommand({ cluster: clusterArn, task, reason: 'Protected experiment cleanup' }),
     );
   }
+}
 
+/** Cancels the workload stack's update if one is running; any other state is left alone. */
+async function cancelWorkloadStackUpdate(): Promise<void> {
   const stack = await describeWorkloadStack();
 
   if (stack?.StackStatus === 'UPDATE_IN_PROGRESS') {
-    await cloudFormation.send(new CancelUpdateStackCommand({ StackName: workloadStackName }));
+    await cloudFormation.send(
+      new CancelUpdateStackCommand({ StackName: controlEnvironment().workloadStackName }),
+    );
   }
 }
 
@@ -162,15 +195,18 @@ async function deleteWorkloadStack(): Promise<void> {
 }
 
 /**
- * Deregisters task definitions CloudFormation does not own, then, once the stack is gone,
- * deletes every inactive revision, including releases registered outside CloudFormation.
+ * Deregisters the recommendation revisions the release step registered outside
+ * CloudFormation, then, once the stack is gone, deletes every inactive revision.
+ * While the stack exists, the revisions it owns are left for stack deletion.
  *
  * @throws Error when ECS reports any revision it could not delete
  */
 async function removeReleaseTaskDefinitions(): Promise<void> {
   const stack = await describeWorkloadStack();
+  const stackOwned = new Set(stack ? await listStackResourceIds() : []);
+  const active = await listExperimentTaskDefinitions(['ACTIVE'], Boolean(stack));
 
-  for (const taskDefinition of await listExperimentTaskDefinitions(['ACTIVE'], Boolean(stack))) {
+  for (const taskDefinition of active.filter((arn) => !stackOwned.has(arn))) {
     await ecs.send(new DeregisterTaskDefinitionCommand({ taskDefinition }));
   }
 

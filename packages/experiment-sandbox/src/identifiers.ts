@@ -54,6 +54,23 @@ export function sandboxTaskDefinitionOutputKey(
   return `${capitalize(caseId)}${capitalize(stepId)}TaskDefinitionArn`;
 }
 
+/** The nine trial step task definition families: one per case and step. */
+export function sandboxTrialTaskFamilies(experimentId: string): readonly string[] {
+  return SANDBOX_CASE_IDS.flatMap((caseId) =>
+    SANDBOX_STEP_IDS.map((stepId) => sandboxTaskFamily(experimentId, caseId, stepId)),
+  );
+}
+
+/** Task definition family of the recommendation service, such as `exp-demo-recommendation`. */
+export function sandboxRecommendationTaskFamily(experimentId: string): string {
+  return `${experimentId}-recommendation`;
+}
+
+/** Task definition family of the Harness delegate, such as `exp-demo-delegate`. */
+export function sandboxDelegateTaskFamily(experimentId: string): string {
+  return `${experimentId}-delegate`;
+}
+
 /**
  * Every task definition family the sandbox creates: the recommendation service, the
  * Harness delegate, and one family per case and step.
@@ -62,11 +79,9 @@ export function sandboxTaskDefinitionOutputKey(
  */
 export function sandboxTaskFamilies(experimentId: string): readonly string[] {
   return [
-    `${experimentId}-recommendation`,
-    `${experimentId}-delegate`,
-    ...SANDBOX_CASE_IDS.flatMap((caseId) =>
-      SANDBOX_STEP_IDS.map((stepId) => sandboxTaskFamily(experimentId, caseId, stepId)),
-    ),
+    sandboxRecommendationTaskFamily(experimentId),
+    sandboxDelegateTaskFamily(experimentId),
+    ...sandboxTrialTaskFamilies(experimentId),
   ];
 }
 

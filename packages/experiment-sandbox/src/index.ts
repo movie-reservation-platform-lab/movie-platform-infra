@@ -1,8 +1,11 @@
 // Public surface of the experiment-sandbox contract. Each module has one job:
 //   sandbox-limits.ts    fixed budget, lease and launch limits
-//   field-schemas.ts     reusable field rules (bounded text, timestamps, IDs)
+//   field-schemas.ts     reusable field rules (bounded text, timestamps, IDs, images)
 //   sandbox-record.ts    record schemas and the types inferred from them
 //   parse-record.ts      parsing untrusted JSON, plus rules spanning sections
+//   sandbox-config.ts    the CDK app's input file and the operator's render inputs
+//   control-state.ts     launch requests, lease and watch rows, cleanup requests
+//   schema-parse.ts      turning zod errors into field-named messages
 //   admission-policy.ts  when a sandbox may be created or used
 //   identifiers.ts       task names shared by provisioning, launch and cleanup
 
@@ -14,12 +17,18 @@ export {
   type ControlStackLocation,
 } from './parse-record';
 
-export { isUtcTimestamp } from './field-schemas';
+export { isDigestImageReference } from './field-schemas';
 
 export { HOUR_MS, MINUTE_MS, SANDBOX_LIMITS, type SandboxLimits } from './sandbox-limits';
 
 export {
-  isDigestImageReference,
+  parseSandboxConfig,
+  parseSandboxRenderInputs,
+  type SandboxConfig,
+  type SandboxRenderInputs,
+} from './sandbox-config';
+
+export {
   SANDBOX_ACCOUNT_STATES,
   type CleanupStatus,
   type CostForecast,
@@ -35,11 +44,30 @@ export {
 } from './sandbox-record';
 
 export {
+  CLEANUP_BLOCKERS,
+  parseCleanupRequest,
+  parseLaunchRequest,
+  parseLeaseRow,
+  parseWatchRow,
+  TASK_STATUSES,
+  type CleanupRequest,
+  type FixedTaskRequest,
+  type LaunchRequest,
+  type LeaseRow,
+  type Reservation,
+  type TaskStatus,
+  type WatchRow,
+} from './control-state';
+
+export {
   SANDBOX_CASE_IDS,
   SANDBOX_STEP_IDS,
   SANDBOX_PROBE_METRIC,
+  sandboxDelegateTaskFamily,
+  sandboxRecommendationTaskFamily,
   sandboxTaskFamily,
   sandboxTaskDefinitionOutputKey,
+  sandboxTrialTaskFamilies,
   sandboxTaskFamilies,
   type SandboxCaseId,
   type SandboxStepId,

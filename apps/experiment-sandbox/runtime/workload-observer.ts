@@ -13,6 +13,7 @@ import {
   type Stack,
 } from '@aws-sdk/client-cloudformation';
 import {
+  DescribeTasksCommand,
   ListTaskDefinitionsCommand,
   ListTasksCommand,
   type TaskDefinitionStatus,
@@ -20,6 +21,7 @@ import {
 
 import { cloudFormation, ecs } from './aws-clients';
 import { controlEnvironment } from './control-environment';
+import type { ClusterTask } from './run-limit';
 
 /** Stack states in which the outputs describe a finished, usable deployment. */
 const STABLE_STACK_STATUSES = new Set([
@@ -126,6 +128,36 @@ export async function listWorkloadTaskArns(): Promise<string[]> {
   } while (nextToken);
 
   return taskArns;
+}
+
+/** ECS describes at most 100 tasks per DescribeTasks call. */
+const DESCRIBE_TASKS_BATCH_SIZE = 100;
+
+/** Group and start times of the given tasks in the workload cluster. */
+export async function describeWorkloadTasks(taskArns: readonly string[]): Promise<ClusterTask[]> {
+  const tasks: ClusterTask[] = [];
+
+  for (let offset = 0; offset < taskArns.length; offset += DESCRIBE_TASKS_BATCH_SIZE) {
+    const response = await ecs.send(
+      new DescribeTasksCommand({
+        cluster: controlEnvironment().clusterArn,
+        tasks: taskArns.slice(offset, offset + DESCRIBE_TASKS_BATCH_SIZE),
+      }),
+    );
+
+    for (const task of response.tasks ?? []) {
+      if (task.taskArn) {
+        tasks.push({
+          taskArn: task.taskArn,
+          group: task.group,
+          startedAt: task.startedAt,
+          createdAt: task.createdAt,
+        });
+      }
+    }
+  }
+
+  return tasks;
 }
 
 /**

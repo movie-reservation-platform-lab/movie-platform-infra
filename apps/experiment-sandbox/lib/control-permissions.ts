@@ -1,7 +1,9 @@
-// IAM for the control stack: the role CloudFormation uses to delete the
-// workload stack, and the permissions of the launcher and cleanup Lambdas.
-// Kept apart from `control-stack.ts` so the stack reads as a list of
-// resources, and every permission can be reviewed in one file.
+/**
+ * IAM for the control stack: the role CloudFormation uses to delete the
+ * workload stack, and the permissions of the launcher and cleanup Lambdas.
+ * Kept apart from `control-stack.ts` so the stack reads as a list of
+ * resources, and every permission can be reviewed in one file.
+ */
 
 import { ArnFormat, Stack, Tags } from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -9,11 +11,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 
-import {
-  SANDBOX_CASE_IDS,
-  SANDBOX_STEP_IDS,
-  sandboxTaskFamily,
-} from '@movie-platform/experiment-sandbox';
+import { sandboxTrialTaskFamilies } from '@movie-platform/experiment-sandbox';
 
 import { SandboxConfig, SandboxResourceNames } from './config';
 
@@ -288,6 +286,15 @@ export function grantCleanupAccess(
     }),
   );
 
+  // Start times of running tasks, so the schedule can stop trial steps past their run limit.
+  cleanup.addToRolePolicy(
+    new iam.PolicyStatement({
+      actions: ['ecs:DescribeTasks'],
+      resources: [workloadTaskArns(scope)],
+      conditions: { ArnEquals: { 'ecs:cluster': clusterArn } },
+    }),
+  );
+
   cleanup.addToRolePolicy(
     new iam.PolicyStatement({
       actions: ['ecs:StopTask'],
@@ -330,14 +337,12 @@ function experimentTaskDefinitionArns(scope: ControlPermissionScope): string {
  * recommendation service or the delegate as standalone tasks.
  */
 function trialTaskDefinitionArns(scope: ControlPermissionScope): string[] {
-  return SANDBOX_CASE_IDS.flatMap((caseId) =>
-    SANDBOX_STEP_IDS.map((stepId) =>
-      scope.stack.formatArn({
-        service: 'ecs',
-        resource: 'task-definition',
-        resourceName: `${sandboxTaskFamily(scope.config.experimentId, caseId, stepId)}:*`,
-      }),
-    ),
+  return sandboxTrialTaskFamilies(scope.config.experimentId).map((family) =>
+    scope.stack.formatArn({
+      service: 'ecs',
+      resource: 'task-definition',
+      resourceName: `${family}:*`,
+    }),
   );
 }
 
