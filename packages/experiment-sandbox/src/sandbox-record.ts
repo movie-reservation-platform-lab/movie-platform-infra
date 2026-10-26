@@ -1,32 +1,24 @@
+/**
+ * The schemas below are the single source of truth: each exported type is
+ * inferred from its schema, so the runtime check and the compile-time type
+ * cannot drift apart. Rules within one object live on that object's schema;
+ * rules that compare two parts of the record live in `parse-record.ts`.
+ */
 import { z } from 'zod';
 
 import {
   absolutePathSchema,
   awsAccountIdSchema,
   boundedTextSchema,
+  experimentIdSchema,
+  isDigestImageReference,
   isoTimestampSchema,
   nonNegativeNumberSchema,
   textMatching,
 } from './field-schemas';
 import { HOUR_MS, SANDBOX_LIMITS } from './sandbox-limits';
 
-// The schemas below are the single source of truth: each exported type is
-// inferred from its schema, so the runtime check and the compile-time type
-// cannot drift apart. Rules within one object live on that object's schema;
-// rules that compare two parts of the record live in `parse-record.ts`.
-
-const DIGEST_IMAGE_REFERENCE =
-  /^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?\/[a-z0-9][a-z0-9/_.-]*@sha256:[a-f0-9]{64}$/;
-
 const STACK_NAME = /^[A-Za-z][A-Za-z0-9-]{0,127}$/;
-
-/**
- * Whether `value` is a registry image pinned by `sha256` digest, never by a
- * mutable tag. Shared by the record schema and the CDK app's config check.
- */
-export function isDigestImageReference(value: string): boolean {
-  return DIGEST_IMAGE_REFERENCE.test(value);
-}
 
 /** Lifecycle of the sandbox account, from planned creation to confirmed closure. */
 export const SANDBOX_ACCOUNT_STATES = [
@@ -302,7 +294,7 @@ export const sandboxInventorySchema = z
 export const sandboxRecordSchema = z
   .strictObject({
     version: z.literal(1),
-    id: textMatching(/^exp-[a-z0-9-]{3,24}$/),
+    id: experimentIdSchema,
     owner: boundedTextSchema,
     region: z.literal(SANDBOX_LIMITS.region),
     managementTargetFile: absolutePathSchema,
