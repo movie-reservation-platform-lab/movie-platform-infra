@@ -45,12 +45,16 @@ export {
 
 export {
   CLEANUP_BLOCKERS,
+  newLeaseRow,
   parseCleanupRequest,
+  parseCleanupResult,
+  scheduledCleanupRequest,
   parseLaunchRequest,
   parseLeaseRow,
   parseWatchRow,
   TASK_STATUSES,
   type CleanupRequest,
+  type CleanupResult,
   type FixedTaskRequest,
   type LaunchRequest,
   type LeaseRow,

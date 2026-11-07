@@ -21,6 +21,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cr from 'aws-cdk-lib/custom-resources';
+import { scheduledCleanupRequest } from '@movie-platform/experiment-sandbox';
 import { Construct } from 'constructs';
 
 import { SandboxConfig, SandboxResourceNames, sandboxResourceNames } from './config';
@@ -237,10 +238,8 @@ export class ExperimentControlStack extends Stack {
       schedule: events.Schedule.rate(Duration.minutes(5)),
       targets: [
         new targets.LambdaFunction(cleanup, {
-          event: events.RuleTargetInput.fromObject({
-            experimentId: config.experimentId,
-            scheduled: true,
-          }),
+          // The operator's `admit` checks this exact input, built by the same function.
+          event: events.RuleTargetInput.fromObject(scheduledCleanupRequest(config.experimentId)),
           retryAttempts: 2,
           maxEventAge: Duration.hours(1),
         }),

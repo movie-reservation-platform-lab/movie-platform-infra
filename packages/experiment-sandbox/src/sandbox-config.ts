@@ -46,7 +46,14 @@ const operatorInputFields = {
  */
 export const sandboxRenderInputsSchema = z.strictObject(operatorInputFields).readonly();
 
-/** Validated, operator-owned settings for one disposable experiment sandbox. */
+/**
+ * Validated, operator-owned settings for the current Harness rollback experiment.
+ *
+ * When generalizing sandbox provisioning, separate the reusable account lifecycle
+ * configuration from each experiment's workload recipe. `goodImage`, `badImage` and
+ * the Harness settings belong to this experiment; future throwaway-account experiments
+ * must not be required to provide them or inherit them as optional lifecycle fields.
+ */
 export const sandboxConfigSchema = z
   .strictObject({
     /** Prefix for every resource name, for example `exp-canary-01`. */
