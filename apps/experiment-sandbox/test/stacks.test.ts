@@ -218,17 +218,33 @@ describe('ExperimentControlStack', () => {
       );
     });
 
-    it('discovers log groups everywhere but deletes only experiment log groups', () => {
-      const discovery = statementGranting(templates.control, 'logs:DescribeLogGroups');
-      const deletion = statementGranting(templates.control, 'logs:DeleteLogGroup');
+    it('can read task start times in the workload cluster to stop overdue trial steps', () => {
+      const describeTasks = policyStatements(templates.control).filter(
+        (statement) =>
+          actionsOf(statement).includes('ecs:DescribeTasks') &&
+          JSON.stringify(statement.Condition).includes('ecs:cluster'),
+      );
 
-      expect(discovery.Resource).toBe('*');
-      expect(deletion.Resource).not.toEqual('*');
-      expect(actionsOf(deletion)).not.toContain('logs:DescribeLogGroups');
+      expect(describeTasks.length).toBeGreaterThanOrEqual(1);
+      expect(describeTasks.every((statement) => statement.Resource !== '*')).toBe(true);
+    });
+
+    it('cannot delete any log group, so the trial evidence survives workload deletion', () => {
+      expect(policiesOfRole(templates.control, 'exp-synthetic-workload-deletion')).not.toContain(
+        'logs:',
+      );
     });
   });
 
   describe('logging', () => {
+    it('keeps the trial task logs, so they outlive automatic cleanup at lease expiry', () => {
+      templates.control.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: '/experiment/exp-synthetic/tasks',
+      });
+
+      templates.workload.resourceCountIs('AWS::Logs::LogGroup', 0);
+    });
+
     it('gives every control Lambda a CloudFormation-owned log group', () => {
       const functions = Object.values(resourcesOf(templates.control)).filter(
         (resource) => resource.Type === 'AWS::Lambda::Function',
@@ -331,6 +347,7 @@ describe('ExperimentWorkloadStack', () => {
         ContainerDefinitions: Match.arrayWith([
           Match.objectLike({
             Environment: Match.arrayWith([
+              { Name: 'MANAGER_HOST_AND_PORT', Value: 'https://app.harness.io' },
               { Name: 'EXPERIMENT_ID', Value: 'exp-synthetic' },
               { Name: 'SANDBOX_ACCOUNT_ID', Value: '111111111111' },
               { Name: 'SANDBOX_REGION', Value: 'eu-central-1' },

@@ -8,6 +8,7 @@
 import { z } from 'zod';
 
 import { experimentIdSchema, isoTimestampSchema } from './field-schemas';
+import { cleanupStatusSchema } from './sandbox-record';
 import { SANDBOX_CASE_IDS, SANDBOX_STEP_IDS } from './identifiers';
 import { parseWithSchema } from './schema-parse';
 
@@ -99,6 +100,21 @@ export const CLEANUP_BLOCKERS = Object.freeze({
   awsOperationFailed: 'AWS cleanup operation failed; inspect inventory and retry',
 } as const);
 
+/**
+ * What the cleanup Lambda returns to its caller: the result of one teardown pass, or
+ * `WAITING_FOR_EXPIRY` for a schedule run before the lease ends.
+ */
+export const cleanupResultSchema = z.object({
+  experimentId: experimentIdSchema,
+  status: cleanupStatusSchema,
+  /** Texts from {@link CLEANUP_BLOCKERS}; the operator replaces anything else. */
+  blockers: z.array(z.string()),
+  /** Workload resources still observed after the pass. */
+  resources: z.array(z.string()),
+  accessRevoked: z.boolean(),
+  workloadsRemoved: z.boolean(),
+});
+
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export type LaunchRequest = z.infer<typeof launchRequestSchema>;
@@ -112,6 +128,32 @@ export type LeaseRow = z.infer<typeof leaseRowSchema>;
 export type WatchRow = z.infer<typeof watchRowSchema>;
 
 export type CleanupRequest = z.infer<typeof cleanupRequestSchema>;
+
+export type CleanupResult = z.infer<typeof cleanupResultSchema>;
+
+/**
+ * The lease row the operator's `admit` installs: nothing launched yet, version 0.
+ * The launcher and cleanup Lambdas then read and update it.
+ */
+export function newLeaseRow(
+  experimentId: string,
+  lease: { readonly expiresAt: string; readonly rejectNewWorkAt: string },
+): LeaseRow {
+  return {
+    experimentId,
+    version: 0,
+    expiresAt: lease.expiresAt,
+    rejectNewWorkAt: lease.rejectNewWorkAt,
+    disabled: false,
+    total: 0,
+    requests: {},
+  };
+}
+
+/** The input the expiry schedule sends to the cleanup Lambda every five minutes. */
+export function scheduledCleanupRequest(experimentId: string): CleanupRequest {
+  return { experimentId, scheduled: true };
+}
 
 /**
  * Validates a launch request.
@@ -138,6 +180,15 @@ export function parseLeaseRow(value: unknown): LeaseRow {
  */
 export function parseWatchRow(value: unknown): WatchRow {
   return parseWithSchema(watchRowSchema, value, 'watch');
+}
+
+/**
+ * Validates the cleanup Lambda's response.
+ *
+ * @throws Error naming each invalid field
+ */
+export function parseCleanupResult(value: unknown): CleanupResult {
+  return parseWithSchema(cleanupResultSchema, value, 'cleanupResult');
 }
 
 /**
