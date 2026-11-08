@@ -1,0 +1,20 @@
+{
+  "name": "@movie-platform/harness-buy-check",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "license": "UNLICENSED",
+  "main": "dist/index.js",
+  "bin": {
+    "harness-buy-check": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "jest --config jest.config.cjs --runInBand",
+    "cli": "ts-node --project tsconfig.json src/main.ts"
+  },
+  "dependencies": {
+    "@movie-platform/experiment-sandbox": "0.1.0"
+  }
+}
