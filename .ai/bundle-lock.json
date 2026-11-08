@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "catalog": {
-    "revision": "2ad87431243960a70a83fd99b69e230290ca2697"
+    "revision": "4369f47396635213675b454f51a0870bcaf4e675"
   },
   "packs": [
     "core",
@@ -26,7 +26,7 @@
       ]
     },
     "agents/readability-maintainability": {
-      "sha256": "00a1f880eb2e5a1f1e568bff13b06cad11a8d4c69b659f916fdafd9149d6c560",
+      "sha256": "d1b92b97be2ed0155102d65a093643666a4812fc9a23813759143440289816d6",
       "packs": [
         "review"
       ]
@@ -50,7 +50,7 @@
       ]
     },
     "render.py": {
-      "sha256": "76da5045534b2c7ab0948fe8e6cea76bf42852696f3f28d5d08f10022dccd6a1",
+      "sha256": "5676c4d186fd034c1ee0ad02ca3351a6e6b349dbb12cfc856215d0d8a915ce9a",
       "packs": [
         "support"
       ]
@@ -65,6 +65,12 @@
       "sha256": "8115f99b3d8c0a83ccbfeaecb86bede3a22958ecff2e35ea8cd5b22b3bdfd7af",
       "packs": [
         "teaching"
+      ]
+    },
+    "skills/adr": {
+      "sha256": "2d15ea632a80133e394290890f4be589bdb1748edcf13ec5cb3053082be7e8c2",
+      "packs": [
+        "core"
       ]
     },
     "skills/appsec-review": {
@@ -86,7 +92,7 @@
       ]
     },
     "skills/clean-architecture": {
-      "sha256": "d947852212edfefc71931b9becbda385dfe75e5486c1a31ceb3468e6cb30c55c",
+      "sha256": "1fda7f9a145f911fe890fa5d31a2d55993b5df8bfd943c69c68252eb6ceb528f",
       "packs": [
         "architecture"
       ]
@@ -122,13 +128,19 @@
       ]
     },
     "skills/plan-execution": {
-      "sha256": "9e53c5adff94271bc5e659bf79ad3ede7e904366607a10ad1dcc1eea4dab9a66",
+      "sha256": "af0143d2038cf65ffce18109520f18cb85ba3d4a3598c21aef10e84751f5237b",
+      "packs": [
+        "core"
+      ]
+    },
+    "skills/plan-sweep": {
+      "sha256": "f0e539e761d1ecc56d39850f2f5a3e11dc30e8ebb069d0b5777daf66a49c80a0",
       "packs": [
         "core"
       ]
     },
     "skills/plan-validation": {
-      "sha256": "83ddbcc97f13023b3d230b45a78697f22fd1ddff69cc829a2cafc7ac1c05dbf7",
+      "sha256": "09d256e33fd4509033c86394b50afb2389ab2b6dad59ea9f2ef01b2897679a70",
       "packs": [
         "core"
       ]
@@ -140,7 +152,7 @@
       ]
     },
     "skills/principal-engineer-planner": {
-      "sha256": "46bfa2ac284153e7f4611753945e0e3c6c6ebdaa11a77c24527b5d242155dd09",
+      "sha256": "5367149bc239e700f798776eab0e949d84f8fd2ea3cb7b4dc8522a854f477861",
       "packs": [
         "core"
       ]
@@ -152,13 +164,13 @@
       ]
     },
     "skills/typescript": {
-      "sha256": "8d614fe25604c776659304f3ffddf5b3f5bfe8b1aea4ec033036bb724de1cfb6",
+      "sha256": "b622be3817281e892347e4afc03be5028909395718a7c3d7e08484311117eb92",
       "packs": [
         "typescript"
       ]
     },
     "skills/typescript-style": {
-      "sha256": "e0dfa020e67c83916ec9075eef27408414cdc2abf0cdfaa573f4fcf2c27b78ae",
+      "sha256": "f8ffa59f909ac2fe84160cb1d930cdf6bd1aed68794d91c58ab5132d0d87f7d6",
       "packs": [
         "typescript"
       ]
