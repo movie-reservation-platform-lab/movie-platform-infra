@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "catalog": {
-    "revision": "4369f47396635213675b454f51a0870bcaf4e675"
+    "revision": "5ab427ee3135c644ecd95fd6d8a02ca797343a47"
   },
   "packs": [
     "core",
@@ -158,7 +158,7 @@
       ]
     },
     "skills/programming-kb": {
-      "sha256": "99794f09d5eb2a149cdce9df76950b2eff340263116da4e969ef43fa81859b3a",
+      "sha256": "2b614113b43c7e1f51931869e13ef6b126f79ff291015e271a092a23f28052b1",
       "packs": [
         "knowledge-base"
       ]
