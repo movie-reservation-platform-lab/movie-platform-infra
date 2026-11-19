@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 
 export const AUDIT_ACCOUNT_REGION = 'eu-central-1' as const;
+
 export const AUDIT_ACCOUNT_CONFIG_ENVIRONMENT_VARIABLE =
   'MOVIE_PLATFORM_AUDIT_ACCOUNT_CONFIG_FILE' as const;
 
@@ -11,6 +12,7 @@ const CONFIG_KEYS = [
   'workloadAccountIds',
   'region',
 ] as const;
+
 const AWS_ACCOUNT_ID_PATTERN = /^[0-9]{12}$/;
 
 /** Expected configuration failure safe to show at the CLI boundary. */
@@ -40,35 +42,28 @@ export function parseAuditAccountConfigJson(contents: string): AuditAccountConfi
   const parsedJson = requireJsonObject(rawJson);
 
   const allRequiredKeysPresent = CONFIG_KEYS.every((key) => key in parsedJson);
+
   if (!allRequiredKeysPresent) {
     throw new AuditAccountConfigError('some of the required keys are missing!');
   }
+
   const allowedKeys = new Set<string>(CONFIG_KEYS);
-  const containsUnknownKey = Object.keys(parsedJson).some(
-    (key) => !allowedKeys.has(key),
-  );
+  const containsUnknownKey = Object.keys(parsedJson).some((key) => !allowedKeys.has(key));
+
   if (containsUnknownKey) {
-    throw new AuditAccountConfigError(
-      'Config contains extra keys outside of the required ones.',
-    );
+    throw new AuditAccountConfigError('Config contains extra keys outside of the required ones.');
   }
 
   const managementAccountId = requireAccountId(
     parsedJson.managementAccountId,
     'managementAccountId',
   );
-  const auditAccountId = requireAccountId(
-    parsedJson.auditAccountId,
-    'auditAccountId',
-  );
+
+  const auditAccountId = requireAccountId(parsedJson.auditAccountId, 'auditAccountId');
   const workloadAccountIds = requireWorkloadAccountIds(parsedJson.workloadAccountIds);
   const region = requireRegion(parsedJson.region);
 
-  requireDistinctAccountRoles(
-    managementAccountId,
-    auditAccountId,
-    workloadAccountIds,
-  );
+  requireDistinctAccountRoles(managementAccountId, auditAccountId, workloadAccountIds);
 
   const auditAccountConfig = {
     managementAccountId,
@@ -76,19 +71,20 @@ export function parseAuditAccountConfigJson(contents: string): AuditAccountConfi
     workloadAccountIds,
     region,
   };
+
   return Object.freeze(auditAccountConfig);
 }
 
 /** Load and validate audit-account configuration from an explicit absolute path. */
-export function loadAuditAccountConfig(
-  environment: NodeJS.ProcessEnv,
-): AuditAccountConfig {
+export function loadAuditAccountConfig(environment: NodeJS.ProcessEnv): AuditAccountConfig {
   const configFilepath = environment[AUDIT_ACCOUNT_CONFIG_ENVIRONMENT_VARIABLE];
+
   if (configFilepath === undefined || configFilepath.length === 0) {
     throw new AuditAccountConfigError(
       `${AUDIT_ACCOUNT_CONFIG_ENVIRONMENT_VARIABLE} must name the config file.`,
     );
   }
+
   if (!isAbsolute(configFilepath)) {
     throw new AuditAccountConfigError(
       `${AUDIT_ACCOUNT_CONFIG_ENVIRONMENT_VARIABLE} must be an absolute path.`,
@@ -96,6 +92,7 @@ export function loadAuditAccountConfig(
   }
 
   const configFileContent = readFileSync(configFilepath, 'utf8');
+
   return parseAuditAccountConfigJson(configFileContent);
 }
 
@@ -109,27 +106,22 @@ function parseRawContent(rawContent: string): unknown {
 }
 
 /** Require a non-null, non-array JSON object before reading named fields. */
-function requireJsonObject(
-  unvalidatedJson: unknown,
-): Readonly<Record<string, unknown>> {
+function requireJsonObject(unvalidatedJson: unknown): Readonly<Record<string, unknown>> {
   if (
-    unvalidatedJson === null
-    || typeof unvalidatedJson !== 'object'
-    || Array.isArray(unvalidatedJson)
+    unvalidatedJson === null ||
+    typeof unvalidatedJson !== 'object' ||
+    Array.isArray(unvalidatedJson)
   ) {
-    throw new AuditAccountConfigError(
-      'audit-account config must contain a json object.',
-    );
+    throw new AuditAccountConfigError('audit-account config must contain a json object.');
   }
+
   return unvalidatedJson as Readonly<Record<string, unknown>>;
 }
 
 /** Require one field to contain a syntactically valid 12-digit AWS account ID. */
 function requireAccountId(value: unknown, fieldName: string): string {
   if (typeof value !== 'string' || !AWS_ACCOUNT_ID_PATTERN.test(value)) {
-    throw new AuditAccountConfigError(
-      `${fieldName} must be a valid 12-digit AWS account ID.`,
-    );
+    throw new AuditAccountConfigError(`${fieldName} must be a valid 12-digit AWS account ID.`);
   }
 
   return value;
@@ -140,19 +132,13 @@ function requireWorkloadAccountIds(value: unknown): readonly string[] {
   if (!Array.isArray(value)) {
     throw new AuditAccountConfigError(`${value} account ids is not an array`);
   }
+
   if (value.length === 0) {
-    throw new AuditAccountConfigError(
-      'Workload accounts cannot be an empty array.',
-    );
+    throw new AuditAccountConfigError('Workload accounts cannot be an empty array.');
   }
-  if (
-    !value.every(
-      (item) => typeof item === 'string' && AWS_ACCOUNT_ID_PATTERN.test(item),
-    )
-  ) {
-    throw new AuditAccountConfigError(
-      `${value} - some of the elements are not valid accounts`,
-    );
+
+  if (!value.every((item) => typeof item === 'string' && AWS_ACCOUNT_ID_PATTERN.test(item))) {
+    throw new AuditAccountConfigError(`${value} - some of the elements are not valid accounts`);
   }
 
   return value;
@@ -163,6 +149,7 @@ function requireRegion(value: unknown): typeof AUDIT_ACCOUNT_REGION {
   if (value !== AUDIT_ACCOUNT_REGION) {
     throw new AuditAccountConfigError('trying to use an unsupported region');
   }
+
   return value;
 }
 
@@ -175,17 +162,18 @@ function requireDistinctAccountRoles(
   if (managementAccountId === auditAccountId) {
     throw new AuditAccountConfigError('audit and management accounts must differ');
   }
+
   if (
     workloadAccountIds.some(
       (workloadAccountId) =>
-      workloadAccountId === auditAccountId
-        || workloadAccountId === managementAccountId,
+        workloadAccountId === auditAccountId || workloadAccountId === managementAccountId,
     )
   ) {
     throw new AuditAccountConfigError(
       'None of the workload accounts can be a management or audit account',
     );
   }
+
   if (workloadAccountIds.length !== new Set(workloadAccountIds).size) {
     throw new AuditAccountConfigError('Workload accounts contain duplicates');
   }

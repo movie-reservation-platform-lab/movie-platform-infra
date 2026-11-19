@@ -104,28 +104,31 @@ test.each([
     { AWS_STUB_PROFILE_LOGIN_SESSION: 'not-used' },
     'non-SSO credential provider',
   ],
-])('rejects a profile with the wrong %s before calling STS', (_caseName, envOverrides, expectedMessage) => {
-  const fixture = createFixture();
+])(
+  'rejects a profile with the wrong %s before calling STS',
+  (_caseName, envOverrides, expectedMessage) => {
+    const fixture = createFixture();
 
-  try {
-    const result = runFixturePreflight(fixture, envOverrides);
+    try {
+      const result = runFixturePreflight(fixture, envOverrides);
 
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain(expectedMessage);
-    expect(readFileSync(fixture.stsMarker, 'utf8')).toBe('');
-    expectPrivateValuesAbsent(result, Object.values(envOverrides));
-  } finally {
-    fixture.cleanup();
-  }
-});
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(expectedMessage);
+      expect(readFileSync(fixture.stsMarker, 'utf8')).toBe('');
+
+      expectPrivateValuesAbsent(result, Object.values(envOverrides));
+    } finally {
+      fixture.cleanup();
+    }
+  },
+);
 
 test.each([
   [
     'account',
     {
       AWS_STUB_CALLER_ACCOUNT: '222222222222',
-      AWS_STUB_CALLER_ARN:
-        `arn:aws:sts::222222222222:assumed-role/${EXPECTED_ROLE_NAME}/${SESSION_NAME}`,
+      AWS_STUB_CALLER_ARN: `arn:aws:sts::222222222222:assumed-role/${EXPECTED_ROLE_NAME}/${SESSION_NAME}`,
     },
     'live caller account does not match',
   ],
@@ -146,20 +149,24 @@ test.each([
     },
     'caller is not an IAM Identity Center assumed-role session',
   ],
-])('rejects the wrong live caller %s without revealing it', (_caseName, envOverrides, expectedMessage) => {
-  const fixture = createFixture();
+])(
+  'rejects the wrong live caller %s without revealing it',
+  (_caseName, envOverrides, expectedMessage) => {
+    const fixture = createFixture();
 
-  try {
-    const result = runFixturePreflight(fixture, envOverrides);
+    try {
+      const result = runFixturePreflight(fixture, envOverrides);
 
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain(expectedMessage);
-    expect(readFileSync(fixture.stsMarker, 'utf8')).toContain('sts get-caller-identity');
-    expectPrivateValuesAbsent(result, Object.values(envOverrides));
-  } finally {
-    fixture.cleanup();
-  }
-});
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(expectedMessage);
+      expect(readFileSync(fixture.stsMarker, 'utf8')).toContain('sts get-caller-identity');
+
+      expectPrivateValuesAbsent(result, Object.values(envOverrides));
+    } finally {
+      fixture.cleanup();
+    }
+  },
+);
 
 test('sanitizes an STS failure instead of forwarding AWS CLI diagnostics', () => {
   const fixture = createFixture();
@@ -170,6 +177,7 @@ test('sanitizes an STS failure instead of forwarding AWS CLI diagnostics', () =>
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('STS GetCallerIdentity failed');
     expect(result.stderr).not.toContain('private AWS CLI diagnostic');
+
     expectPrivateValuesAbsent(result);
   } finally {
     fixture.cleanup();
@@ -183,6 +191,7 @@ test('passes only the exact SSO identity and prints the approved redacted fields
     const result = runFixturePreflight(fixture);
 
     expectSuccessfulRedactedResult(result);
+
     expect(result.stdout).toBe(
       [
         'AWS account preflight passed',
@@ -195,6 +204,7 @@ test('passes only the exact SSO identity and prints the approved redacted fields
     );
 
     const stsInvocation = readFileSync(fixture.stsMarker, 'utf8');
+
     expect(stsInvocation).toContain('sts get-caller-identity');
     expect(stsInvocation).toContain('--profile movie-platform-demo');
     expect(stsInvocation).toContain('--region eu-central-1');

@@ -24,6 +24,7 @@ export function validateAuditAccountTarget(
       'the validated AWS target does not match the configured audit account',
     );
   }
+
   if (access.target.region !== config.region) {
     throw new AuditAccountTargetError(
       'the validated AWS target Region does not match the configured audit Region',

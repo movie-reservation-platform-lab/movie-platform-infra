@@ -24,6 +24,7 @@ export class HttpLoginClient implements LoginClient {
       redirect: 'manual',
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+
     return { httpStatus: response.status, auditEventId: await readAuditEventId(response) };
   }
 }
@@ -31,19 +32,25 @@ export class HttpLoginClient implements LoginClient {
 /** The receipt is optional: authentication fails open without it. */
 async function readAuditEventId(response: Response): Promise<string | null> {
   const text = await response.text();
+
   if (text.length > MAX_RESPONSE_BYTES) {
     return null;
   }
+
   let body: unknown;
+
   try {
     body = JSON.parse(text) as unknown;
   } catch {
     return null;
   }
+
   if (body === null || typeof body !== 'object') {
     return null;
   }
+
   const id = (body as Record<string, unknown>).audit_event_id;
+
   // Validated here because the ID is later interpolated into Athena SQL.
   return typeof id === 'string' && AUDIT_EVENT_ID.test(id) ? id : null;
 }

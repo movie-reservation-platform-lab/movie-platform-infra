@@ -69,11 +69,27 @@ the ECS health commands match the runtime.
 
 ## Useful Commands
 
+The [experiment sandbox](automation/experiment-sandbox/README.md) and
+[Harness trial tooling](automation/harness-buy-check/README.md) provide local
+preparation for isolated delivery experiments. `npm run check:harness-trial`
+runs credential-free policy, lifecycle, pipeline and synthetic infrastructure
+checks. The CLI help commands below do not create resources. Live operation
+requires a verified operator-owned target and the documented execution flags.
+Use `npm run format:harness-trial` to format these four new workspaces;
+`npm run format:check:harness-trial` checks them locally and in CI.
+`npm run lint:harness-trial` runs ESLint on the same workspaces, and
+`npm run lint:fix:harness-trial` applies its automatic fixes. Prettier owns
+layout; ESLint enforces braces, one declaration per statement, and blank lines
+between steps, which Prettier never adds.
+
 Run commands from this repository root:
 
 ```bash
 npm ci
 npm run validate:aws-account-preflight
+npm run check:harness-trial
+npm run sandbox:experiment -- --help
+npm run trial:harness -- --help
 npm run validate:artifact-foundation-cleanup
 npm run validate:artifact-copy
 npm run build:artifact-copy-cli

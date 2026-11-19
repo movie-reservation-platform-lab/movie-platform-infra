@@ -13,6 +13,7 @@ const AUDIT_CONFIG: AuditAccountConfig = {
   workloadAccountIds: ['333333333333'],
   region: 'eu-central-1',
 };
+
 const PREREQUISITES_CONFIG = {
   bucketArn: 'arn:aws:s3:::aws-security-data-lake-eu-central-1-example',
   region: 'eu-central-1',
@@ -22,6 +23,7 @@ const PREREQUISITES_CONFIG = {
 describe('Security Lake custom-source prerequisites', () => {
   it('creates a Glue crawler role scoped to the Authentication source prefix', () => {
     const app = new App();
+
     const template = Template.fromStack(
       new SecurityLakeCustomSourcePrerequisitesStack(
         app,
@@ -44,8 +46,11 @@ describe('Security Lake custom-source prerequisites', () => {
         ]),
       },
     });
+
     const roles = template.findResources('AWS::IAM::Role');
+
     expect(JSON.stringify(roles)).toContain('AWSGlueServiceRole');
+
     template.hasResourceProperties('AWS::IAM::Policy', {
       PolicyDocument: {
         Statement: Match.arrayWith([
@@ -56,29 +61,40 @@ describe('Security Lake custom-source prerequisites', () => {
         ]),
       },
     });
+
     template.hasOutput('CrawlerRoleArn', { Value: Match.anyValue() });
   });
 
   it('parses a data-lake bucket in the configured audit Region', () => {
-    expect(parseSecurityLakePrerequisitesConfigJson(JSON.stringify({
-      bucketArn: PREREQUISITES_CONFIG.bucketArn,
-      region: PREREQUISITES_CONFIG.region,
-    }), AUDIT_CONFIG)).toEqual(PREREQUISITES_CONFIG);
+    expect(
+      parseSecurityLakePrerequisitesConfigJson(
+        JSON.stringify({
+          bucketArn: PREREQUISITES_CONFIG.bucketArn,
+          region: PREREQUISITES_CONFIG.region,
+        }),
+        AUDIT_CONFIG,
+      ),
+    ).toEqual(PREREQUISITES_CONFIG);
   });
 
   it.each([
-    ['another Region', {
-      bucketArn: PREREQUISITES_CONFIG.bucketArn,
-      region: 'us-east-1',
-    }],
-    ['an object ARN instead of a bucket ARN', {
-      bucketArn: `${PREREQUISITES_CONFIG.bucketArn}/ext/MOVIE_AUTH/`,
-      region: PREREQUISITES_CONFIG.region,
-    }],
+    [
+      'another Region',
+      {
+        bucketArn: PREREQUISITES_CONFIG.bucketArn,
+        region: 'us-east-1',
+      },
+    ],
+    [
+      'an object ARN instead of a bucket ARN',
+      {
+        bucketArn: `${PREREQUISITES_CONFIG.bucketArn}/ext/MOVIE_AUTH/`,
+        region: PREREQUISITES_CONFIG.region,
+      },
+    ],
   ])('rejects %s', (_description, value) => {
-    expect(() => parseSecurityLakePrerequisitesConfigJson(
-      JSON.stringify(value),
-      AUDIT_CONFIG,
-    )).toThrow(SecurityLakePrerequisitesConfigError);
+    expect(() =>
+      parseSecurityLakePrerequisitesConfigJson(JSON.stringify(value), AUDIT_CONFIG),
+    ).toThrow(SecurityLakePrerequisitesConfigError);
   });
 });

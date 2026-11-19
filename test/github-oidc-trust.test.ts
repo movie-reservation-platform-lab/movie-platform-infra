@@ -30,10 +30,12 @@ interface PolicyStatement {
 
 function createTemplate(): Template {
   const app = new cdk.App();
+
   const stack = new GitHubOidcTrustStack(app, 'TestGitHubOidcTrustStack', {
     env: TEST_TARGET,
     trustConfig: VALID_CONFIG,
   });
+
   return Template.fromStack(stack);
 }
 
@@ -47,8 +49,12 @@ function withRepositoryCatalog(
 ): void {
   // Deliberately vary the real catalog at the module boundary. Production's
   // literal tuple type describes today's six entries, not these drift fixtures.
-  const replacement = jest.replaceProperty(artifactCatalog, 'ARTIFACT_FOUNDATION_REPOSITORIES',
-    repositories as typeof artifactCatalog.ARTIFACT_FOUNDATION_REPOSITORIES);
+  const replacement = jest.replaceProperty(
+    artifactCatalog,
+    'ARTIFACT_FOUNDATION_REPOSITORIES',
+    repositories as typeof artifactCatalog.ARTIFACT_FOUNDATION_REPOSITORIES,
+  );
+
   try {
     check();
   } finally {
@@ -60,10 +66,12 @@ function policyStatements(template: Template): PolicyStatement[] {
   const policies = Object.values(
     template.findResources('AWS::IAM::Policy'),
   ) as SynthesizedResource[];
+
   return policies.flatMap((policy) => {
     const document = policy.Properties?.PolicyDocument as {
       readonly Statement: PolicyStatement[];
     };
+
     return document.Statement;
   });
 }
@@ -76,20 +84,25 @@ function resolveTestArn(value: unknown): string {
   const join = value as {
     readonly 'Fn::Join'?: readonly [string, readonly unknown[]];
   };
+
   if (join['Fn::Join'] === undefined) {
     throw new Error('Expected a literal ARN or Fn::Join expression.');
   }
 
   const [separator, fragments] = join['Fn::Join'];
+
   return fragments
     .map((fragment) => {
       if (typeof fragment === 'string') {
         return fragment;
       }
+
       const reference = fragment as { readonly Ref?: string };
+
       if (reference.Ref === 'AWS::Partition') {
         return 'aws';
       }
+
       throw new Error('Unexpected token in ARN expression.');
     })
     .join(separator);
@@ -101,6 +114,7 @@ test('accepts exact separate admission and deployment identities', () => {
 
 test('accepts an exact subject without coupling the parser to one GitHub subject format', () => {
   const config = cloneConfig();
+
   (config.admission as Record<string, unknown>).subject =
     'repository_id:1000001:environment:artifact-admission-test';
 
@@ -110,38 +124,77 @@ test('accepts an exact subject without coupling the parser to one GitHub subject
 });
 
 test.each([
-  ['unknown top-level key', (config: Record<string, unknown>): void => {
-    config.extra = true;
-  }, 'unexpected keys: extra'],
-  ['placeholder value', (config: Record<string, unknown>) => {
-    (config.admission as Record<string, unknown>).repository = 'your-org/your-repository';
-  }, '"admission.repository" must be an exact non-placeholder value'],
-  ['wildcard subject', (config: Record<string, unknown>) => {
-    (config.admission as Record<string, unknown>).subject = 'repo:test-org/*';
-  }, '"admission.subject" must be an exact non-placeholder value'],
-  ['non-main ref', (config: Record<string, unknown>) => {
-    (config.deployment as Record<string, unknown>).ref = 'refs/heads/release';
-  }, '"deployment.ref" must be "refs/heads/main"'],
-  ['malformed repository ID', (config: Record<string, unknown>) => {
-    (config.admission as Record<string, unknown>).repositoryId = 'repo-1';
-  }, '"admission.repositoryId" must be a positive numeric ID'],
-  ['different control repository', (config: Record<string, unknown>) => {
-    const deployment = config.deployment as Record<string, unknown>;
-    deployment.repository = 'test-org/other-private-control';
-    deployment.repositoryId = '2000001';
-  }, 'Admission and deployment must use the same GitHub repository and owner identities'],
-  ['different repository owner', (config: Record<string, unknown>) => {
-    (config.deployment as Record<string, unknown>).repositoryOwnerId = '2000000';
-  }, 'Admission and deployment must use the same GitHub repository and owner identities'],
-  ['shared workflow', (config: Record<string, unknown>) => {
-    (config.deployment as Record<string, unknown>).workflow = 'Artifact Admission Test';
-  }, 'Admission and deployment must use different GitHub workflows'],
-  ['shared environment', (config: Record<string, unknown>) => {
-    (config.deployment as Record<string, unknown>).environment = 'artifact-admission-test';
-  }, 'Admission and deployment must use different GitHub Environments'],
+  [
+    'unknown top-level key',
+    (config: Record<string, unknown>): void => {
+      config.extra = true;
+    },
+    'unexpected keys: extra',
+  ],
+  [
+    'placeholder value',
+    (config: Record<string, unknown>) => {
+      (config.admission as Record<string, unknown>).repository = 'your-org/your-repository';
+    },
+    '"admission.repository" must be an exact non-placeholder value',
+  ],
+  [
+    'wildcard subject',
+    (config: Record<string, unknown>) => {
+      (config.admission as Record<string, unknown>).subject = 'repo:test-org/*';
+    },
+    '"admission.subject" must be an exact non-placeholder value',
+  ],
+  [
+    'non-main ref',
+    (config: Record<string, unknown>) => {
+      (config.deployment as Record<string, unknown>).ref = 'refs/heads/release';
+    },
+    '"deployment.ref" must be "refs/heads/main"',
+  ],
+  [
+    'malformed repository ID',
+    (config: Record<string, unknown>) => {
+      (config.admission as Record<string, unknown>).repositoryId = 'repo-1';
+    },
+    '"admission.repositoryId" must be a positive numeric ID',
+  ],
+  [
+    'different control repository',
+    (config: Record<string, unknown>) => {
+      const deployment = config.deployment as Record<string, unknown>;
+
+      deployment.repository = 'test-org/other-private-control';
+      deployment.repositoryId = '2000001';
+    },
+    'Admission and deployment must use the same GitHub repository and owner identities',
+  ],
+  [
+    'different repository owner',
+    (config: Record<string, unknown>) => {
+      (config.deployment as Record<string, unknown>).repositoryOwnerId = '2000000';
+    },
+    'Admission and deployment must use the same GitHub repository and owner identities',
+  ],
+  [
+    'shared workflow',
+    (config: Record<string, unknown>) => {
+      (config.deployment as Record<string, unknown>).workflow = 'Artifact Admission Test';
+    },
+    'Admission and deployment must use different GitHub workflows',
+  ],
+  [
+    'shared environment',
+    (config: Record<string, unknown>) => {
+      (config.deployment as Record<string, unknown>).environment = 'artifact-admission-test';
+    },
+    'Admission and deployment must use different GitHub Environments',
+  ],
 ] as const)('rejects %s', (_name, mutate, expectedError) => {
   const config = cloneConfig();
+
   mutate(config);
+
   expect(() => parseGitHubOidcTrustConfig(config)).toThrow(expectedError);
 });
 
@@ -153,6 +206,7 @@ test('creates one GitHub provider and two exact-claim roles', () => {
     Url: 'https://token.actions.githubusercontent.com',
     ClientIdList: ['sts.amazonaws.com'],
   });
+
   expect(roles).toHaveLength(2);
 
   const trustConditions = roles.map((role) => {
@@ -161,7 +215,9 @@ test('creates one GitHub provider and two exact-claim roles', () => {
         readonly Condition: { readonly StringEquals: Record<string, string> };
       }>;
     };
+
     expect(role.Properties?.MaxSessionDuration).toBe(3600);
+
     return assumeRolePolicy.Statement[0].Condition.StringEquals;
   });
 
@@ -176,6 +232,7 @@ test('creates one GitHub provider and two exact-claim roles', () => {
     'token.actions.githubusercontent.com:ref': 'refs/heads/main',
     'token.actions.githubusercontent.com:environment': VALID_CONFIG.admission.environment,
   });
+
   expect(trustConditions).toContainEqual({
     'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
     'token.actions.githubusercontent.com:sub': VALID_CONFIG.deployment.subject,
@@ -191,6 +248,7 @@ test('creates one GitHub provider and two exact-claim roles', () => {
 
 test('scopes artifact admission to exactly the six approved container repositories', () => {
   const statements = policyStatements(createTemplate());
+
   const repositoryStatement = statements.find(
     ({ Sid }) => Sid === 'ReadAndWriteTrustedArtifactRepository',
   );
@@ -208,12 +266,22 @@ test('scopes artifact admission to exactly the six approved container repositori
       'ecr:UploadLayerPart',
     ],
   });
+
   const resources = (repositoryStatement?.Resource as unknown[]).map(resolveTestArn);
-  expect(resources).toEqual([
-    'reservation-service', 'reservation-web', 'reservation-agent',
-    'recommendation-service', 'reservation-mcp', 'recommendation-mcp',
-  ].map((component) => `arn:aws:ecr:eu-central-1:111111111111:repository/movie-${component}`));
+
+  expect(resources).toEqual(
+    [
+      'reservation-service',
+      'reservation-web',
+      'reservation-agent',
+      'recommendation-service',
+      'reservation-mcp',
+      'recommendation-mcp',
+    ].map((component) => `arn:aws:ecr:eu-central-1:111111111111:repository/movie-${component}`),
+  );
+
   expect(resources.every((resource) => !resource.includes('*'))).toBe(true);
+
   expect(statements).toContainEqual({
     Sid: 'RequestEcrAuthorizationToken',
     Effect: 'Allow',
@@ -224,6 +292,7 @@ test('scopes artifact admission to exactly the six approved container repositori
 
 test('limits deployment to exact CDK bootstrap role assumption', () => {
   const statements = policyStatements(createTemplate());
+
   const deploymentStatement = statements.find(
     ({ Sid }) => Sid === 'AssumeSelectedCdkBootstrapRoles',
   );
@@ -233,18 +302,18 @@ test('limits deployment to exact CDK bootstrap role assumption', () => {
     Effect: 'Allow',
     Action: 'sts:AssumeRole',
   });
+
   expect(
     (deploymentStatement?.Resource as unknown[]).map((resource) => resolveTestArn(resource)),
   ).toEqual([
-      'arn:aws:iam::111111111111:role/cdk-hnb659fds-deploy-role-111111111111-eu-central-1',
-      'arn:aws:iam::111111111111:role/cdk-hnb659fds-file-publishing-role-111111111111-eu-central-1',
-      'arn:aws:iam::111111111111:role/cdk-hnb659fds-image-publishing-role-111111111111-eu-central-1',
-      'arn:aws:iam::111111111111:role/cdk-hnb659fds-lookup-role-111111111111-eu-central-1',
-    ]);
+    'arn:aws:iam::111111111111:role/cdk-hnb659fds-deploy-role-111111111111-eu-central-1',
+    'arn:aws:iam::111111111111:role/cdk-hnb659fds-file-publishing-role-111111111111-eu-central-1',
+    'arn:aws:iam::111111111111:role/cdk-hnb659fds-image-publishing-role-111111111111-eu-central-1',
+    'arn:aws:iam::111111111111:role/cdk-hnb659fds-lookup-role-111111111111-eu-central-1',
+  ]);
 
-  const actions = statements.flatMap(({ Action }) =>
-    Array.isArray(Action) ? Action : [Action],
-  );
+  const actions = statements.flatMap(({ Action }) => (Array.isArray(Action) ? Action : [Action]));
+
   expect(actions).not.toContain('ecr:DeleteRepository');
   expect(actions).not.toContain('ecr:BatchDeleteImage');
   expect(actions).not.toContain('cloudformation:*');
@@ -253,25 +322,35 @@ test('limits deployment to exact CDK bootstrap role assumption', () => {
 
 test('attaches only admission statements to admission and bootstrap assumption to deployment', () => {
   const template = createTemplate();
-  const outputs = template.toJSON().Outputs as Record<string, {
-    readonly Value: { readonly 'Fn::GetAtt': readonly [string, string] };
-  }>;
+
+  const outputs = template.toJSON().Outputs as Record<
+    string,
+    {
+      readonly Value: { readonly 'Fn::GetAtt': readonly [string, string] };
+    }
+  >;
+
   const admissionRoleId = outputs.ArtifactAdmissionRoleArn.Value['Fn::GetAtt'][0];
   const deploymentRoleId = outputs.WorkloadDeploymentRoleArn.Value['Fn::GetAtt'][0];
   const policies = Object.values(template.findResources('AWS::IAM::Policy'));
 
   expect(policies).toHaveLength(2);
+
   for (const [roleId, statementIds] of [
     [admissionRoleId, ['ReadAndWriteTrustedArtifactRepository', 'RequestEcrAuthorizationToken']],
     [deploymentRoleId, ['AssumeSelectedCdkBootstrapRoles']],
   ] as const) {
     const attached = policies.filter((policy) => {
       const roles = policy.Properties.Roles as Array<{ readonly Ref: string }>;
+
       return roles.some(({ Ref }) => Ref === roleId);
     });
+
     expect(attached).toHaveLength(1);
     expect(attached[0].Properties.Roles).toEqual([{ Ref: roleId }]);
+
     const statements = attached[0].Properties.PolicyDocument.Statement as PolicyStatement[];
+
     expect(statements.map(({ Sid }) => Sid).sort()).toEqual([...statementIds].sort());
   }
 
@@ -285,6 +364,7 @@ test('names the missing recommendation MCP destination when the catalog drifts',
   const missingRecommendationMcp = artifactCatalog.ARTIFACT_FOUNDATION_REPOSITORIES.filter(
     ({ componentId }) => componentId !== 'recommendation-mcp',
   );
+
   withRepositoryCatalog(missingRecommendationMcp, () => {
     expect(createTemplate).toThrow(
       'The artifact foundation catalog is missing the approved admission repository for "recommendation-mcp".',
@@ -294,22 +374,33 @@ test('names the missing recommendation MCP destination when the catalog drifts',
 
 test('adding a foundation repository does not grant admission authority to it', () => {
   const originalRepositories = artifactCatalog.ARTIFACT_FOUNDATION_REPOSITORIES;
+
   const expectedResources = policyStatements(createTemplate()).find(
     ({ Sid }) => Sid === 'ReadAndWriteTrustedArtifactRepository',
   )?.Resource;
-  withRepositoryCatalog([
-    ...originalRepositories,
-    { ...originalRepositories[0], componentId: 'future-service', repositoryName: 'movie-future-service' },
-  ], () => {
-    const repositoryStatement = policyStatements(createTemplate()).find(
-      ({ Sid }) => Sid === 'ReadAndWriteTrustedArtifactRepository',
-    );
-    expect(repositoryStatement?.Resource).toEqual(expectedResources);
-  });
+
+  withRepositoryCatalog(
+    [
+      ...originalRepositories,
+      {
+        ...originalRepositories[0],
+        componentId: 'future-service',
+        repositoryName: 'movie-future-service',
+      },
+    ],
+    () => {
+      const repositoryStatement = policyStatements(createTemplate()).find(
+        ({ Sid }) => Sid === 'ReadAndWriteTrustedArtifactRepository',
+      );
+
+      expect(repositoryStatement?.Resource).toEqual(expectedResources);
+    },
+  );
 });
 
 test('publishes separate role discovery outputs', () => {
   const template = createTemplate();
+
   template.hasOutput('ArtifactAdmissionRoleArn', {});
   template.hasOutput('WorkloadDeploymentRoleArn', {});
 });

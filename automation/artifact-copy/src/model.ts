@@ -1,4 +1,5 @@
 export const ARTIFACT_COPY_VERIFICATION_METHOD = 'exact-manifest-digest-v1';
+
 export const ARTIFACT_TRANSFER_VERIFICATION_METHOD = 'exact-manifest-digest-v2';
 
 export const ARTIFACT_TRANSFER_OPERATION = {

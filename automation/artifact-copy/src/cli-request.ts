@@ -8,10 +8,13 @@ import {
 } from './model';
 
 export const ARTIFACT_COPY_CLI_REQUEST_VERSION = 'artifact-copy-request-v1';
+
 export const ARTIFACT_COPY_CLI_REQUEST_VERSION_V2 = 'artifact-copy-request-v2';
+
 export const MAX_ARTIFACT_COPY_REQUEST_BYTES = 64 * 1024;
 
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
+
 const V1_ALLOWED_FIELDS = new Set([
   'requestVersion',
   'sourceReference',
@@ -20,6 +23,7 @@ const V1_ALLOWED_FIELDS = new Set([
   'sourceAuthFile',
   'destinationAuthFile',
 ]);
+
 const V2_ALLOWED_FIELDS = new Set([...V1_ALLOWED_FIELDS, 'operation']);
 
 interface JsonObject {
@@ -36,9 +40,7 @@ export interface ArtifactCopyCliRequestV2 {
   readonly transferRequest: ArtifactTransferRequest;
 }
 
-export type ArtifactCopyCliRequest =
-  | ArtifactCopyCliRequestV1
-  | ArtifactCopyCliRequestV2;
+export type ArtifactCopyCliRequest = ArtifactCopyCliRequestV1 | ArtifactCopyCliRequestV2;
 
 export class ArtifactCopyCliInputFailure extends Error {
   constructor() {
@@ -54,6 +56,7 @@ export function parseArtifactCopyCliRequest(rawRequest: Buffer): ArtifactCopyCli
   }
 
   let requestText: string;
+
   try {
     requestText = UTF8_DECODER.decode(rawRequest);
   } catch {
@@ -63,22 +66,28 @@ export function parseArtifactCopyCliRequest(rawRequest: Buffer): ArtifactCopyCli
   assertNoDuplicateJsonObjectKeys(requestText);
 
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(requestText) as unknown;
   } catch {
     failCliInput();
   }
+
   if (!isJsonObject(parsed)) {
     failCliInput();
   }
 
   const requestVersion = parsed.requestVersion;
-  const allowedFields = requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION
-    ? V1_ALLOWED_FIELDS
-    : requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION_V2
-      ? V2_ALLOWED_FIELDS
-      : failCliInput();
+
+  const allowedFields =
+    requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION
+      ? V1_ALLOWED_FIELDS
+      : requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION_V2
+        ? V2_ALLOWED_FIELDS
+        : failCliInput();
+
   const fields = Object.keys(parsed);
+
   if (fields.some((field) => !allowedFields.has(field))) {
     failCliInput();
   }
@@ -103,11 +112,13 @@ export function parseArtifactCopyCliRequest(rawRequest: Buffer): ArtifactCopyCli
       copyRequest: Object.freeze(commonRequest),
     });
   }
+
   if (requestVersion !== ARTIFACT_COPY_CLI_REQUEST_VERSION_V2) {
     failCliInput();
   }
 
   const operation = readOperation(parsed);
+
   return Object.freeze({
     requestVersion,
     transferRequest: Object.freeze({ ...commonRequest, operation }),
@@ -116,31 +127,38 @@ export function parseArtifactCopyCliRequest(rawRequest: Buffer): ArtifactCopyCli
 
 function readOperation(object: JsonObject): ArtifactTransferOperation {
   const operation = object.operation;
+
   if (
     operation !== ARTIFACT_TRANSFER_OPERATION.COPY_AND_VERIFY &&
     operation !== ARTIFACT_TRANSFER_OPERATION.VERIFY_EXISTING
   ) {
     failCliInput();
   }
+
   return operation;
 }
 
 function readRequiredString(object: JsonObject, field: string): string {
   const value = object[field];
+
   if (typeof value !== 'string' || value.length === 0) {
     failCliInput();
   }
+
   return value;
 }
 
 function readOptionalString(object: JsonObject, field: string): string | undefined {
   const value = object[field];
+
   if (value === undefined) {
     return undefined;
   }
+
   if (typeof value !== 'string' || value.length === 0) {
     failCliInput();
   }
+
   return value;
 }
 
@@ -150,41 +168,52 @@ function assertNoDuplicateJsonObjectKeys(jsonText: string): void {
 
   for (let index = 0; index < jsonText.length; index += 1) {
     const character = jsonText[index];
+
     if (character === '{') {
       objectKeySets.push(new Set());
       continue;
     }
+
     if (character === '}') {
       objectKeySets.pop();
       continue;
     }
+
     if (character !== '"') {
       continue;
     }
 
     const stringStart = index;
+
     index = findJsonStringEnd(jsonText, stringStart);
     let nextIndex = index + 1;
+
     while (isJsonWhitespace(jsonText[nextIndex])) {
       nextIndex += 1;
     }
+
     if (jsonText[nextIndex] !== ':') {
       continue;
     }
 
     const currentKeys = objectKeySets.at(-1);
+
     if (currentKeys === undefined) {
       failCliInput();
     }
+
     let key: unknown;
+
     try {
       key = JSON.parse(jsonText.slice(stringStart, index + 1)) as unknown;
     } catch {
       failCliInput();
     }
+
     if (typeof key !== 'string' || currentKeys.has(key)) {
       failCliInput();
     }
+
     currentKeys.add(key);
   }
 }
@@ -195,10 +224,12 @@ function findJsonStringEnd(jsonText: string, start: number): number {
       index += 1;
       continue;
     }
+
     if (jsonText[index] === '"') {
       return index;
     }
   }
+
   failCliInput();
 }
 

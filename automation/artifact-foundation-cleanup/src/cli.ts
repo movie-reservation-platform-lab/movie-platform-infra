@@ -8,10 +8,7 @@ import {
 import { ARTIFACT_FOUNDATION_REPOSITORIES } from '../../../lib/artifact-foundation-repositories';
 import { createAwsSdkCleaner } from './aws-cleanup-client';
 import { createAwsSdkReader } from './aws-read-client';
-import {
-  executeArtifactFoundationCleanup,
-  planArtifactFoundationCleanup,
-} from './cleanup';
+import { executeArtifactFoundationCleanup, planArtifactFoundationCleanup } from './cleanup';
 import { CleanupFailure, failCleanup } from './cleanup-error';
 import { inspectArtifactFoundation } from './inspection';
 import { InspectionFailure, failInspection } from './inspection-error';
@@ -21,11 +18,7 @@ import type {
   ArtifactRepositoryCatalog,
   CleanupInspectionAccess,
 } from './model';
-import {
-  renderExecutionPlan,
-  renderExecutionResult,
-  renderInspectionReport,
-} from './report';
+import { renderExecutionPlan, renderExecutionResult, renderInspectionReport } from './report';
 
 /** Parse CLI input, wire adapters, and render the cleanup-readiness report. */
 export async function runCli(
@@ -35,28 +28,36 @@ export async function runCli(
   dependencies: CliDependencies = PRODUCTION_DEPENDENCIES,
 ): Promise<number> {
   let operation: 'inspection' | 'cleanup' = 'inspection';
+
   try {
     const options = parseCliOptions(arguments_);
+
     if (options.help) {
       streams.stdout(USAGE);
+
       return 0;
     }
+
     operation = options.execute ? 'cleanup' : 'inspection';
     const confirmation = options.confirmation;
+
     if (options.execute && confirmation === undefined) {
       failCleanup('--execute requires an exact --confirm value; run the read-only check first');
     }
+
     if (!options.execute && confirmation !== undefined) {
       failInspection('--confirm is valid only together with --execute');
     }
 
     const access = dependencies.validateAccess(environment);
     const reader = dependencies.createReader(access);
+
     const inspection = await inspectArtifactFoundation(
       toInspectionAccess(access),
       reader,
       dependencies.artifactRepositoryCatalog,
     );
+
     streams.stdout(renderInspectionReport(inspection));
 
     if (!options.execute) {
@@ -67,19 +68,20 @@ export async function runCli(
       inspection,
       confirmation ?? failCleanup('--execute requires an exact --confirm value'),
     );
+
     streams.stdout(renderExecutionPlan(plan));
     const cleaner = dependencies.createCleaner(access);
-    const result = await executeArtifactFoundationCleanup(
-      plan,
-      cleaner,
-      async () =>
-        inspectArtifactFoundation(
-          toInspectionAccess(access),
-          reader,
-          dependencies.artifactRepositoryCatalog,
-        ),
+
+    const result = await executeArtifactFoundationCleanup(plan, cleaner, async () =>
+      inspectArtifactFoundation(
+        toInspectionAccess(access),
+        reader,
+        dependencies.artifactRepositoryCatalog,
+      ),
     );
+
     streams.stdout(renderExecutionResult(result));
+
     return 0;
   } catch (error: unknown) {
     const message =
@@ -88,7 +90,9 @@ export async function runCli(
       error instanceof CleanupFailure
         ? error.message
         : 'unexpected internal error';
+
     streams.stderr(`Artifact foundation ${operation} failed: ${message}\n`);
+
     return 1;
   }
 }
@@ -170,6 +174,7 @@ function parseCliOptions(arguments_: readonly string[]): CliOptions {
       strict: true,
       allowPositionals: false,
     });
+
     return Object.freeze({
       help: values.help ?? false,
       execute: values.execute ?? false,

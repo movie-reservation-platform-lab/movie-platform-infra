@@ -18,6 +18,7 @@ function createFoundationTemplate(): Template {
       region: TEST_CONFIG.region,
     },
   });
+
   return Template.fromStack(stack);
 }
 
@@ -30,6 +31,7 @@ describe('AuditAccountStack', () => {
       LifecycleConfiguration: { Expiration: { Days: 30 } },
       MetaStoreManagerRoleArn: Match.anyValue(),
     });
+
     foundationTemplate.hasOutput('CustomSourceCrawlerRoleArn', {
       Description: 'Crawler role passed to CreateCustomLogSource.',
       Value: Match.anyValue(),
@@ -39,17 +41,11 @@ describe('AuditAccountStack', () => {
   it('enables CloudTrail management events only for the configured audit and workload accounts', () => {
     const foundationTemplate = createFoundationTemplate();
 
-    foundationTemplate.hasResourceProperties(
-      'AWS::SecurityLake::AwsLogSource',
-      {
-        Accounts: [
-          TEST_CONFIG.auditAccountId,
-          ...TEST_CONFIG.workloadAccountIds,
-        ],
-        DataLakeArn: Match.anyValue(),
-        SourceName: 'CLOUD_TRAIL_MGMT',
-        SourceVersion: '2.0',
-      },
-    );
+    foundationTemplate.hasResourceProperties('AWS::SecurityLake::AwsLogSource', {
+      Accounts: [TEST_CONFIG.auditAccountId, ...TEST_CONFIG.workloadAccountIds],
+      DataLakeArn: Match.anyValue(),
+      SourceName: 'CLOUD_TRAIL_MGMT',
+      SourceVersion: '2.0',
+    });
   });
 });

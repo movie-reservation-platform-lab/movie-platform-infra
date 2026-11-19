@@ -63,9 +63,14 @@ function pinnedClientConfig(access: ValidatedAwsAccess) {
  * config changed in between.
  */
 async function verifySdkIdentity(access: ValidatedAwsAccess, label: string): Promise<void> {
-  const identity = await new STSClient(pinnedClientConfig(access)).send(new GetCallerIdentityCommand({}));
+  const identity = await new STSClient(pinnedClientConfig(access)).send(
+    new GetCallerIdentityCommand({}),
+  );
+
   if (identity.Account !== access.target.accountId) {
-    throw new RunConfigError(`the SDK credentials for the ${label} profile do not reach the preflighted account`);
+    throw new RunConfigError(
+      `the SDK credentials for the ${label} profile do not reach the preflighted account`,
+    );
   }
 }
 
@@ -75,16 +80,22 @@ function createComparisonDependencies(
   audit: ValidatedAwsAccess,
 ): ComparisonDependencies {
   const auditClientConfig = pinnedClientConfig(audit);
-  const catalog = new GlueSecurityLakeCatalog(new GlueClient(auditClientConfig), config.securityLakeStore.crawlerName);
+
+  const catalog = new GlueSecurityLakeCatalog(
+    new GlueClient(auditClientConfig),
+    config.securityLakeStore.crawlerName,
+  );
 
   // Resolve the Security Lake table once and reuse it; forget a failed lookup
   // so the next poll retries instead of repeating a cached rejection.
   let securityLakeTable: Promise<{ database: string; table: string }> | undefined;
+
   const resolveSecurityLakeTable = () => {
     securityLakeTable ??= catalog.resolveTable().catch((error: unknown) => {
       securityLakeTable = undefined;
       throw error;
     });
+
     return securityLakeTable;
   };
 
@@ -95,7 +106,8 @@ function createComparisonDependencies(
       legacy: new AthenaAuditStoreReader(
         new AthenaClient(pinnedClientConfig(workload)),
         config.legacyStore.workGroup,
-        async (ids, window) => legacyLookupQuery(config.legacyStore.database, config.legacyStore.table, ids, window),
+        async (ids, window) =>
+          legacyLookupQuery(config.legacyStore.database, config.legacyStore.table, ids, window),
         SYSTEM_CLOCK,
       ),
       securityLake: new AthenaAuditStoreReader(
@@ -103,6 +115,7 @@ function createComparisonDependencies(
         config.securityLakeStore.workGroup,
         async (ids, window) => {
           const { database, table } = await resolveSecurityLakeTable();
+
           return securityLakeLookupQuery(database, table, ids, window);
         },
         SYSTEM_CLOCK,

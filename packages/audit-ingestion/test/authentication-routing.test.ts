@@ -10,11 +10,14 @@ function createRoutingTemplate(): Template {
   const stack = new Stack(new App(), 'RoutingFixture', {
     env: { account: '222222222222', region: 'eu-central-1' },
   });
+
   const bus = new EventBus(stack, 'AuditBus');
+
   new Rule(stack, 'AuthenticationRule', {
     eventBus: bus,
     eventPattern: buildAuthenticationEventPattern(WORKLOAD_ACCOUNT_ID),
   });
+
   return Template.fromStack(stack);
 }
 
@@ -36,7 +39,7 @@ describe('Authentication routing', () => {
         ],
         'detail-type': ['ocsf.authentication.v1'],
         detail: {
-          'envelope_version': ['1'],
+          envelope_version: ['1'],
         },
       },
     });

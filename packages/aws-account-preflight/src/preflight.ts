@@ -33,6 +33,7 @@ export interface ValidatedAwsAccess {
 export function validateAwsAccess(environment: NodeJS.ProcessEnv): ValidatedAwsAccess {
   const target = loadAwsTarget(environment);
   const configFiles = resolveAwsConfigFiles(environment);
+
   const permissionSet = validateAwsCliIdentity(target, {
     ...environment,
     AWS_CONFIG_FILE: configFiles.configFilepath,
@@ -87,12 +88,15 @@ function resolveAwsConfigFile(
     if (!isAbsolute(override)) {
       fail(`${variableName} must be an absolute path`);
     }
+
     return override;
   }
 
   const home = environment.HOME;
+
   if (home === undefined || !isAbsolute(home)) {
     fail(`HOME must be an absolute path when ${variableName} is unset`);
   }
+
   return join(home, '.aws', defaultName);
 }

@@ -1,26 +1,25 @@
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { runCli } from '../src';
 
 export const EXPECTED_ACCOUNT_ID = '111111111111';
+
 export const EXPECTED_ROLE_SUFFIX = '0123456789abcdef';
+
 export const EXPECTED_ROLE_NAME = `AWSReservedSSO_AdministratorAccess_${EXPECTED_ROLE_SUFFIX}`;
+
 export const SESSION_NAME = 'operator@example.invalid';
+
 export const VALID_TARGET_VALUE = Object.freeze({
   profile: 'movie-platform-demo',
   region: 'eu-central-1',
   accountId: EXPECTED_ACCOUNT_ID,
   expectedRoleName: EXPECTED_ROLE_NAME,
 });
+
 export const VALID_TARGET = serializeTarget(VALID_TARGET_VALUE);
+
 export const CREDENTIAL_ENVIRONMENT_VARIABLES = [
   'AWS_ACCESS_KEY_ID',
   'AWS_SECRET_ACCESS_KEY',
@@ -90,8 +89,7 @@ export function runFixturePreflight(
     AWS_STUB_PROFILE_REGION: 'eu-central-1',
     AWS_STUB_SSO_REGION: 'eu-central-1',
     AWS_STUB_CALLER_ACCOUNT: EXPECTED_ACCOUNT_ID,
-    AWS_STUB_CALLER_ARN:
-      `arn:aws:sts::${EXPECTED_ACCOUNT_ID}:assumed-role/${EXPECTED_ROLE_NAME}/${SESSION_NAME}`,
+    AWS_STUB_CALLER_ARN: `arn:aws:sts::${EXPECTED_ACCOUNT_ID}:assumed-role/${EXPECTED_ROLE_NAME}/${SESSION_NAME}`,
     AWS_STUB_AWS_MARKER: fixture.awsMarker,
     AWS_STUB_STS_MARKER: fixture.stsMarker,
   };
@@ -99,7 +97,9 @@ export function runFixturePreflight(
   for (const variableName of CREDENTIAL_ENVIRONMENT_VARIABLES) {
     delete environment[variableName];
   }
+
   Object.assign(environment, envOverrides);
+
   for (const [key, value] of Object.entries(envOverrides)) {
     if (value === undefined) {
       delete environment[key];
@@ -116,6 +116,7 @@ export function runPreflightProcess(
 ): PreflightResult {
   let stdout = '';
   let stderr = '';
+
   const status = runCli(arguments_, environment, {
     stdout: (text) => {
       stdout += text;
@@ -140,6 +141,7 @@ export function expectPrivateValuesAbsent(
   additionalPrivateValues: readonly string[] = [],
 ): void {
   const combinedOutput = `${result.stdout}\n${result.stderr}`;
+
   const privateValues = [
     EXPECTED_ACCOUNT_ID,
     EXPECTED_ROLE_NAME,

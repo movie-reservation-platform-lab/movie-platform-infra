@@ -1,9 +1,5 @@
 import { inspectArtifactFoundation } from '../src/inspection';
-import {
-  CLEANUP_BLOCKER_CODES,
-  CLEANUP_READINESS,
-  CLEANUP_WARNING_CODES,
-} from '../src/model';
+import { CLEANUP_BLOCKER_CODES, CLEANUP_READINESS, CLEANUP_WARNING_CODES } from '../src/model';
 import {
   FOUNDATION_STACK,
   REPOSITORY,
@@ -25,9 +21,11 @@ test('marks the normal protected foundation as ready after workload teardown', a
   expect(inspection.blockers).toEqual([]);
   expect(inspection.warnings).toEqual([]);
   expect(inspection.repositories).toHaveLength(1);
+
   expect(inspection.repositories[0].definition.componentId).toBe(
     RESERVATION_SERVICE_REPOSITORY_DEFINITION.componentId,
   );
+
   expect(inspection.repositories[0].repository?.componentId).toBe(
     RESERVATION_SERVICE_REPOSITORY_DEFINITION.componentId,
   );
@@ -86,6 +84,7 @@ test('blocks cleanup while the disposable workload stack exists', async () => {
   );
 
   expect(inspection.readiness).toBe(CLEANUP_READINESS.BLOCKED);
+
   expect(inspection.blockers).toContainEqual({
     code: CLEANUP_BLOCKER_CODES.WORKLOAD_STACK_PRESENT,
     message: 'the disposable workload stack still exists',
@@ -112,10 +111,12 @@ test('recognizes a retained repository after stack deletion as a resumable state
 
   expect(inspection.readiness).toBe(CLEANUP_READINESS.READY);
   expect(inspection.blockers).toEqual([]);
+
   expect(inspection.warnings).toContainEqual({
     code: CLEANUP_WARNING_CODES.RETAINED_REPOSITORY_WITHOUT_STACK,
     componentId: RESERVATION_SERVICE_REPOSITORY_DEFINITION.componentId,
-    message: 'the stack is absent but retained ECR repository movie-reservation-service still exists',
+    message:
+      'the stack is absent but retained ECR repository movie-reservation-service still exists',
   });
 });
 
@@ -127,6 +128,7 @@ test('blocks an inconsistent foundation stack with no expected repository', asyn
   );
 
   expect(inspection.readiness).toBe(CLEANUP_READINESS.BLOCKED);
+
   expect(inspection.blockers).toContainEqual({
     code: CLEANUP_BLOCKER_CODES.FOUNDATION_REPOSITORY_ABSENT,
     componentId: RESERVATION_SERVICE_REPOSITORY_DEFINITION.componentId,
@@ -140,6 +142,7 @@ test('blocks cleanup while a foundation stack operation is in progress', async (
     ...FOUNDATION_STACK,
     status: 'UPDATE_IN_PROGRESS',
   };
+
   const inspection = await inspectArtifactFoundation(
     TEST_INSPECTION_ACCESS,
     createReader({ foundationStack, repositories: [REPOSITORY] }),
@@ -147,6 +150,7 @@ test('blocks cleanup while a foundation stack operation is in progress', async (
   );
 
   expect(inspection.readiness).toBe(CLEANUP_READINESS.BLOCKED);
+
   expect(inspection.blockers).toContainEqual({
     code: CLEANUP_BLOCKER_CODES.FOUNDATION_OPERATION_IN_PROGRESS,
     message: 'the foundation stack has an operation in progress',
@@ -161,6 +165,7 @@ test('blocks mismatched foundation discovery outputs without exposing their valu
       MovieReservationServiceRepositoryUri: 'wrong-uri',
     },
   };
+
   const inspection = await inspectArtifactFoundation(
     TEST_INSPECTION_ACCESS,
     createReader({ foundationStack, repositories: [REPOSITORY] }),
@@ -168,6 +173,7 @@ test('blocks mismatched foundation discovery outputs without exposing their valu
   );
 
   expect(inspection.readiness).toBe(CLEANUP_READINESS.BLOCKED);
+
   expect(inspection.blockers).toEqual([
     {
       code: CLEANUP_BLOCKER_CODES.FOUNDATION_OUTPUT_MISMATCH,
@@ -176,6 +182,7 @@ test('blocks mismatched foundation discovery outputs without exposing their valu
         'foundation output MovieReservationServiceRepositoryUri does not match the inspected repository',
     },
   ]);
+
   expect(inspection.blockers.map(({ message }) => message).join('\n')).not.toContain('wrong-uri');
 });
 
@@ -189,6 +196,7 @@ test('reports configuration drift as warnings while preserving read-only readine
     tags: { Scope: 'unexpected' },
     lifecyclePolicyText: undefined,
   };
+
   const inspection = await inspectArtifactFoundation(
     TEST_INSPECTION_ACCESS,
     createReader({ foundationStack: FOUNDATION_STACK, repositories: [repository] }),
@@ -196,6 +204,7 @@ test('reports configuration drift as warnings while preserving read-only readine
   );
 
   expect(inspection.readiness).toBe(CLEANUP_READINESS.READY);
+
   expect(inspection.warnings.map(({ code }) => code)).toEqual([
     CLEANUP_WARNING_CODES.REPOSITORY_TAG_MUTABILITY_DRIFT,
     CLEANUP_WARNING_CODES.REPOSITORY_TAG_MUTABILITY_EXCLUSIONS_PRESENT,

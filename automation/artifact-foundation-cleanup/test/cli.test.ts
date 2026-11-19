@@ -25,6 +25,7 @@ async function run(
 ): Promise<CliResult> {
   let stdout = '';
   let stderr = '';
+
   const status = await runCli(
     arguments_,
     {},
@@ -38,6 +39,7 @@ async function run(
     },
     dependencies,
   );
+
   return { status, stdout, stderr };
 }
 
@@ -45,6 +47,7 @@ function successfulDependencies(events: string[] = []): CliDependencies {
   return {
     validateAccess: () => {
       events.push('preflight');
+
       return TEST_ACCESS;
     },
     createReader: (access) => {
@@ -52,7 +55,9 @@ function successfulDependencies(events: string[] = []): CliDependencies {
         `reader:${access.target.profile}:${access.target.region}:` +
           `${access.configFiles.configFilepath}:${access.configFiles.credentialsFilepath}`,
       );
+
       let inspectionNumber = 0;
+
       return {
         verifyIdentity: async () => {
           inspectionNumber += 1;
@@ -60,19 +65,23 @@ function successfulDependencies(events: string[] = []): CliDependencies {
         },
         inspectStack: async (stackName) => {
           events.push(`stack:${inspectionNumber}:${stackName}`);
+
           if (inspectionNumber > 1) {
             return undefined;
           }
+
           return stackName === FOUNDATION_STACK.name ? FOUNDATION_STACK : undefined;
         },
         inspectRepository: async (definition) => {
           events.push(`repository:${inspectionNumber}:${definition.componentId}`);
+
           return inspectionNumber > 1 ? undefined : REPOSITORY;
         },
       };
     },
     createCleaner: (access) => {
       events.push(`cleaner:${access.target.profile}:${access.target.region}`);
+
       return createCleaner(events);
     },
     artifactRepositoryCatalog: TEST_ARTIFACT_REPOSITORY_CATALOG,
@@ -120,6 +129,7 @@ test('requires confirmation before preflight or client creation', async () => {
     stderr:
       'Artifact foundation cleanup failed: --execute requires an exact --confirm value; run the read-only check first\n',
   });
+
   expect(validateAccess).not.toHaveBeenCalled();
   expect(createReaderMock).not.toHaveBeenCalled();
   expect(createCleanerMock).not.toHaveBeenCalled();
@@ -140,6 +150,7 @@ test('runs preflight and read-only inspection without constructing a mutation cl
   expect(result.stdout).toContain('<account ending 1111>');
   expect(result.stdout).not.toContain(TEST_TARGET.accountId);
   expect(result.stdout).not.toContain(TEST_TARGET.expectedRoleName);
+
   expect(events).toEqual([
     'preflight',
     'reader:movie-platform-demo:eu-central-1:/test-home/.aws/config:/test-home/.aws/credentials',
@@ -179,6 +190,7 @@ test('executes in guarded order and reports success only after final absence ver
   expect(result.stdout).toContain('Force-delete ECR repository movie-reservation-service');
   expect(result.stdout).toContain('Cleanup result: CLEANED');
   expect(result.stdout).toContain('final absence verification: passed');
+
   expect(events).toEqual([
     'preflight',
     'reader:movie-platform-demo:eu-central-1:/test-home/.aws/config:/test-home/.aws/credentials',
@@ -202,20 +214,17 @@ test('executes in guarded order and reports success only after final absence ver
 test('blocks execution while the workload exists and makes no mutation', async () => {
   const createCleanerMock = jest.fn(() => createCleaner());
 
-  const result = await run(
-    ['--execute', '--confirm', buildCleanupConfirmation(TEST_TARGET)],
-    {
-      validateAccess: () => TEST_ACCESS,
-      createReader: () =>
-        createReader({
-          workloadStack: WORKLOAD_STACK,
-          foundationStack: FOUNDATION_STACK,
-          repositories: [REPOSITORY],
-        }),
-      createCleaner: createCleanerMock,
-      artifactRepositoryCatalog: TEST_ARTIFACT_REPOSITORY_CATALOG,
-    },
-  );
+  const result = await run(['--execute', '--confirm', buildCleanupConfirmation(TEST_TARGET)], {
+    validateAccess: () => TEST_ACCESS,
+    createReader: () =>
+      createReader({
+        workloadStack: WORKLOAD_STACK,
+        foundationStack: FOUNDATION_STACK,
+        repositories: [REPOSITORY],
+      }),
+    createCleaner: createCleanerMock,
+    artifactRepositoryCatalog: TEST_ARTIFACT_REPOSITORY_CATALOG,
+  });
 
   expect(result.status).toBe(1);
   expect(result.stdout).toContain('Final cleanup readiness: BLOCKED');

@@ -1,7 +1,4 @@
-import {
-  CloudFormationClient,
-  DescribeStacksCommand,
-} from '@aws-sdk/client-cloudformation';
+import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
 import {
   DescribeRepositoriesCommand,
   ECRClient,
@@ -22,11 +19,14 @@ import {
 } from './test-support';
 
 type CloudFormationReadClient = Pick<CloudFormationClient, 'send'>;
+
 type EcrReadClient = Pick<ECRClient, 'send'>;
+
 type StsReadClient = Pick<STSClient, 'send'>;
 
 const TEST_REPOSITORY_ARN =
   'arn:aws:ecr:eu-central-1:111111111111:repository/movie-reservation-service';
+
 const TEST_REPOSITORY_URI =
   '111111111111.dkr.ecr.eu-central-1.amazonaws.com/movie-reservation-service';
 
@@ -64,20 +64,20 @@ function stsClient(
   return { send: handler } as unknown as StsReadClient;
 }
 
-function inspectRepository(
-  reader: AwsSdkArtifactFoundationReader,
-): Promise<unknown> {
+function inspectRepository(reader: AwsSdkArtifactFoundationReader): Promise<unknown> {
   return reader.inspectRepository(RESERVATION_SERVICE_REPOSITORY_DEFINITION);
 }
 
 test('verifies the exact SDK caller with one read-only STS command', async () => {
   const commands: unknown[] = [];
+
   const reader = new AwsSdkArtifactFoundationReader(
     TEST_TARGET,
     cloudFormationClient(async () => ({})),
     ecrClient(async () => ({})),
     stsClient(async (command) => {
       commands.push(command);
+
       return {
         Account: TEST_TARGET.accountId,
         Arn:
@@ -127,10 +127,12 @@ test('sanitizes unexpected SDK identity failures', async () => {
 
 test('inspects an exact CloudFormation stack with one read command', async () => {
   const commands: unknown[] = [];
+
   const reader = new AwsSdkArtifactFoundationReader(
     TEST_TARGET,
     cloudFormationClient(async (command) => {
       commands.push(command);
+
       return {
         Stacks: [
           {
@@ -156,8 +158,10 @@ test('inspects an exact CloudFormation stack with one read command', async () =>
     terminationProtection: true,
     outputs: { RepositoryName: 'movie-reservation-service' },
   });
+
   expect(commands).toHaveLength(1);
   expect(commands[0]).toBeInstanceOf(DescribeStacksCommand);
+
   expect((commands[0] as DescribeStacksCommand).input).toEqual({
     StackName: 'ArtifactFoundationStack',
   });
@@ -168,6 +172,7 @@ test('maps the precise CloudFormation missing-stack response to absence', async 
     TEST_TARGET,
     cloudFormationClient(async () => {
       const error = new Error('Stack with id ArtifactFoundationStack does not exist');
+
       error.name = 'ValidationError';
       throw error;
     }),
@@ -191,6 +196,7 @@ test('sanitizes unexpected CloudFormation failures', async () => {
   await expect(reader.inspectStack('ArtifactFoundationStack')).rejects.toThrow(
     'unable to inspect the CloudFormation stack',
   );
+
   await expect(reader.inspectStack('ArtifactFoundationStack')).rejects.not.toThrow(
     'private SDK diagnostic',
   );
@@ -220,6 +226,7 @@ test('refuses a CloudFormation stack ARN outside the pinned account and Region',
 
 test('inventories repository settings, tags, lifecycle, and paginated image digests using read commands only', async () => {
   const commands: unknown[] = [];
+
   const reader = new AwsSdkArtifactFoundationReader(
     TEST_TARGET,
     cloudFormationClient(async () => {
@@ -227,15 +234,19 @@ test('inventories repository settings, tags, lifecycle, and paginated image dige
     }),
     ecrClient(async (command) => {
       commands.push(command);
+
       if (command instanceof DescribeRepositoriesCommand) {
         return { repositories: [repositoryDescription()] };
       }
+
       if (command instanceof ListTagsForResourceCommand) {
         return { tags: [{ Key: 'Scope', Value: 'artifact-foundation' }] };
       }
+
       if (command instanceof GetLifecyclePolicyCommand) {
         return { lifecyclePolicyText: EXPECTED_LIFECYCLE_POLICY };
       }
+
       if (command instanceof ListImagesCommand && command.input.nextToken === undefined) {
         return {
           imageIds: [
@@ -245,11 +256,13 @@ test('inventories repository settings, tags, lifecycle, and paginated image dige
           nextToken: 'second-page',
         };
       }
+
       if (command instanceof ListImagesCommand && command.input.nextToken === 'second-page') {
         return {
           imageIds: [{ imageDigest: TEST_DIGEST_B }],
         };
       }
+
       throw new Error(`Unexpected command ${String(command)}`);
     }),
     stsClient(),
@@ -288,6 +301,7 @@ test('inventories repository settings, tags, lifecycle, and paginated image dige
     'ListImagesCommand',
     'ListImagesCommand',
   ]);
+
   for (const command of commands) {
     if (
       command instanceof DescribeRepositoriesCommand ||
@@ -296,19 +310,19 @@ test('inventories repository settings, tags, lifecycle, and paginated image dige
     ) {
       expect(command.input.registryId).toBe(TEST_TARGET.accountId);
     }
-    if (
-      command instanceof GetLifecyclePolicyCommand ||
-      command instanceof ListImagesCommand
-    ) {
+
+    if (command instanceof GetLifecyclePolicyCommand || command instanceof ListImagesCommand) {
       expect(command.input.repositoryName).toBe(
         RESERVATION_SERVICE_REPOSITORY_DEFINITION.repositoryName,
       );
     }
+
     if (command instanceof DescribeRepositoriesCommand) {
       expect(command.input.repositoryNames).toEqual([
         RESERVATION_SERVICE_REPOSITORY_DEFINITION.repositoryName,
       ]);
     }
+
     if (command instanceof ListImagesCommand) {
       expect(command.input.filter).toEqual({ imageStatus: 'ANY' });
     }
@@ -317,12 +331,14 @@ test('inventories repository settings, tags, lifecycle, and paginated image dige
 
 test('reports an absent repository without issuing follow-up ECR commands', async () => {
   const commands: unknown[] = [];
+
   const reader = new AwsSdkArtifactFoundationReader(
     TEST_TARGET,
     cloudFormationClient(async () => ({})),
     ecrClient(async (command) => {
       commands.push(command);
       const error = new Error('private repository detail');
+
       error.name = 'RepositoryNotFoundException';
       throw error;
     }),
@@ -353,12 +369,14 @@ test('refuses a repository identity outside the pinned target', async () => {
           ],
         };
       }
+
       throw new Error('follow-up commands must not run');
     }),
     stsClient(),
   );
 
   await expect(inspectRepository(reader)).rejects.toBeInstanceOf(InspectionFailure);
+
   await expect(inspectRepository(reader)).rejects.toThrow(
     'ECR returned a repository outside the pinned target',
   );
@@ -372,15 +390,19 @@ test('rejects malformed repository tags instead of creating an ambiguous tag map
       if (command instanceof DescribeRepositoriesCommand) {
         return { repositories: [repositoryDescription()] };
       }
+
       if (command instanceof ListTagsForResourceCommand) {
         return { tags: [{ Key: 'Scope' }] };
       }
+
       if (command instanceof GetLifecyclePolicyCommand) {
         return { lifecyclePolicyText: EXPECTED_LIFECYCLE_POLICY };
       }
+
       if (command instanceof ListImagesCommand) {
         return { imageIds: [] };
       }
+
       throw new Error('unexpected command');
     }),
     stsClient(),
@@ -399,15 +421,19 @@ test('sanitizes unexpected lifecycle-policy failures', async () => {
       if (command instanceof DescribeRepositoriesCommand) {
         return { repositories: [repositoryDescription()] };
       }
+
       if (command instanceof ListTagsForResourceCommand) {
         return { tags: [] };
       }
+
       if (command instanceof GetLifecyclePolicyCommand) {
         throw new Error('private lifecycle diagnostic for 111111111111');
       }
+
       if (command instanceof ListImagesCommand) {
         return { imageIds: [] };
       }
+
       throw new Error('unexpected command');
     }),
     stsClient(),
@@ -416,11 +442,13 @@ test('sanitizes unexpected lifecycle-policy failures', async () => {
   await expect(inspectRepository(reader)).rejects.toThrow(
     'unable to inspect the ECR lifecycle policy',
   );
+
   await expect(inspectRepository(reader)).rejects.not.toThrow('private lifecycle diagnostic');
 });
 
 test('rejects a repeated ECR image pagination token', async () => {
   let imagePageCalls = 0;
+
   const reader = new AwsSdkArtifactFoundationReader(
     TEST_TARGET,
     cloudFormationClient(async () => ({})),
@@ -428,16 +456,21 @@ test('rejects a repeated ECR image pagination token', async () => {
       if (command instanceof DescribeRepositoriesCommand) {
         return { repositories: [repositoryDescription()] };
       }
+
       if (command instanceof ListTagsForResourceCommand) {
         return { tags: [] };
       }
+
       if (command instanceof GetLifecyclePolicyCommand) {
         return { lifecyclePolicyText: EXPECTED_LIFECYCLE_POLICY };
       }
+
       if (command instanceof ListImagesCommand) {
         imagePageCalls += 1;
+
         return { imageIds: [], nextToken: 'repeated-token' };
       }
+
       throw new Error('unexpected command');
     }),
     stsClient(),
@@ -446,6 +479,7 @@ test('rejects a repeated ECR image pagination token', async () => {
   await expect(inspectRepository(reader)).rejects.toThrow(
     'ECR returned a repeated image pagination token',
   );
+
   expect(imagePageCalls).toBe(2);
 });
 
@@ -459,15 +493,19 @@ test.each([undefined, 'sha256:not-a-digest'])(
         if (command instanceof DescribeRepositoriesCommand) {
           return { repositories: [repositoryDescription()] };
         }
+
         if (command instanceof ListTagsForResourceCommand) {
           return { tags: [] };
         }
+
         if (command instanceof GetLifecyclePolicyCommand) {
           return { lifecyclePolicyText: EXPECTED_LIFECYCLE_POLICY };
         }
+
         if (command instanceof ListImagesCommand) {
           return { imageIds: [{ imageDigest }] };
         }
+
         throw new Error('unexpected command');
       }),
       stsClient(),

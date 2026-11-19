@@ -1,0 +1,12 @@
+# Required immutable inputs; tool/node shared libraries must match delegate base.
+# Build-time smoke probes fail on an incompatible libc/architecture combination.
+ARG TRIAL_TOOLS_IMAGE
+ARG HARNESS_DELEGATE_BASE_IMAGE
+FROM ${TRIAL_TOOLS_IMAGE} AS tools
+FROM ${HARNESS_DELEGATE_BASE_IMAGE}
+COPY --from=tools /usr/local/aws-cli/ /usr/local/aws-cli/
+COPY --from=tools /usr/local/bin/node /opt/trial/bin/node
+COPY --from=tools /opt/trial/ /opt/trial/
+ENV PATH="/opt/trial/bin:/usr/local/aws-cli/v2/current/bin:${PATH}"
+RUN node --version && aws --version && node /opt/trial/automation/harness-buy-check/dist/main.js evaluate
+# Preserve the Harness base's ENTRYPOINT, command and runtime user.

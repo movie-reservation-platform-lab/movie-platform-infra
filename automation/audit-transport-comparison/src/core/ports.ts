@@ -15,7 +15,11 @@ export interface LookupWindow {
 /** Find which of the given audit event IDs are queryable in one store. */
 export interface AuditStoreReader {
   /** @throws {QueryDeadlineExceededError} when the lookup cannot finish before `deadline`. */
-  findEventIds(ids: readonly string[], window: LookupWindow, deadline: Date): Promise<ReadonlySet<string>>;
+  findEventIds(
+    ids: readonly string[],
+    window: LookupWindow,
+    deadline: Date,
+  ): Promise<ReadonlySet<string>>;
 }
 
 /**

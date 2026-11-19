@@ -5,9 +5,7 @@ import { loadGitHubOidcTrustConfig } from '../lib/config/github-oidc-trust-confi
 import { GitHubOidcTrustStack } from '../lib/github-oidc-trust-stack';
 
 const app = new cdk.App();
-const trustConfig = loadGitHubOidcTrustConfig(
-  app.node.tryGetContext('githubOidcTrustConfigFile'),
-);
+const trustConfig = loadGitHubOidcTrustConfig(app.node.tryGetContext('githubOidcTrustConfigFile'));
 
 new GitHubOidcTrustStack(app, 'GitHubOidcTrustStack', {
   env: {
@@ -16,4 +14,3 @@ new GitHubOidcTrustStack(app, 'GitHubOidcTrustStack', {
   },
   trustConfig,
 });
-

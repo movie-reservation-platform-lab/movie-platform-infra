@@ -1,4 +1,4 @@
-import type {EventPattern} from 'aws-cdk-lib/aws-events';
+import type { EventPattern } from 'aws-cdk-lib/aws-events';
 import {
   AUDIT_EVENTBRIDGE_DETAIL_TYPE,
   AUDIT_EVENTBRIDGE_ENVELOPE_VERSION,
@@ -6,9 +6,7 @@ import {
 } from './transport-contract';
 
 /** Select supported Authentication events from one configured workload account. */
-export function buildAuthenticationEventPattern(
-  workloadAccountId: string,
-): EventPattern {
+export function buildAuthenticationEventPattern(workloadAccountId: string): EventPattern {
   return {
     account: [workloadAccountId],
     source: [...AUDIT_EVENTBRIDGE_SOURCES],

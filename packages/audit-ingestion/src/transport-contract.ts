@@ -6,4 +6,5 @@ export const AUDIT_EVENTBRIDGE_SOURCES = [
 ] as const;
 
 export const AUDIT_EVENTBRIDGE_DETAIL_TYPE = 'ocsf.authentication.v1' as const;
+
 export const AUDIT_EVENTBRIDGE_ENVELOPE_VERSION = '1' as const;

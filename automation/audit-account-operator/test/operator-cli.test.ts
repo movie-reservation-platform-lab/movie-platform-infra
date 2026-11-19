@@ -38,6 +38,7 @@ test('queries only the CDK bootstrap stack after the audit target passes preflig
 
   expect(fixture.run(['status'])).toBe(0);
   expect(fixture.stdout()).toBe('Audit-account CDK bootstrap status: CREATE_COMPLETE\n');
+
   expect(fixture.runProcess).toHaveBeenCalledWith(
     'aws',
     expect.arrayContaining([

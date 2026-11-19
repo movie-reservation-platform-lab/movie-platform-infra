@@ -12,7 +12,9 @@ import type { ComparisonDependencies } from '../../src/core/run-comparison';
 import type { ComparisonContext, ComparisonSettings } from '../../src/core/settings';
 
 export const START = new Date('2026-10-12T21:00:00.000Z');
+
 export const ID_ACCEPTED = '11111111-1111-4111-8111-111111111111';
+
 export const ID_REJECTED = '22222222-2222-4222-8222-222222222222';
 
 export const TEST_SETTINGS: ComparisonSettings = Object.freeze({
@@ -67,38 +69,53 @@ export class FakeStore implements AuditStoreReader {
     private readonly availableAt: ReadonlyMap<string, Date>,
   ) {}
 
-  public async findEventIds(ids: readonly string[], window: LookupWindow, deadline: Date): Promise<ReadonlySet<string>> {
+  public async findEventIds(
+    ids: readonly string[],
+    window: LookupWindow,
+    deadline: Date,
+  ): Promise<ReadonlySet<string>> {
     this.calls.push({ ids, window });
+
     if (this.failure !== null) {
       throw this.failure;
     }
+
     const now = this.clock.now();
+
     if (now >= deadline) {
       throw new QueryDeadlineExceededError();
     }
+
     return new Set(ids.filter((id) => (this.availableAt.get(id) ?? Infinity) <= now));
   }
 }
 
 export function availableAfter(clock: FakeClock, seconds: Record<string, number>): FakeStore {
-  return new FakeStore(clock, new Map(Object.entries(seconds).map(([id, delay]) => [id, after(delay)])));
+  return new FakeStore(
+    clock,
+    new Map(Object.entries(seconds).map(([id, delay]) => [id, after(delay)])),
+  );
 }
 
 /** Login client answering from a script; requests are recorded for assertions. */
 export function scriptedLogins(...responses: Array<LoginResponse | Error>) {
   const requests: LoginRequest[] = [];
+
   return {
     requests,
     client: {
       login: async (request: LoginRequest): Promise<LoginResponse> => {
         requests.push(request);
         const response = responses[requests.length - 1];
+
         if (response === undefined) {
           throw new Error(`no scripted response for login ${requests.length}`);
         }
+
         if (response instanceof Error) {
           throw response;
         }
+
         return response;
       },
     },
@@ -113,6 +130,7 @@ export function fakeComparisonDependencies(
 ): ComparisonDependencies & { readonly crawlerStarts: Date[] } {
   const crawlerStarts: Date[] = [];
   const statusFor: Record<LoginOutcome, number> = { accepted: 200, rejected: 401 };
+
   return {
     clock,
     login: scriptedLogins(

@@ -1,0 +1,185 @@
+{
+  "schema_version": 2,
+  "catalog": {
+    "revision": "5ab427ee3135c644ecd95fd6d8a02ca797343a47"
+  },
+  "packs": [
+    "core",
+    "review",
+    "knowledge-base",
+    "teaching",
+    "typescript",
+    "aws-cdk",
+    "architecture"
+  ],
+  "entities": {
+    "agents/check-runner": {
+      "sha256": "e3e644d928e29158637983dd0ff09ead9d348aa4f1ee487e007365f268f49963",
+      "packs": [
+        "core"
+      ]
+    },
+    "agents/performance-scalability": {
+      "sha256": "8a9979e00202686a7aaa2a539ff0a8079abb283e82f46c7319a8eeca6865e679",
+      "packs": [
+        "review"
+      ]
+    },
+    "agents/readability-maintainability": {
+      "sha256": "d1b92b97be2ed0155102d65a093643666a4812fc9a23813759143440289816d6",
+      "packs": [
+        "review"
+      ]
+    },
+    "agents/scout": {
+      "sha256": "698457b06192f7db414727205cae4d22ee23ebfe1cd0e5a227d4319f9c218a43",
+      "packs": [
+        "core"
+      ]
+    },
+    "agents/security-practices": {
+      "sha256": "76811ff2272fb9fd1bc2920bc45fa58aed20916ebe0bb667bfb4de0c1cad1c13",
+      "packs": [
+        "review"
+      ]
+    },
+    "agents/system-design-scalability": {
+      "sha256": "260db3553453bd58cfe7a495d43741825764949994cf259eb6781cc3498d8979",
+      "packs": [
+        "review"
+      ]
+    },
+    "render.py": {
+      "sha256": "5676c4d186fd034c1ee0ad02ca3351a6e6b349dbb12cfc856215d0d8a915ce9a",
+      "packs": [
+        "support"
+      ]
+    },
+    "routing.json": {
+      "sha256": "41ef7aef6022291252aa9908182948097b9a79695412c7f6e0df8d75699e6703",
+      "packs": [
+        "support"
+      ]
+    },
+    "rules/teaching-mode": {
+      "sha256": "8115f99b3d8c0a83ccbfeaecb86bede3a22958ecff2e35ea8cd5b22b3bdfd7af",
+      "packs": [
+        "teaching"
+      ]
+    },
+    "skills/adr": {
+      "sha256": "2d15ea632a80133e394290890f4be589bdb1748edcf13ec5cb3053082be7e8c2",
+      "packs": [
+        "core"
+      ]
+    },
+    "skills/appsec-review": {
+      "sha256": "aa5684c030d2a336fdbd28c94a3030c54a5c0cc05b41fda45234432fadae83cc",
+      "packs": [
+        "review"
+      ]
+    },
+    "skills/aws-cdk-iac": {
+      "sha256": "0938777d275e399fb614d0d399184d51e09bc705f38dc3fc072b79f7320835af",
+      "packs": [
+        "aws-cdk"
+      ]
+    },
+    "skills/cdk-infra-testing": {
+      "sha256": "ed84d6b40e0f689a96790f4ac93db64bb2b7a1c4d8923225ca6eaacf0bbb8856",
+      "packs": [
+        "aws-cdk"
+      ]
+    },
+    "skills/clean-architecture": {
+      "sha256": "1fda7f9a145f911fe890fa5d31a2d55993b5df8bfd943c69c68252eb6ceb528f",
+      "packs": [
+        "architecture"
+      ]
+    },
+    "skills/codebase-research": {
+      "sha256": "50bc8db66343de57ed0448e10153a3e59004788735260e4815f7da6b74d3e452",
+      "packs": [
+        "core"
+      ]
+    },
+    "skills/external-research": {
+      "sha256": "c81788bc50957dc378fcd213009184de8f41e7fa29fd13ac1c0eea15f70431a6",
+      "packs": [
+        "core"
+      ]
+    },
+    "skills/hybrid-teaching-mode": {
+      "sha256": "8821052dea27101a9fc4a25c27dee6005704868d581afe6c493501cd67b91b52",
+      "packs": [
+        "teaching"
+      ]
+    },
+    "skills/learn-by-doing": {
+      "sha256": "93b63539f0a03d7ca6bb9a351dbf4ee637f43d8926be73ac907f28975a1a6cc7",
+      "packs": [
+        "teaching"
+      ]
+    },
+    "skills/model-routing": {
+      "sha256": "ac08a4ebe5a0865afb14974dd6b1bba63a781c14662a2ca9a18b1624ea48622f",
+      "packs": [
+        "core"
+      ]
+    },
+    "skills/plan-execution": {
+      "sha256": "af0143d2038cf65ffce18109520f18cb85ba3d4a3598c21aef10e84751f5237b",
+      "packs": [
+        "core"
+      ]
+    },
+    "skills/plan-sweep": {
+      "sha256": "f0e539e761d1ecc56d39850f2f5a3e11dc30e8ebb069d0b5777daf66a49c80a0",
+      "packs": [
+        "core"
+      ]
+    },
+    "skills/plan-validation": {
+      "sha256": "09d256e33fd4509033c86394b50afb2389ab2b6dad59ea9f2ef01b2897679a70",
+      "packs": [
+        "core"
+      ]
+    },
+    "skills/pr-walkthrough": {
+      "sha256": "990205439b9bb4f3e54922f2e2976e8aa89e2d770e8094db6e6f0fb1d8d178eb",
+      "packs": [
+        "review"
+      ]
+    },
+    "skills/principal-engineer-planner": {
+      "sha256": "5367149bc239e700f798776eab0e949d84f8fd2ea3cb7b4dc8522a854f477861",
+      "packs": [
+        "core"
+      ]
+    },
+    "skills/programming-kb": {
+      "sha256": "2b614113b43c7e1f51931869e13ef6b126f79ff291015e271a092a23f28052b1",
+      "packs": [
+        "knowledge-base"
+      ]
+    },
+    "skills/typescript": {
+      "sha256": "b622be3817281e892347e4afc03be5028909395718a7c3d7e08484311117eb92",
+      "packs": [
+        "typescript"
+      ]
+    },
+    "skills/typescript-style": {
+      "sha256": "f8ffa59f909ac2fe84160cb1d930cdf6bd1aed68794d91c58ab5132d0d87f7d6",
+      "packs": [
+        "typescript"
+      ]
+    },
+    "skills/vitest-testing": {
+      "sha256": "8799c359ff132aabc62df853bd19c62781eadbacf180e53c09c9163b7d908ce3",
+      "packs": [
+        "typescript"
+      ]
+    }
+  }
+}

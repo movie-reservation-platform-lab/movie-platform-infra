@@ -10,6 +10,7 @@ export function describeError(error: unknown): string {
   if (!(error instanceof Error)) {
     return redact(String(error));
   }
+
   return redact(error.name === 'Error' ? error.message : `${error.name}: ${error.message}`);
 }
 
@@ -20,5 +21,6 @@ export function redact(text: string): string {
     .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, '<email>')
     .replace(/\b\d{12}\b/g, '<account>')
     .replace(/(?<![\w<])\/(?:[\w.-]+\/)*[\w.-]+/g, '<path>');
+
   return masked.length > MAX_ERROR_LENGTH ? `${masked.slice(0, MAX_ERROR_LENGTH)}...` : masked;
 }

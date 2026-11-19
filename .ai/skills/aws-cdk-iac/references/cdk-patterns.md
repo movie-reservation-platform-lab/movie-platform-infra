@@ -1,6 +1,6 @@
 # AWS CDK Patterns And Review Notes
 
-This reference is a compact checklist for CDK work in this repository.
+This reference is a compact checklist for CDK work.
 
 ## Construct Choice
 
@@ -10,7 +10,7 @@ Use the construct level that matches the job:
 - L2: normal resource modeling with ergonomic CDK APIs.
 - L3: common patterns when hiding detail is acceptable.
 
-For the ECS/ADOT learning path, prefer explicit L2 composition until the first
+For ECS and sidecar-telemetry (for example ADOT) stacks, prefer explicit L2 composition until the first
 deploy works. This keeps VPC, endpoint, security group, ALB, ECS, IAM, and log
 resources reviewable.
 
@@ -31,7 +31,7 @@ Acceptable with a documented reason:
 
 ```typescript
 new logs.LogGroup(this, 'AppLogGroup', {
-  logGroupName: `/golden-path/${environmentName}/${serviceName}/app`,
+  logGroupName: `/${projectName}/${environmentName}/${serviceName}/app`,
   retention: logs.RetentionDays.ONE_WEEK,
 });
 ```
@@ -119,8 +119,8 @@ For ECS:
 
 CDK Docker assets hash the build context. Keep `.dockerignore` current.
 
-For this repo, the ADOT collector image build context is `adot-collector/`.
-Application service images are external ECR artifacts pinned by digest.
+Application images built by other pipelines should be referenced by digest,
+not built as assets.
 
 Keep generated output, local AI tool state, and unrelated files out of Docker
 build contexts when they are not needed for the image.
@@ -164,11 +164,5 @@ Before `cdk deploy`, review:
 - removal policies and data persistence;
 - how to destroy or roll back.
 
-Run:
-
-```bash
-npm run cdk -- diff \
-  -c allowedIngressCidr=203.0.113.10/32 \
-  -c applicationImageReference=<account>.dkr.ecr.<region>.amazonaws.com/movie-reservation-service@sha256:<digest> \
-  -c applicationServiceVersion=<release-id>
-```
+Run `cdk diff` through the repository's script with the same context values
+used for synth, and review it before any deploy the user has authorised.

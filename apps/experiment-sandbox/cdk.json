@@ -1,0 +1,10 @@
+{
+  "app": "npx ts-node --project tsconfig.json --prefer-ts-exts bin/experiment-sandbox.ts",
+  "context": {
+    "availability-zones:account=111111111111:region=eu-central-1": [
+      "eu-central-1a",
+      "eu-central-1b"
+    ],
+    "@aws-cdk/core:defaultCrossStackReferences": "strong"
+  }
+}

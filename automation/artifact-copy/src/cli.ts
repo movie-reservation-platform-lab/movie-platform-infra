@@ -1,16 +1,8 @@
-import {
-  closeSync,
-  fstatSync,
-  openSync,
-  readFileSync,
-} from 'node:fs';
+import { closeSync, fstatSync, openSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
 
-import {
-  ARTIFACT_COPY_FAILURE_STAGE,
-  ArtifactCopyFailure,
-} from './artifact-copy-error';
+import { ARTIFACT_COPY_FAILURE_STAGE, ArtifactCopyFailure } from './artifact-copy-error';
 import { copyAndVerifyArtifact, transferAndVerifyArtifact } from './artifact-copy';
 import {
   ARTIFACT_COPY_CLI_REQUEST_VERSION,
@@ -79,10 +71,12 @@ class ArtifactCopyCliArgumentFailure extends Error {
 }
 
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
+
 const PROCESS_STREAMS: ArtifactCopyCliStreams = {
   stdout: (text) => process.stdout.write(text),
   stderr: (text) => process.stderr.write(text),
 };
+
 const PRODUCTION_DEPENDENCIES: ArtifactCopyCliDependencies = {
   readRequestFile: readBoundedRequestFile,
   createRegistryClient: (trustedSkopeoExecutable) =>
@@ -90,6 +84,7 @@ const PRODUCTION_DEPENDENCIES: ArtifactCopyCliDependencies = {
   copyArtifact: copyAndVerifyArtifact,
   transferArtifact: transferAndVerifyArtifact,
 };
+
 const CLI_OPTIONS = {
   help: {
     type: 'boolean',
@@ -102,6 +97,7 @@ const CLI_OPTIONS = {
     type: 'string',
   },
 } as const;
+
 const USAGE = [
   'Usage: npm run copy:artifact -- --request-file <absolute-path> \\',
   '         --skopeo-executable <normalized-absolute-path>',
@@ -129,8 +125,10 @@ export async function runCli(
 ): Promise<number> {
   try {
     const options = parseCliOptions(arguments_);
+
     if (options.help) {
       streams.stdout(USAGE);
+
       return ARTIFACT_COPY_CLI_EXIT_CODE.SUCCESS;
     }
 
@@ -139,14 +137,20 @@ export async function runCli(
     const rawRequest = readRequest(requestFile, dependencies.readRequestFile);
     const request = parseArtifactCopyCliRequest(rawRequest);
     const client = dependencies.createRegistryClient(skopeoExecutable);
-    const result = request.requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION
-      ? await dependencies.copyArtifact(request.copyRequest, client)
-      : await dependencies.transferArtifact(request.transferRequest, client);
+
+    const result =
+      request.requestVersion === ARTIFACT_COPY_CLI_REQUEST_VERSION
+        ? await dependencies.copyArtifact(request.copyRequest, client)
+        : await dependencies.transferArtifact(request.transferRequest, client);
+
     streams.stdout(`${JSON.stringify(result)}\n`);
+
     return ARTIFACT_COPY_CLI_EXIT_CODE.SUCCESS;
   } catch (error: unknown) {
     const failure = classifyFailure(error);
+
     streams.stderr(`Artifact copy failed: ${failure}\n`);
+
     return exitCodeForFailure(failure);
   }
 }
@@ -159,18 +163,21 @@ function parseCliOptions(arguments_: readonly string[]): CliOptions {
       strict: true,
       allowPositionals: false,
     });
+
     if (
       values.help === true &&
       (values['request-file'] !== undefined || values['skopeo-executable'] !== undefined)
     ) {
       failCliArguments();
     }
+
     if (
       values.help !== true &&
       (values['request-file'] === undefined || values['skopeo-executable'] === undefined)
     ) {
       failCliArguments();
     }
+
     return Object.freeze({
       help: values.help ?? false,
       requestFile: values['request-file'],
@@ -180,6 +187,7 @@ function parseCliOptions(arguments_: readonly string[]): CliOptions {
     if (error instanceof ArtifactCopyCliArgumentFailure) {
       throw error;
     }
+
     failCliArguments();
   }
 }
@@ -196,6 +204,7 @@ function readRequest(
   ) {
     failCliArguments();
   }
+
   try {
     return readRequestFile(requestFilePath);
   } catch {
@@ -205,15 +214,20 @@ function readRequest(
 
 function readBoundedRequestFile(requestFilePath: string): Buffer {
   const descriptor = openSync(requestFilePath, 'r');
+
   try {
     const metadata = fstatSync(descriptor);
+
     if (!metadata.isFile() || metadata.size > MAX_ARTIFACT_COPY_REQUEST_BYTES) {
       throw new ArtifactCopyCliInputFailure();
     }
+
     const rawRequest = readFileSync(descriptor);
+
     if (rawRequest.length > MAX_ARTIFACT_COPY_REQUEST_BYTES) {
       throw new ArtifactCopyCliInputFailure();
     }
+
     return rawRequest;
   } finally {
     closeSync(descriptor);
@@ -227,6 +241,7 @@ function classifyFailure(error: unknown): ArtifactCopyCliFailure {
   ) {
     return ARTIFACT_COPY_CLI_FAILURE.INVALID_INPUT;
   }
+
   if (!(error instanceof ArtifactCopyFailure)) {
     return ARTIFACT_COPY_CLI_FAILURE.INTERNAL_ERROR;
   }

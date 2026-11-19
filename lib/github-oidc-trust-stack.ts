@@ -39,6 +39,7 @@ export class GitHubOidcTrustStack extends cdk.Stack {
       props.trustConfig.admission,
       'Copies and verifies approved container artifacts in the six trusted ECR repositories',
     );
+
     this.addAdmissionPermissions(admissionRole);
 
     const deploymentRole = this.createGitHubRole(
@@ -47,12 +48,14 @@ export class GitHubOidcTrustStack extends cdk.Stack {
       props.trustConfig.deployment,
       'Starts reviewed CDK workload deployments through the selected bootstrap roles',
     );
+
     this.addDeploymentPermissions(deploymentRole, props.trustConfig.bootstrapQualifier);
 
     new cdk.CfnOutput(this, 'ArtifactAdmissionRoleArn', {
       description: 'ARN of the GitHub OIDC role authorized for exact artifact admission',
       value: admissionRole.roleArn,
     });
+
     new cdk.CfnOutput(this, 'WorkloadDeploymentRoleArn', {
       description: 'ARN of the separate GitHub OIDC role authorized to start CDK deployments',
       value: deploymentRole.roleArn,
@@ -98,13 +101,18 @@ export class GitHubOidcTrustStack extends cdk.Stack {
       'reservation-mcp',
       'recommendation-mcp',
     ] as const;
+
     const repositoryArns = approvedComponents.map((componentId) => {
       const repository = ARTIFACT_FOUNDATION_REPOSITORIES.find(
         (entry) => entry.componentId === componentId,
       );
+
       if (repository === undefined) {
-        throw new Error(`The artifact foundation catalog is missing the approved admission repository for "${componentId}".`);
+        throw new Error(
+          `The artifact foundation catalog is missing the approved admission repository for "${componentId}".`,
+        );
       }
+
       return this.formatArn({
         service: 'ecr',
         resource: 'repository',
@@ -127,6 +135,7 @@ export class GitHubOidcTrustStack extends cdk.Stack {
         resources: repositoryArns,
       }),
     );
+
     role.addToPolicy(
       new iam.PolicyStatement({
         sid: 'RequestEcrAuthorizationToken',
@@ -143,6 +152,7 @@ export class GitHubOidcTrustStack extends cdk.Stack {
       'image-publishing',
       'lookup',
     ] as const;
+
     const bootstrapRoleArns = bootstrapRoleDescriptions.map((description) =>
       this.formatArn({
         service: 'iam',

@@ -31,7 +31,9 @@ import {
 } from './model';
 
 type CloudFormationReadClient = Pick<CloudFormationClient, 'send'>;
+
 type EcrReadClient = Pick<ECRClient, 'send'>;
+
 type StsReadClient = Pick<STSClient, 'send'>;
 
 const MAX_IMAGE_PAGES = 1_000;
@@ -70,6 +72,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
    */
   async verifyIdentity(): Promise<void> {
     let response;
+
     try {
       response = await this.sts.send(new GetCallerIdentityCommand({}));
     } catch {
@@ -79,6 +82,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
     if (response.Account === undefined || response.Arn === undefined) {
       failInspection('STS returned an unexpected caller identity shape');
     }
+
     validateAwsCallerIdentity(this.target, response.Account, response.Arn);
   }
 
@@ -88,6 +92,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
    */
   async inspectStack(stackName: string): Promise<StackInspection | undefined> {
     let response;
+
     try {
       response = await this.cloudFormation.send(
         new DescribeStacksCommand({ StackName: stackName }),
@@ -96,10 +101,12 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
       if (isMissingStackError(error)) {
         return undefined;
       }
+
       failInspection('unable to inspect the CloudFormation stack');
     }
 
     const stacks = response.Stacks ?? [];
+
     if (stacks.length !== 1) {
       failInspection('CloudFormation returned an unexpected stack result');
     }
@@ -115,6 +122,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
     definition: ArtifactRepositoryDefinition,
   ): Promise<RepositoryInspection | undefined> {
     let response;
+
     try {
       response = await this.ecr.send(
         new DescribeRepositoriesCommand({
@@ -126,16 +134,19 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
       if (hasErrorName(error, 'RepositoryNotFoundException')) {
         return undefined;
       }
+
       failInspection('unable to inspect the ECR repository');
     }
 
     const repositories = response.repositories ?? [];
+
     if (repositories.length !== 1) {
       failInspection('ECR returned an unexpected repository result');
     }
 
     const repository = repositories[0];
     const identity = validateRepositoryIdentity(repository, this.target, definition);
+
     const [tags, lifecyclePolicyText, images] = await Promise.all([
       this.readRepositoryTags(identity.arn),
       this.readLifecyclePolicy(definition),
@@ -168,8 +179,11 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
   /**
    * Reads repository tags into a deterministic map used by drift checks.
    */
-  private async readRepositoryTags(repositoryArn: string): Promise<Readonly<Record<string, string>>> {
+  private async readRepositoryTags(
+    repositoryArn: string,
+  ): Promise<Readonly<Record<string, string>>> {
     let response;
+
     try {
       response = await this.ecr.send(
         new ListTagsForResourceCommand({ resourceArn: repositoryArn }),
@@ -179,13 +193,17 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
     }
 
     const tags: Array<readonly [string, string]> = [];
+
     for (const tag of response.tags ?? []) {
       if (tag.Key === undefined || tag.Value === undefined) {
         failInspection('ECR returned an unexpected repository tag');
       }
+
       tags.push([tag.Key, tag.Value]);
     }
+
     tags.sort(([left], [right]) => left.localeCompare(right));
+
     return Object.freeze(Object.fromEntries(tags));
   }
 
@@ -202,11 +220,13 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
           repositoryName: definition.repositoryName,
         }),
       );
+
       return response.lifecyclePolicyText;
     } catch (error: unknown) {
       if (hasErrorName(error, 'LifecyclePolicyNotFoundException')) {
         return undefined;
       }
+
       failInspection('unable to inspect the ECR lifecycle policy');
     }
   }
@@ -224,6 +244,7 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
 
     for (let page = 0; page < MAX_IMAGE_PAGES; page += 1) {
       let response;
+
       try {
         response = await this.ecr.send(
           new ListImagesCommand({
@@ -240,12 +261,15 @@ export class AwsSdkArtifactFoundationReader implements ArtifactFoundationReader 
 
       imageIdentifiers.push(...(response.imageIds ?? []));
       nextToken = response.nextToken;
+
       if (nextToken === undefined) {
         return groupImagesByDigest(imageIdentifiers);
       }
+
       if (seenTokens.has(nextToken)) {
         failInspection('ECR returned a repeated image pagination token');
       }
+
       seenTokens.add(nextToken);
     }
 
@@ -267,6 +291,7 @@ function mapStack(stack: Stack, expectedName: string, target: AwsTarget): StackI
   }
 
   const outputs: Record<string, string> = {};
+
   for (const output of stack.Outputs ?? []) {
     if (output.OutputKey !== undefined && output.OutputValue !== undefined) {
       outputs[output.OutputKey] = output.OutputValue;
@@ -286,6 +311,7 @@ function stackArnMatchesTarget(stackId: string, expectedName: string, target: Aw
   const match = /^arn:[^:]+:cloudformation:([^:]+):([0-9]{12}):stack\/([^/]+)\/[^/]+$/.exec(
     stackId,
   );
+
   return (
     match !== null &&
     match[1] === target.region &&
@@ -338,6 +364,7 @@ function repositoryArnMatchesTarget(
   definition: ArtifactRepositoryDefinition,
 ): boolean {
   const match = /^arn:[^:]+:ecr:([^:]+):([0-9]{12}):repository\/(.+)$/.exec(arn);
+
   return (
     match !== null &&
     match[1] === target.region &&
@@ -361,17 +388,22 @@ function repositoryUriMatchesTarget(
 /**
  * Collapses ECR's one-row-per-tag image listing into one report row per digest.
  */
-function groupImagesByDigest(imageIdentifiers: readonly ImageIdentifier[]): readonly ImageInspection[] {
+function groupImagesByDigest(
+  imageIdentifiers: readonly ImageIdentifier[],
+): readonly ImageInspection[] {
   const tagsByDigest = new Map<string, Set<string>>();
 
   for (const image of imageIdentifiers) {
     if (image.imageDigest === undefined || !/^sha256:[0-9a-f]{64}$/.test(image.imageDigest)) {
       failInspection('ECR returned an unexpected image digest');
     }
+
     const tags = tagsByDigest.get(image.imageDigest) ?? new Set<string>();
+
     if (image.imageTag !== undefined) {
       tags.add(image.imageTag);
     }
+
     tagsByDigest.set(image.imageDigest, tags);
   }
 
@@ -394,9 +426,6 @@ function isMissingStackError(error: unknown): boolean {
 /** Checks AWS SDK service exception names while keeping caught errors typed as unknown. */
 function hasErrorName(error: unknown, expectedName: string): boolean {
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'name' in error &&
-    error.name === expectedName
+    typeof error === 'object' && error !== null && 'name' in error && error.name === expectedName
   );
 }

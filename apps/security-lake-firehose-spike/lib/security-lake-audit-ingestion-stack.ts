@@ -1,9 +1,4 @@
-import {
-  Arn,
-  Aws,
-  Stack,
-  type StackProps,
-} from 'aws-cdk-lib';
+import { Arn, Aws, Stack, type StackProps } from 'aws-cdk-lib';
 import * as glue from 'aws-cdk-lib/aws-glue';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as firehose from 'aws-cdk-lib/aws-kinesisfirehose';
@@ -19,17 +14,14 @@ export interface SecurityLakeAuditIngestionStackProps extends StackProps {
 
 /** Disposable delivery stack used only by the issue #71 feasibility checkpoint. */
 export class SecurityLakeAuditIngestionStack extends Stack {
-  public constructor(
-    scope: Construct,
-    id: string,
-    props: SecurityLakeAuditIngestionStackProps,
-  ) {
+  public constructor(scope: Construct, id: string, props: SecurityLakeAuditIngestionStackProps) {
     super(scope, id, props);
 
     const conversionDatabase = new glue.CfnDatabase(this, 'ConversionDatabase', {
       catalogId: this.account,
       databaseInput: { description: 'Disposable Firehose conversion schema for issue 71' },
     });
+
     const conversionTable = new glue.CfnTable(this, 'ConversionTable', {
       catalogId: this.account,
       databaseName: conversionDatabase.ref,
@@ -57,22 +49,29 @@ export class SecurityLakeAuditIngestionStack extends Stack {
               actions: ['glue:GetTable', 'glue:GetTableVersion', 'glue:GetTableVersions'],
               resources: [
                 Arn.format({ service: 'glue', resource: 'catalog' }, this),
-                Arn.format({
-                  service: 'glue',
-                  resource: 'database',
-                  resourceName: conversionDatabase.ref,
-                }, this),
-                Arn.format({
-                  service: 'glue',
-                  resource: 'table',
-                  resourceName: `${conversionDatabase.ref}/${conversionTable.ref}`,
-                }, this),
+                Arn.format(
+                  {
+                    service: 'glue',
+                    resource: 'database',
+                    resourceName: conversionDatabase.ref,
+                  },
+                  this,
+                ),
+                Arn.format(
+                  {
+                    service: 'glue',
+                    resource: 'table',
+                    resourceName: `${conversionDatabase.ref}/${conversionTable.ref}`,
+                  },
+                  this,
+                ),
               ],
             }),
           ],
         }),
       },
     });
+
     const conversionDatabaseAccess = new lakeformation.CfnPrincipalPermissions(
       this,
       'ConversionDatabaseAccess',
@@ -90,6 +89,7 @@ export class SecurityLakeAuditIngestionStack extends Stack {
         },
       },
     );
+
     const conversionTableAccess = new lakeformation.CfnPrincipalPermissions(
       this,
       'ConversionTableAccess',
@@ -117,34 +117,32 @@ export class SecurityLakeAuditIngestionStack extends Stack {
       this.region,
       props.sourceConfig.sourceAccountId,
     );
-    const providerErrorOutputPolicy = new iam.CfnPolicy(
-      this,
-      'ProviderErrorOutputPolicy',
-      {
-        policyName: 'security-lake-firehose-error-output',
-        roles: [props.sourceConfig.providerRoleName],
-        policyDocument: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              actions: ['s3:PutObject'],
-              resources: [
-                Arn.format(
-                  {
-                    partition: Aws.PARTITION,
-                    service: 's3',
-                    region: '',
-                    account: '',
-                    resource: props.sourceConfig.bucketName,
-                    resourceName: `${partitioning.errorObjectPrefix}*`,
-                  },
-                  this,
-                ),
-              ],
-            }),
-          ],
-        }),
-      },
-    );
+
+    const providerErrorOutputPolicy = new iam.CfnPolicy(this, 'ProviderErrorOutputPolicy', {
+      policyName: 'security-lake-firehose-error-output',
+      roles: [props.sourceConfig.providerRoleName],
+      policyDocument: new iam.PolicyDocument({
+        statements: [
+          new iam.PolicyStatement({
+            actions: ['s3:PutObject'],
+            resources: [
+              Arn.format(
+                {
+                  partition: Aws.PARTITION,
+                  service: 's3',
+                  region: '',
+                  account: '',
+                  resource: props.sourceConfig.bucketName,
+                  resourceName: `${partitioning.errorObjectPrefix}*`,
+                },
+                this,
+              ),
+            ],
+          }),
+        ],
+      }),
+    });
+
     const stream = new firehose.CfnDeliveryStream(this, 'DeliveryStream', {
       deliveryStreamType: 'DirectPut',
       deliveryStreamEncryptionConfigurationInput: { keyType: 'AWS_OWNED_CMK' },
@@ -189,6 +187,7 @@ export class SecurityLakeAuditIngestionStack extends Stack {
         processingConfiguration: partitioning.processingConfiguration,
       },
     });
+
     stream.addResourceDependency(conversionDatabaseAccess);
     stream.addResourceDependency(conversionTableAccess);
     stream.addResourceDependency(providerErrorOutputPolicy);

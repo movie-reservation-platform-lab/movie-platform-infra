@@ -110,6 +110,7 @@ function parsePrefixListId(value: unknown): string {
       'CDK context value "allowedIngressPrefixListId" must start with pl- and contain exactly 8 or 17 lowercase hexadecimal characters.',
     );
   }
+
   return value;
 }
 
@@ -122,21 +123,27 @@ function parseChoice<T extends string>(
   if (value === undefined) {
     return defaultValue;
   }
+
   if (typeof value !== 'string' || !(choices as readonly string[]).includes(value)) {
     throw new EcsCanarySpikeConfigError(
       `CDK context value "${key}" must be one of: ${choices.join(', ')}.`,
     );
   }
+
   return value as T;
 }
 
 function parseExpiresOn(value: unknown): string {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)
-    || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
+  if (
+    typeof value !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+  ) {
     throw new EcsCanarySpikeConfigError(
       'CDK context value "expiresOn" must be a YYYY-MM-DD date for the teardown tag.',
     );
   }
+
   return value;
 }
 
@@ -144,11 +151,13 @@ function parseRevision(value: unknown, key: string): string {
   if (value === undefined) {
     return '1';
   }
+
   if (typeof value !== 'string' || !/^[A-Za-z0-9-]{1,32}$/.test(value)) {
     throw new EcsCanarySpikeConfigError(
       `CDK context value "${key}" must be 1-32 letters, digits, or hyphens.`,
     );
   }
+
   return value;
 }
 
@@ -156,12 +165,16 @@ function parseActiveTaskDefinitionArn(value: unknown): string | undefined {
   if (value === undefined) {
     return undefined;
   }
-  if (typeof value !== 'string'
-    || (value !== BOOTSTRAP_RECIPE && !TASK_DEFINITION_ARN_PATTERN.test(value))) {
+
+  if (
+    typeof value !== 'string' ||
+    (value !== BOOTSTRAP_RECIPE && !TASK_DEFINITION_ARN_PATTERN.test(value))
+  ) {
     throw new EcsCanarySpikeConfigError(
       `CDK context value "activeTaskDefinitionArn" must be a task definition ARN with a revision, or ${BOOTSTRAP_RECIPE}.`,
     );
   }
+
   return value;
 }
 
@@ -170,8 +183,10 @@ function parseFlag(value: unknown, key: string): boolean {
   if (value === undefined || value === false || value === 'false') {
     return false;
   }
+
   if (value === true || value === 'true') {
     return true;
   }
+
   throw new EcsCanarySpikeConfigError(`CDK context value "${key}" must be true or false.`);
 }

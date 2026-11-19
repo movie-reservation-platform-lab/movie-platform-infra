@@ -20,44 +20,62 @@ export class AuditStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AuditStackProps) {
     super(scope, id, props);
     const { config } = props;
+
     cdk.Tags.of(this).add('Platform', PLATFORM_NAME);
     cdk.Tags.of(this).add('Environment', ENVIRONMENT_NAME);
-    const bucket = (name: string, retentionDays: number): s3.Bucket => new s3.Bucket(this, name, {
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      versioned: true,
-      removalPolicy: config.allowAuditDataDeletion ? cdk.RemovalPolicy.DESTROY : cdk.RemovalPolicy.RETAIN,
-      autoDeleteObjects: config.allowAuditDataDeletion,
-      lifecycleRules: [{
-        expiration: cdk.Duration.days(retentionDays),
-        noncurrentVersionExpiration: cdk.Duration.days(retentionDays),
-        abortIncompleteMultipartUploadAfter: cdk.Duration.days(1),
-      }],
-    });
+
+    const bucket = (name: string, retentionDays: number): s3.Bucket =>
+      new s3.Bucket(this, name, {
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        enforceSSL: true,
+        versioned: true,
+        removalPolicy: config.allowAuditDataDeletion
+          ? cdk.RemovalPolicy.DESTROY
+          : cdk.RemovalPolicy.RETAIN,
+        autoDeleteObjects: config.allowAuditDataDeletion,
+        lifecycleRules: [
+          {
+            expiration: cdk.Duration.days(retentionDays),
+            noncurrentVersionExpiration: cdk.Duration.days(retentionDays),
+            abortIncompleteMultipartUploadAfter: cdk.Duration.days(1),
+          },
+        ],
+      });
+
     const archive = bucket('AuditArchive', config.auditRetentionDays);
     const accessLogs = bucket('AlbAccessLogs', config.auditRetentionDays);
     const results = bucket('AthenaResults', 7);
 
     // ALB cannot update a bucket policy owned by a different stack. Install the
     // delivery permission here; workload only sets the ALB logging attributes.
-    accessLogs.addToResourcePolicy(new iam.PolicyStatement({
-      principals: [new iam.ServicePrincipal('logdelivery.elasticloadbalancing.amazonaws.com')],
-      actions: ['s3:PutObject'],
-      resources: [accessLogs.arnForObjects(`alb/AWSLogs/${this.account}/*`)],
-      conditions: { ArnLike: { 'aws:SourceArn': this.formatArn({
-        service: 'elasticloadbalancing', resource: 'loadbalancer', resourceName: '*',
-      }) } },
-    }));
+    accessLogs.addToResourcePolicy(
+      new iam.PolicyStatement({
+        principals: [new iam.ServicePrincipal('logdelivery.elasticloadbalancing.amazonaws.com')],
+        actions: ['s3:PutObject'],
+        resources: [accessLogs.arnForObjects(`alb/AWSLogs/${this.account}/*`)],
+        conditions: {
+          ArnLike: {
+            'aws:SourceArn': this.formatArn({
+              service: 'elasticloadbalancing',
+              resource: 'loadbalancer',
+              resourceName: '*',
+            }),
+          },
+        },
+      }),
+    );
 
     const deliveryLogs = new logs.LogGroup(this, 'DeliveryLogGroup', {
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
     const deliveryLogStream = new logs.LogStream(this, 'DeliveryLogStream', {
       logGroup: deliveryLogs,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
     const deliveryRole = new iam.Role(this, 'FirehoseDeliveryRole', {
       assumedBy: new iam.ServicePrincipal('firehose.amazonaws.com', {
         // Firehose supplies the destination account as ExternalId when assuming
@@ -66,14 +84,21 @@ export class AuditStack extends cdk.Stack {
       }),
       description: 'Writes audit batches to S3; cannot delete archived records',
     });
-    deliveryRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['s3:GetBucketLocation', 's3:ListBucket', 's3:ListBucketMultipartUploads'],
-      resources: [archive.bucketArn],
-    }));
-    deliveryRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['s3:AbortMultipartUpload', 's3:GetObject', 's3:PutObject'],
-      resources: [archive.arnForObjects('audit/*'), archive.arnForObjects('delivery-errors/*')],
-    }));
+
+    deliveryRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:GetBucketLocation', 's3:ListBucket', 's3:ListBucketMultipartUploads'],
+        resources: [archive.bucketArn],
+      }),
+    );
+
+    deliveryRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:AbortMultipartUpload', 's3:GetObject', 's3:PutObject'],
+        resources: [archive.arnForObjects('audit/*'), archive.arnForObjects('delivery-errors/*')],
+      }),
+    );
+
     deliveryLogs.grantWrite(deliveryRole);
 
     const stream = new firehose.CfnDeliveryStream(this, 'AuditDeliveryStream', {
@@ -95,6 +120,7 @@ export class AuditStack extends cdk.Stack {
         // record. No transform or second delimiter processor is needed.
       },
     });
+
     stream.node.addDependency(deliveryRole);
 
     // This is AWS control-plane evidence, not an application request trace.
@@ -112,6 +138,7 @@ export class AuditStack extends cdk.Stack {
       catalogId: this.account,
       databaseInput: { name: 'movie_platform_audit' },
     });
+
     new glue.CfnTable(this, 'AuthenticationTable', {
       catalogId: this.account,
       databaseName: database.ref,
@@ -135,19 +162,32 @@ export class AuditStack extends cdk.Stack {
           outputFormat: 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat',
           serdeInfo: { serializationLibrary: 'org.openx.data.jsonserde.JsonSerDe' },
           columns: [
-            ...['activity_id', 'category_uid', 'class_uid', 'type_uid', 'severity_id', 'status_id']
-              .map(name => ({ name, type: 'int' })),
+            ...[
+              'activity_id',
+              'category_uid',
+              'class_uid',
+              'type_uid',
+              'severity_id',
+              'status_id',
+            ].map((name) => ({ name, type: 'int' })),
             { name: 'activity_name', type: 'string' },
             { name: 'status_detail', type: 'string' },
             { name: 'time', type: 'bigint' },
-            { name: 'metadata', type: 'struct<version:string,uid:string,correlation_uid:string,product:struct<name:string,vendor_name:string,version:string>>' },
+            {
+              name: 'metadata',
+              type: 'struct<version:string,uid:string,correlation_uid:string,product:struct<name:string,vendor_name:string,version:string>>',
+            },
             { name: 'service', type: 'struct<name:string,version:string>' },
             { name: 'user', type: 'struct<name:string,type_id:int>' },
-            { name: 'unmapped', type: 'struct<platform:struct<schema_version:string,environment:string,request_id:string,trace_id:string,span_id:string,aws_alb_trace_id:string,aws_cloudfront_request_id:string,route:string,auth_boundary:string>>' },
+            {
+              name: 'unmapped',
+              type: 'struct<platform:struct<schema_version:string,environment:string,request_id:string,trace_id:string,span_id:string,aws_alb_trace_id:string,aws_cloudfront_request_id:string,route:string,auth_boundary:string>>',
+            },
           ],
         },
       },
     });
+
     const awsLogParameters = (location: string): Record<string, string> => ({
       'projection.enabled': 'true',
       'projection.log_date.type': 'date',
@@ -157,11 +197,15 @@ export class AuditStack extends cdk.Stack {
       'projection.log_date.interval.unit': 'DAYS',
       'storage.location.template': `${location}\${log_date}/`,
     });
+
     const albLocation = `s3://${accessLogs.bucketName}/alb/AWSLogs/${this.account}/elasticloadbalancing/${this.region}/`;
+
     new glue.CfnTable(this, 'AlbAccessLogTable', {
-      catalogId: this.account, databaseName: database.ref,
+      catalogId: this.account,
+      databaseName: database.ref,
       tableInput: {
-        name: 'alb_access', tableType: 'EXTERNAL_TABLE',
+        name: 'alb_access',
+        tableType: 'EXTERNAL_TABLE',
         partitionKeys: [{ name: 'log_date', type: 'string' }],
         parameters: awsLogParameters(albLocation),
         storageDescriptor: {
@@ -178,11 +222,15 @@ export class AuditStack extends cdk.Stack {
         },
       },
     });
+
     const trailLocation = `s3://${archive.bucketName}/cloudtrail/AWSLogs/${this.account}/CloudTrail/${this.region}/`;
+
     new glue.CfnTable(this, 'CloudTrailTable', {
-      catalogId: this.account, databaseName: database.ref,
+      catalogId: this.account,
+      databaseName: database.ref,
       tableInput: {
-        name: 'cloudtrail_management', tableType: 'EXTERNAL_TABLE',
+        name: 'cloudtrail_management',
+        tableType: 'EXTERNAL_TABLE',
         partitionKeys: [{ name: 'log_date', type: 'string' }],
         parameters: awsLogParameters(trailLocation),
         storageDescriptor: {
@@ -191,13 +239,25 @@ export class AuditStack extends cdk.Stack {
           outputFormat: 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat',
           serdeInfo: { serializationLibrary: 'com.amazon.emr.hive.serde.CloudTrailSerde' },
           columns: [
-            ...['eventtime', 'eventsource', 'eventname', 'awsregion', 'eventid', 'requestid', 'requestparameters', 'responseelements']
-              .map(name => ({ name, type: 'string' })),
-            { name: 'useridentity', type: 'struct<type:string,arn:string,accountid:string,principalid:string,sessioncontext:struct<sessionissuer:struct<arn:string,username:string>>>' },
+            ...[
+              'eventtime',
+              'eventsource',
+              'eventname',
+              'awsregion',
+              'eventid',
+              'requestid',
+              'requestparameters',
+              'responseelements',
+            ].map((name) => ({ name, type: 'string' })),
+            {
+              name: 'useridentity',
+              type: 'struct<type:string,arn:string,accountid:string,principalid:string,sessioncontext:struct<sessionissuer:struct<arn:string,username:string>>>',
+            },
           ],
         },
       },
     });
+
     const workgroup = new athena.CfnWorkGroup(this, 'AuditWorkGroup', {
       name: 'movie-platform-audit',
       recursiveDeleteOption: true,
@@ -212,19 +272,42 @@ export class AuditStack extends cdk.Stack {
         },
       },
     });
+
     const analystPolicy = new iam.ManagedPolicy(this, 'AuditAnalystPolicy', {
-      description: 'Read audit/ALB/CloudTrail evidence and run bounded Athena queries; no archive writes or deletes',
+      description:
+        'Read audit/ALB/CloudTrail evidence and run bounded Athena queries; no archive writes or deletes',
       statements: [
         new iam.PolicyStatement({
-          actions: ['athena:StartQueryExecution', 'athena:GetQueryExecution', 'athena:GetQueryResults', 'athena:StopQueryExecution', 'athena:GetWorkGroup'],
-          resources: [this.formatArn({ service: 'athena', resource: 'workgroup', resourceName: workgroup.name })],
+          actions: [
+            'athena:StartQueryExecution',
+            'athena:GetQueryExecution',
+            'athena:GetQueryResults',
+            'athena:StopQueryExecution',
+            'athena:GetWorkGroup',
+          ],
+          resources: [
+            this.formatArn({
+              service: 'athena',
+              resource: 'workgroup',
+              resourceName: workgroup.name,
+            }),
+          ],
         }),
         new iam.PolicyStatement({
-          actions: ['glue:GetDatabase', 'glue:GetTable', 'glue:GetPartitions', 'glue:BatchGetPartition'],
+          actions: [
+            'glue:GetDatabase',
+            'glue:GetTable',
+            'glue:GetPartitions',
+            'glue:BatchGetPartition',
+          ],
           resources: [
             this.formatArn({ service: 'glue', resource: 'catalog' }),
             this.formatArn({ service: 'glue', resource: 'database', resourceName: database.ref }),
-            this.formatArn({ service: 'glue', resource: 'table', resourceName: `${database.ref}/*` }),
+            this.formatArn({
+              service: 'glue',
+              resource: 'table',
+              resourceName: `${database.ref}/*`,
+            }),
           ],
         }),
         new iam.PolicyStatement({
@@ -233,21 +316,34 @@ export class AuditStack extends cdk.Stack {
         }),
         new iam.PolicyStatement({
           actions: ['s3:GetObject'],
-          resources: [archive.arnForObjects('*'), accessLogs.arnForObjects('*'), results.arnForObjects('results/*')],
+          resources: [
+            archive.arnForObjects('*'),
+            accessLogs.arnForObjects('*'),
+            results.arnForObjects('results/*'),
+          ],
         }),
-        new iam.PolicyStatement({ actions: ['s3:PutObject'], resources: [results.arnForObjects('results/*')] }),
+        new iam.PolicyStatement({
+          actions: ['s3:PutObject'],
+          resources: [results.arnForObjects('results/*')],
+        }),
       ],
     });
+
     new cloudwatch.Alarm(this, 'AuditDeliveryFreshnessAlarm', {
-      alarmDescription: 'Audit delivery is over five minutes behind; inspect Firehose and router logs.',
+      alarmDescription:
+        'Audit delivery is over five minutes behind; inspect Firehose and router logs.',
       metric: new cloudwatch.Metric({
-        namespace: 'AWS/Firehose', metricName: 'DeliveryToS3.DataFreshness',
-        dimensionsMap: { DeliveryStreamName: stream.ref }, statistic: 'Maximum',
+        namespace: 'AWS/Firehose',
+        metricName: 'DeliveryToS3.DataFreshness',
+        dimensionsMap: { DeliveryStreamName: stream.ref },
+        statistic: 'Maximum',
         period: cdk.Duration.minutes(1),
       }),
-      threshold: 300, evaluationPeriods: 2,
+      threshold: 300,
+      evaluationPeriods: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
+
     foundationOutput(this, 'AuditDeliveryStreamName', stream.ref);
     foundationOutput(this, 'AuditDeliveryStreamArn', stream.attrArn);
     foundationOutput(this, 'AuditArchiveBucketName', archive.bucketName);
@@ -257,6 +353,9 @@ export class AuditStack extends cdk.Stack {
     foundationOutput(this, 'AuditWorkGroupName', workgroup.name);
     foundationOutput(this, 'AuditAnalystPolicyArn', analystPolicy.managedPolicyArn);
     foundationOutput(this, 'ControlPlaneTrailArn', trail.trailArn);
-    new cdk.CfnOutput(this, 'AuditDataDeletionEnabled', { value: String(config.allowAuditDataDeletion) });
+
+    new cdk.CfnOutput(this, 'AuditDataDeletionEnabled', {
+      value: String(config.allowAuditDataDeletion),
+    });
   }
 }

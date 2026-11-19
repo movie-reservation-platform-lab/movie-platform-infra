@@ -1,0 +1,76 @@
+# Scratch-project template: replace project identifiers and use the installed
+# delegate image and fixed context supplied by the CDK app. No service
+# source or release-repository contents are uploaded to Harness.
+pipeline:
+  name: Harness bounded sandbox trial
+  identifier: harness_bounded_sandbox_trial
+  projectIdentifier: REPLACE_SCRATCH_PROJECT
+  orgIdentifier: REPLACE_SCRATCH_ORG
+  variables:
+    - name: caseId
+      type: String
+      value: <+input>.allowedValues(good,blocked,bad)
+  stages:
+    - stage:
+        name: Gate and release
+        identifier: gate_and_release
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Isolated gate
+                  identifier: gate
+                  type: ShellScript
+                  timeout: 45m
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          set -euo pipefail
+                          node /opt/trial/automation/harness-buy-check/dist/main.js delegate "$TRIAL_CASE" --step gate
+                    environmentVariables:
+                      - name: TRIAL_CASE
+                        type: String
+                        value: <+pipeline.variables.caseId>
+              - step:
+                  name: Start isolated watcher and require readiness
+                  identifier: watch
+                  type: ShellScript
+                  timeout: 45m
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          set -euo pipefail
+                          node /opt/trial/automation/harness-buy-check/dist/main.js delegate "$TRIAL_CASE" --step watch
+                    environmentVariables:
+                      - name: TRIAL_CASE
+                        type: String
+                        value: <+pipeline.variables.caseId>
+              - step:
+                  name: Release approved immutable candidate
+                  identifier: release
+                  type: ShellScript
+                  timeout: 45m
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          set -euo pipefail
+                          node /opt/trial/automation/harness-buy-check/dist/main.js delegate "$TRIAL_CASE" --step release
+                    environmentVariables:
+                      - name: TRIAL_CASE
+                        type: String
+                        value: <+pipeline.variables.caseId>
+          # Failures remain failures, including the deliberately unhealthy case.
+          # Independent protected lease cleanup handles cancellation/expiry.
