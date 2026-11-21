@@ -1,3 +1,4 @@
+import { createTaskAws } from '../src/task-aws';
 import { parseRuntimeConfig } from '../src/runtime-config';
 import { gateExitCode, runTask, RuntimePorts } from '../src/task-runtime';
 
@@ -25,6 +26,30 @@ test('blocked gate exits nonzero with no deployment capability', () => {
 test('runtime rejects injected target overrides and mutable artifacts', () => {
   expect(() => parseRuntimeConfig({ ...config, command: ['sh'] })).toThrow();
   expect(() => parseRuntimeConfig({ ...config, badImage: 'image:latest' })).toThrow();
+});
+
+test('deployment observation requests one bounded page and refuses truncated history', async () => {
+  const ports: RuntimePorts = {
+    now: Date.now,
+    sleep: async () => {},
+    probe: async () => true,
+    call: async (_service, operation, args) => {
+      if (operation === 'describe-services') {
+        return { services: [{ taskDefinition: 'recipe:1' }] };
+      }
+
+      expect(operation).toBe('list-service-deployments');
+      expect(args).toEqual(['--cluster', 'cluster', '--service', 'service', '--max-results', '20']);
+
+      return { nextToken: 'second-page' };
+    },
+  };
+
+  const observer = createTaskAws(config, 'good', ports);
+
+  await expect(observer.observe()).rejects.toThrow(
+    'native deployment history exceeds trial bounds',
+  );
 });
 
 test('release refuses missing observed alarms before any mutation', async () => {
