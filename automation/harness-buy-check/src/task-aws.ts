@@ -44,7 +44,7 @@ export function createTaskAws(config: RuntimeConfig, caseId: CaseId, ports: Runt
     return object(services[0]);
   }
 
-  /** Reads configured metric/composite alarms, marking unreturned names as MISSING. */
+  /** Requests only metric alarms so the task can use its alarm-scoped IAM permission. */
   async function readAlarms(): Promise<Record<string, string>> {
     const watched = requireApprovedAlarmSettings(await readService(), config);
     const names = array(watched.alarmNames).map((value) => string(value));
@@ -54,13 +54,9 @@ export function createTaskAws(config: RuntimeConfig, caseId: CaseId, ports: Runt
       ...names,
       '--alarm-types',
       'MetricAlarm',
-      'CompositeAlarm',
     ]);
 
-    const observed = [
-      ...array(response.MetricAlarms ?? []),
-      ...array(response.CompositeAlarms ?? []),
-    ].map((value) => object(value));
+    const observed = array(response.MetricAlarms ?? []).map((value) => object(value));
 
     return Object.fromEntries(
       names.map((name) => [
