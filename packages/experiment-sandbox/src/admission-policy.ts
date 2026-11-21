@@ -102,7 +102,13 @@ function allocationRuleBlockers(record: SandboxRecord, now: Date): string[] {
     blockers.push('good/bad immutable artifact pair verification evidence required');
   }
 
-  const { maxOperatingUsd, minContingencyUsd, allowanceUsd } = SANDBOX_LIMITS;
+  const { minContingencyUsd } = SANDBOX_LIMITS;
+  const { allowanceUsd } = cost;
+
+  const maxOperatingUsd =
+    allowanceUsd === SANDBOX_LIMITS.allowanceUsd
+      ? SANDBOX_LIMITS.maxOperatingUsd
+      : allowanceUsd - minContingencyUsd;
 
   const forecastFits =
     cost.complete &&

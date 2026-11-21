@@ -13,8 +13,10 @@ export function hoursFromNow(hours: number): string {
  *
  * Tests change one field at a time and expect exactly one blocker.
  */
-export function approvedRecord(): SandboxRecord {
-  const verifiedAt = hoursFromNow(-1);
+export function approvedRecord(now = NOW): SandboxRecord {
+  const atHour = (hours: number) => new Date(now.getTime() + hours * HOUR_MS).toISOString();
+
+  const verifiedAt = atHour(-1);
 
   return {
     version: 1,
@@ -30,7 +32,7 @@ export function approvedRecord(): SandboxRecord {
       correlationId: 'correlation01',
       state: 'ready',
       accountId: '222222222222',
-      preparationExpiresAt: hoursFromNow(24),
+      preparationExpiresAt: atHour(24),
       capacityVerifiedAt: verifiedAt,
       capacityEvidence: 'organization capacity review',
       recoveryVerifiedAt: verifiedAt,
@@ -44,7 +46,7 @@ export function approvedRecord(): SandboxRecord {
     },
     entitlement: {
       zeroCharge: true,
-      expiresAt: hoursFromNow(SANDBOX_LIMITS.maxLeaseHours),
+      expiresAt: atHour(SANDBOX_LIMITS.maxLeaseHours),
       verifiedAt,
       evidence: 'free plan confirmed',
     },
@@ -57,9 +59,9 @@ export function approvedRecord(): SandboxRecord {
       evidence: 'regional price worksheet',
     },
     lease: {
-      startsAt: hoursFromNow(0),
-      expiresAt: hoursFromNow(SANDBOX_LIMITS.maxLeaseHours),
-      rejectNewWorkAt: hoursFromNow(SANDBOX_LIMITS.maxNewWorkHours),
+      startsAt: atHour(0),
+      expiresAt: atHour(SANDBOX_LIMITS.maxLeaseHours),
+      rejectNewWorkAt: atHour(SANDBOX_LIMITS.maxNewWorkHours),
       maxConcurrentTasks: SANDBOX_LIMITS.maxConcurrentTasks,
       maxTotalLaunches: SANDBOX_LIMITS.maxTotalLaunches,
       maxRunMinutes: SANDBOX_LIMITS.maxRunMinutes,
