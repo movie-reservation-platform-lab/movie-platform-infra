@@ -42,7 +42,8 @@ export async function runTask(
     try {
       return await runWatchTask(config, caseId, ports);
     } catch (error) {
-      await createTaskAws(config, caseId, ports).publish(false, 'FAIL', 'FAIL');
+      // An observer error revokes readiness but cannot attest to a failed candidate.
+      await createTaskAws(config, caseId, ports).publish(false, 'PENDING', 'FAIL');
       throw error;
     }
   }

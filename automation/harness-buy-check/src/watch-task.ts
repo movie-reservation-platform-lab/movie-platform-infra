@@ -1,21 +1,16 @@
-/** Runs baseline readiness checks and candidate probes, publishing trial evidence each pass. */
+/** Runs ECS discovery, task HTTP probes and watcher heartbeat publication on independent schedules. */
 import { MINUTE_MS, SANDBOX_LIMITS } from '@movie-platform/experiment-sandbox';
 import type { CaseId } from './run-case';
 import type { RuntimeConfig } from './runtime-config';
 import type { RuntimePorts, TaskResult } from './runtime-types';
-import { createTaskAws, type TaskAws, type ObservedTask } from './task-aws';
-import type { ReleaseObservation } from './release';
-import { assertAllAlarmsOk, candidateVerdict, type ProbeSample, type Verdict } from './watch';
+import { createTaskAws, type ObservedTask, type TaskAws } from './task-aws';
+import { TrialCheckError } from './trial-check-error';
+import { assertAllAlarmsOk, type ProbeSample } from './watch';
+import { WatchObservations } from './watch-observations';
 
 /**
- * Probes the healthy baseline until ready, then tracks the first candidate revision.
- * Publishes health and candidate coverage until completion, reversion or timeout.
- *
- * @param config - validated ECS targets, approved images and observation destinations
- * @param caseId - scenario determining the approved candidate image
- * @param ports - AWS transport, HTTP probes, delay and millisecond clock
- * @returns zero only when a completed candidate has a passing attributed probe verdict
- * @throws Error when the baseline, candidate identity, startup deadline or AWS calls fail
+ * Samples each discovered candidate task until ECS finishes the deployment or the trial expires.
+ * Each loop permits one operation in flight. All loops drain before the final publication.
  */
 export async function runWatchTask(
   config: RuntimeConfig,
@@ -23,97 +18,105 @@ export async function runWatchTask(
   ports: RuntimePorts,
 ): Promise<TaskResult> {
   const aws = createTaskAws(config, caseId, ports);
-  const initial = await aws.observe();
+  const initial = await aws.observeWithTasks();
+  const baseline = initial.observation;
 
-  if (initial.state !== 'COMPLETED' || initial.digest !== config.goodImage.split('@')[1]) {
-    throw new Error('watcher requires observed healthy starting revision');
+  if (baseline.state !== 'COMPLETED' || baseline.digest !== config.goodImage.split('@')[1]) {
+    throw new TrialCheckError('watcher requires observed healthy starting revision');
   }
 
-  const deadline = ports.now() + SANDBOX_LIMITS.maxRunMinutes * MINUTE_MS;
-  const startupDeadline = ports.now() + STARTUP_TIMEOUT_MS;
-  let ready = false;
-  let candidateRevision: string | undefined;
-  let candidateStartedAt = 0;
-  let verdict: Verdict = 'PENDING';
-  const samples: ProbeSample[] = [];
-  const candidateTasks = new Set<string>();
+  const now = ports.now();
+  const deadline = now + SANDBOX_LIMITS.maxRunMinutes * MINUTE_MS;
+  const candidateImage = caseId === 'bad' ? config.badImage : config.goodImage;
 
-  while (ports.now() < deadline) {
-    const observed = await aws.observe(initial.taskDefinitionArn);
-    const tasks = await aws.tasks();
+  const observations = new WatchObservations(
+    baseline.taskDefinitionArn,
+    baseline.digest,
+    candidateImage.split('@')[1],
+    now + STARTUP_TIMEOUT_MS,
+    now,
+  );
 
-    if (!candidateRevision && observed.taskDefinitionArn !== initial.taskDefinitionArn) {
-      candidateRevision = observed.taskDefinitionArn;
-      candidateStartedAt = ports.now();
+  observations.observe(baseline, initial.tasks, now);
+
+  async function sample(): Promise<void> {
+    const targets = observations.probeTargets(ports.now());
+    const probes = await probeRunningTasks(targets, ports);
+
+    observations.recordProbes(targets, probes, ports.now());
+  }
+
+  async function publish(): Promise<void> {
+    const report = observations.report(ports.now());
+
+    await aws.publish(report.ready, report.verdict, report.health, report.heartbeatAt);
+  }
+
+  // Seed the metric before checking alarms; the first report cannot grant readiness.
+  await sample();
+  await publish();
+  observations.setAlarmReadiness(await alarmsAreOk(aws));
+
+  let stopped = false;
+  let terminal: TaskResult | undefined;
+
+  async function discover(): Promise<void> {
+    const snapshot = await aws.observeWithTasks(baseline.taskDefinitionArn);
+
+    terminal = observations.observe(snapshot.observation, snapshot.tasks, ports.now());
+
+    if (terminal) {
+      stopped = true;
+    } else if (observations.watchingBaseline) {
+      observations.setAlarmReadiness(await alarmsAreOk(aws));
     }
+  }
 
-    const approvedDigest = (caseId === 'bad' ? config.badImage : config.goodImage).split('@')[1];
+  async function repeat(step: () => Promise<void>, intervalMs: number): Promise<void> {
+    try {
+      while (!stopped && ports.now() < deadline) {
+        const startedAt = ports.now();
 
-    const selected = tasks.filter(
-      (task) => task.revision === (candidateRevision ?? initial.taskDefinitionArn),
-    );
+        await step();
 
-    const probes = await probeRunningTasks(selected, ports);
-
-    if (!candidateRevision) {
-      const baselineHealthy =
-        selected.length === 2 && probes.every((probe) => probe.ready && probe.recommendations);
-
-      ready = await refreshStartupReadiness(aws, ready, baselineHealthy);
-
-      if (!ready && ports.now() >= startupDeadline) {
-        throw new Error('watcher startup/alarm readiness timed out');
-      }
-    } else {
-      for (const task of selected) {
-        candidateTasks.add(task.arn);
-
-        if (task.digest !== approvedDigest) {
-          throw new Error('observed candidate digest differs from approved artifact');
+        if (!stopped) {
+          await ports.sleep(Math.max(0, intervalMs - (ports.now() - startedAt)));
         }
       }
-
-      samples.push(...probes);
-
-      verdict = candidateVerdict({
-        candidateTaskDefinitionArn: candidateRevision,
-        candidateDigest: approvedDigest,
-        candidateTasks: [...candidateTasks],
-        startedAt: candidateStartedAt,
-        now: ports.now(),
-        samples,
-      });
-
-      const result = await finishCandidateObservation(aws, observed, ready, verdict);
-
-      if (result) {
-        return result;
-      }
+    } finally {
+      stopped = true;
     }
-
-    await aws.publish(ready, verdict, verdict === 'FAIL' ? 'FAIL' : 'OK');
-    await ports.sleep(PROBE_INTERVAL_MS);
   }
 
-  await aws.publish(false, 'FAIL', 'FAIL');
+  await awaitAll([
+    repeat(discover, DISCOVERY_INTERVAL_MS),
+    repeat(sample, PROBE_INTERVAL_MS),
+    repeat(publish, HEARTBEAT_INTERVAL_MS),
+  ]);
 
-  return { exitCode: 1, reason: 'watcher timed out' };
+  if (!terminal) {
+    await aws.publish(false, 'PENDING', 'FAIL');
+
+    return { exitCode: 1, reason: 'watcher timed out' };
+  }
+
+  const report = observations.report(ports.now());
+
+  await aws.publish(
+    report.ready,
+    report.verdict,
+    terminal.exitCode === 0 ? 'OK' : 'FAIL',
+    report.heartbeatAt,
+  );
+
+  return terminal;
 }
 
-/** Refreshes startup health before alarm reads; only successful alarm checks grant readiness. */
-async function refreshStartupReadiness(
-  aws: Pick<ReturnType<typeof createTaskAws>, 'alarms' | 'publish'>,
-  previousReady: boolean,
-  baselineHealthy: boolean,
-): Promise<boolean> {
-  // Refresh metrics before waiting for alarms, retaining readiness already earned.
-  // A newly failed baseline probe revokes it immediately.
-  await aws.publish(previousReady && baselineHealthy, 'PENDING', baselineHealthy ? 'OK' : 'FAIL');
-
+async function alarmsAreOk(aws: Pick<TaskAws, 'alarms'>): Promise<boolean> {
   try {
     assertAllAlarmsOk(await aws.alarms());
 
-    return baselineHealthy;
+    return true;
   } catch {
     return false;
   }
@@ -124,9 +127,9 @@ async function probeRunningTasks(
   tasks: readonly ObservedTask[],
   ports: RuntimePorts,
 ): Promise<ProbeSample[]> {
-  return Promise.all(
+  return awaitAll(
     tasks.map(async (task) => {
-      const [isReady, recommendations] = await Promise.all([
+      const [isReady, recommendations] = await awaitAll([
         ports.probe(task.ip, '/ready'),
         ports.probe(task.ip, '/recommendations'),
       ]);
@@ -143,36 +146,20 @@ async function probeRunningTasks(
   );
 }
 
-/** Publishes the terminal candidate observation, or returns undefined to keep monitoring. */
-async function finishCandidateObservation(
-  aws: Pick<TaskAws, 'publish'>,
-  observed: ReleaseObservation,
-  ready: boolean,
-  verdict: Verdict,
-): Promise<TaskResult | undefined> {
-  if (observed.state === 'COMPLETED') {
-    await aws.publish(ready, verdict, verdict === 'FAIL' ? 'FAIL' : 'OK');
+/** Drains every operation before propagating a failure to the enclosing watcher. */
+async function awaitAll<T>(operations: Promise<T>[]): Promise<T[]> {
+  const results = await Promise.allSettled(operations);
 
-    return {
-      exitCode: verdict === 'PASS' ? 0 : 1,
-      reason:
-        verdict === 'PASS'
-          ? 'candidate probes and completed revision observed'
-          : 'candidate completed without passing attributed probe verdict',
-    };
-  }
+  return results.map((result) => {
+    if (result.status === 'rejected') {
+      throw result.reason;
+    }
 
-  if (observed.state === 'REVERTED') {
-    await aws.publish(ready, verdict, 'FAIL');
-
-    return { exitCode: 1, reason: 'ECS returned to original revision' };
-  }
-
-  return undefined;
+    return result.value;
+  });
 }
 
-/** Maximum startup wait for healthy baseline probes and observed OK alarms. */
 const STARTUP_TIMEOUT_MS = 300_000;
-
-/** Delay between watcher observation passes. */
+const DISCOVERY_INTERVAL_MS = 5000;
+const HEARTBEAT_INTERVAL_MS = 5000;
 const PROBE_INTERVAL_MS = 1000;

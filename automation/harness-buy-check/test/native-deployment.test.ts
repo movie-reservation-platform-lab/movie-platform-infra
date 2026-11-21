@@ -1,4 +1,4 @@
-import { nativeDeploymentState } from '../src/native-deployment';
+import { DeploymentHistory, nativeDeploymentState } from '../src/native-deployment';
 
 test('native canary completion uses service deployment status, without legacy rolloutState', () => {
   expect(
@@ -33,7 +33,7 @@ test('only native rollback-successful plus original task revision identifies rev
       'new',
       'old',
     ),
-  ).toBe('FAILED');
+  ).toBe('PENDING');
 
   expect(
     nativeDeploymentState(
@@ -41,7 +41,7 @@ test('only native rollback-successful plus original task revision identifies rev
       'old',
       'old',
     ),
-  ).toBe('ACTIVE');
+  ).toBe('PENDING');
 });
 
 test('empty/unknown native deployment state cannot become completion; every in-flight row blocks', () => {
@@ -60,4 +60,31 @@ test('empty/unknown native deployment state cannot become completion; every in-f
       'new',
     ),
   ).toBe('ACTIVE');
+});
+
+test('Build 6 waits for its own deployment after an earlier rollback', () => {
+  const previous = {
+    serviceDeploymentArn: 'prior-rollback',
+    status: 'ROLLBACK_SUCCESSFUL',
+    createdAt: '2026-10-24T10:00:00Z',
+  };
+
+  const candidate = {
+    serviceDeploymentArn: 'bad-candidate',
+    status: 'IN_PROGRESS',
+    createdAt: '2026-10-24T10:10:00Z',
+  };
+
+  const history = new DeploymentHistory();
+
+  expect(history.observe([previous], 'original')).toBe('COMPLETED');
+  expect(history.observe([previous], 'candidate', 'original')).toBe('PENDING');
+  expect(history.observe([candidate, previous], 'candidate', 'original')).toBe('ACTIVE');
+  candidate.status = 'ROLLBACK_SUCCESSFUL';
+  expect(history.observe([candidate, previous], 'candidate', 'original')).toBe('PENDING');
+  expect(history.observe([candidate, previous], 'original', 'original')).toBe('REVERTED');
+
+  expect(() =>
+    history.observe([{ ...candidate, serviceDeploymentArn: 'unexpected' }], 'original', 'original'),
+  ).toThrow('ambiguous');
 });

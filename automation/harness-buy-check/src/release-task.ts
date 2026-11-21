@@ -72,26 +72,26 @@ async function registerCandidateRevision(
   ports: RuntimePorts,
   image: string,
 ): Promise<string> {
-  const recipe = await ports.call('ecs', 'describe-task-definition', [
-    '--task-definition',
-    config.recipeTaskDefinitionArn,
-    '--include',
-    'TAGS',
-  ]);
+  const recipe = await ports.call('ecs', 'describe-task-definition', {
+    taskDefinition: config.recipeTaskDefinitionArn,
+    include: ['TAGS'],
+  });
 
   const rendered = renderRecipe(recipe, config.containerName, image);
 
-  rendered.tags = [
+  const tags = [
     ...array(rendered.tags)
       .map((value) => object(value))
       .filter((tag) => tag.key !== 'ExperimentId'),
     { key: 'ExperimentId', value: config.experimentId },
   ];
 
-  const response = await ports.call('ecs', 'register-task-definition', [
-    '--cli-input-json',
-    JSON.stringify(rendered),
-  ]);
+  const response = await ports.call('ecs', 'register-task-definition', {
+    ...rendered,
+    family: string(rendered.family),
+    containerDefinitions: array(rendered.containerDefinitions).map((value) => object(value)),
+    tags,
+  });
 
   return string(object(response.taskDefinition).taskDefinitionArn);
 }
@@ -112,16 +112,20 @@ async function updateCandidateService(
   assertWatchReady(await aws.watch(), ports.now());
   assertAllAlarmsOk(await aws.alarms());
 
-  await ports.call('ecs', 'update-service', [
-    '--cluster',
-    config.cluster,
-    '--service',
-    config.service,
-    '--task-definition',
-    revision,
-    '--deployment-configuration',
-    JSON.stringify({ ...settings, alarms: { ...alarms, enable: true, rollback: true } }),
-  ]);
+  await ports.call('ecs', 'update-service', {
+    cluster: config.cluster,
+    service: config.service,
+    taskDefinition: revision,
+    deploymentConfiguration: {
+      ...settings,
+      alarms: {
+        ...alarms,
+        alarmNames: array(alarms.alarmNames).map((value) => string(value)),
+        enable: true,
+        rollback: true,
+      },
+    },
+  });
 }
 
 /** Fixed dependencies and identities used to assemble one release task's port. */

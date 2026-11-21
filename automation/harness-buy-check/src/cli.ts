@@ -12,6 +12,8 @@ import { string } from './json';
 import { CaseId, runCase, StepId, waitStep, type Scheduler } from './run-case';
 import { parseRuntimeConfig } from './runtime-config';
 import { runTask } from './task-runtime';
+import { createTaskTransport, TaskCommandError } from './task-call';
+import { TrialCheckError } from './trial-check-error';
 import { probeEndpoint } from './probe';
 import { parseDelegateContext } from './delegate';
 
@@ -136,16 +138,22 @@ export async function cli(args: readonly string[], io: CliIo): Promise<number> {
       JSON.parse(string(io.env.TRIAL_RUNTIME_CONFIG, 'TRIAL_RUNTIME_CONFIG')),
     );
 
-    const result = await runTask(taskStep, caseId, config, {
-      call: awsCli(config.region),
-      now: Date.now,
-      sleep,
-      probe: probeEndpoint,
-    });
+    const transport = createTaskTransport(config.region);
 
-    io.write(JSON.stringify({ mode: 'live-task', stepId: taskStep, caseId, ...result }));
+    try {
+      const result = await runTask(taskStep, caseId, config, {
+        call: transport.call,
+        now: Date.now,
+        sleep,
+        probe: probeEndpoint,
+      });
 
-    return result.exitCode;
+      io.write(JSON.stringify({ mode: 'live-task', stepId: taskStep, caseId, ...result }));
+
+      return result.exitCode;
+    } finally {
+      transport.close();
+    }
   }
 
   if (command === 'doctor') {
@@ -285,6 +293,14 @@ export async function cli(args: readonly string[], io: CliIo): Promise<number> {
 }
 
 /** External failure messages never print arbitrary provider/credential payloads. */
-export function safeError(_error: unknown): string {
+export function safeError(error: unknown): string {
+  if (error instanceof TaskCommandError) {
+    return `harness-buy-check failed: AWS ${error.operation} failed`;
+  }
+
+  if (error instanceof TrialCheckError) {
+    return `harness-buy-check failed: ${error.reason}`;
+  }
+
   return 'harness-buy-check failed; inspect protected logs or run doctor/evaluate locally';
 }

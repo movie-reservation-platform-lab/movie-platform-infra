@@ -90,7 +90,7 @@
     "demo:workload": "ts-node --prefer-ts-exts scripts/demo-workload.ts",
     "build:experiment-sandbox-contract": "npm run build --workspace @movie-platform/experiment-sandbox",
     "validate:experiment-sandbox": "npm run build:experiment-sandbox-contract && npm test --workspace @movie-platform/experiment-sandbox && npm run build --workspace @movie-platform/experiment-sandbox-operator && npm test --workspace @movie-platform/experiment-sandbox-operator && npm run build --workspace @movie-platform/experiment-sandbox-app && npm test --workspace @movie-platform/experiment-sandbox-app",
-    "validate:harness-buy-check": "npm run build:experiment-sandbox-contract && npm run typecheck --workspace @movie-platform/harness-buy-check && npm test --workspace @movie-platform/harness-buy-check && npm run build --workspace @movie-platform/harness-buy-check",
+    "validate:harness-buy-check": "npm run build:experiment-sandbox-contract && npm run typecheck --workspace @movie-platform/harness-buy-check && npm test --workspace @movie-platform/harness-buy-check && npm run build --workspace @movie-platform/harness-buy-check && node --test automation/harness-buy-check/test/packaged-transport.cjs",
     "synth:experiment-sandbox": "npm run build:experiment-sandbox-contract && npm run synth --workspace @movie-platform/experiment-sandbox-app --",
     "sandbox:experiment": "npm run build:experiment-sandbox-contract && npm run cli --workspace @movie-platform/experiment-sandbox-operator --",
     "trial:harness": "npm run build:experiment-sandbox-contract && npm run cli --workspace @movie-platform/harness-buy-check --",

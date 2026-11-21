@@ -1,8 +1,9 @@
 import { MINUTE_MS, SANDBOX_LIMITS } from '@movie-platform/experiment-sandbox';
 import { assertAllAlarmsOk, assertWatchReady, WatchReadiness, Verdict } from './watch';
 
+/** PENDING represents deployment-history or task convergence; only ACTIVE proves a rollout is underway. */
 export interface ReleaseObservation {
-  state: 'ACTIVE' | 'COMPLETED' | 'REVERTED' | 'FAILED';
+  state: 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'REVERTED' | 'FAILED';
   taskDefinitionArn: string;
   digest: string;
 }
@@ -49,28 +50,31 @@ export async function releaseCandidate(
 ): Promise<ReleaseResult> {
   const revision = await deployCandidate(port, original);
   const attempt: ReleaseAttempt = { revision, candidateDigest, original };
-  const history: ReleaseHistory = { sawActive: false, failedWhileActive: false };
+  let failedWhileActive = false;
   const deadline = port.now() + SANDBOX_LIMITS.maxRunMinutes * MINUTE_MS;
 
   while (port.now() < deadline) {
     const observation = await port.observe();
-    const verdict = await port.verdict();
+    // A fresh, attributed failure is final for this release. The watcher can stop before
+    // ECS restores both original tasks; its expired heartbeat cannot undo that evidence.
+    const verdict = failedWhileActive ? 'FAIL' : await port.verdict();
 
-    if (observation.state === 'ACTIVE') {
-      history.sawActive = true;
-
-      if (verdict === 'FAIL') {
-        history.failedWhileActive = true;
-      }
+    if (
+      observation.state === 'ACTIVE' &&
+      verdict === 'FAIL' &&
+      observation.taskDefinitionArn === revision &&
+      observation.digest === candidateDigest
+    ) {
+      failedWhileActive = true;
     }
 
-    const result = evaluateDeploymentObservation(observation, verdict, attempt, history);
+    const result = evaluateDeploymentObservation(observation, verdict, attempt, failedWhileActive);
 
     if (result) {
       return result;
     }
 
-    if (await hasLostWatcherHeartbeat(port)) {
+    if (!failedWhileActive && (await hasLostWatcherHeartbeat(port))) {
       return buildFailure(revision, { reason: 'watcher heartbeat lost' });
     }
 
@@ -107,16 +111,17 @@ function evaluateDeploymentObservation(
   observation: ReleaseObservation,
   verdict: Verdict,
   attempt: ReleaseAttempt,
-  history: ReleaseHistory,
+  failedWhileActive: boolean,
 ): ReleaseResult | undefined {
   const { revision, candidateDigest, original } = attempt;
 
   switch (observation.state) {
+    case 'PENDING':
     case 'ACTIVE':
       return undefined;
     case 'REVERTED':
       if (
-        history.failedWhileActive &&
+        failedWhileActive &&
         observation.taskDefinitionArn === original.taskDefinitionArn &&
         observation.digest === original.digest
       ) {
@@ -126,18 +131,13 @@ function evaluateDeploymentObservation(
         });
       }
 
-      if (history.sawActive) {
-        return buildFailure(revision, {
-          reason: 'revert lacks active failure or original revision evidence',
-        });
-      }
-
-      // The old deployment may still be observed immediately after update.
-      return undefined;
+      return buildFailure(revision, {
+        reason: 'revert lacks active failure or original revision evidence',
+      });
     case 'FAILED':
       return buildFailure(revision, { reason: 'ECS deployment failed' });
     case 'COMPLETED':
-      if (history.failedWhileActive || verdict === 'FAIL') {
+      if (failedWhileActive || verdict === 'FAIL') {
         return buildFailure(revision, {
           reason: 'candidate failure observed; completed release requires operator recovery',
         });
@@ -167,7 +167,7 @@ async function hasLostWatcherHeartbeat(port: ReleasePort): Promise<boolean> {
   return (
     !Number.isFinite(heartbeat.heartbeatAt) ||
     port.now() < heartbeat.heartbeatAt ||
-    port.now() - heartbeat.heartbeatAt > 30000
+    port.now() - heartbeat.heartbeatAt > SANDBOX_LIMITS.watchHeartbeatMaxAgeSeconds * 1000
   );
 }
 
@@ -184,10 +184,4 @@ interface ReleaseAttempt {
   revision: string;
   candidateDigest: string;
   original: ReleaseObservation;
-}
-
-/** Evidence remembered across polls; an observed active failure cannot be cleared. */
-interface ReleaseHistory {
-  sawActive: boolean;
-  failedWhileActive: boolean;
 }

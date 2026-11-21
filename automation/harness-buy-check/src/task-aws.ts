@@ -9,7 +9,8 @@ import type { CaseId } from './run-case';
 import type { ReleaseObservation } from './release';
 import type { Verdict, WatchReadiness } from './watch';
 import { array, object, string } from './json';
-import { nativeDeploymentState } from './native-deployment';
+import { DeploymentHistory } from './native-deployment';
+import { TrialCheckError } from './trial-check-error';
 
 /**
  * Binds observation and publication operations to one experiment case.
@@ -20,16 +21,16 @@ import { nativeDeploymentState } from './native-deployment';
  * @returns case-scoped AWS operations; constructing the adapter performs no I/O
  */
 export function createTaskAws(config: RuntimeConfig, caseId: CaseId, ports: RuntimePorts) {
-  const key = JSON.stringify({ experimentId: { S: `${config.experimentId}#${caseId}#watch` } });
+  const key = { experimentId: { S: `${config.experimentId}#${caseId}#watch` } };
+
+  const history = new DeploymentHistory();
 
   /** Reads exactly one configured service and refuses AWS-reported observation failures. */
   async function readService(): Promise<Record<string, unknown>> {
-    const response = await ports.call('ecs', 'describe-services', [
-      '--cluster',
-      config.cluster,
-      '--services',
-      config.service,
-    ]);
+    const response = await ports.call('ecs', 'describe-services', {
+      cluster: config.cluster,
+      services: [config.service],
+    });
 
     if (array(response.failures ?? []).length) {
       throw new Error('service observation failed');
@@ -49,12 +50,10 @@ export function createTaskAws(config: RuntimeConfig, caseId: CaseId, ports: Runt
     const watched = requireApprovedAlarmSettings(await readService(), config);
     const names = array(watched.alarmNames).map((value) => string(value));
 
-    const response = await ports.call('cloudwatch', 'describe-alarms', [
-      '--alarm-names',
-      ...names,
-      '--alarm-types',
-      'MetricAlarm',
-    ]);
+    const response = await ports.call('cloudwatch', 'describe-alarms', {
+      AlarmNames: names,
+      AlarmTypes: ['MetricAlarm'],
+    });
 
     const observed = array(response.MetricAlarms ?? []).map((value) => object(value));
 
@@ -68,14 +67,11 @@ export function createTaskAws(config: RuntimeConfig, caseId: CaseId, ports: Runt
 
   /** Lists at most four workload tasks and extracts identities only from running tasks. */
   async function readRunningTasks(): Promise<ObservedTask[]> {
-    const listing = await ports.call('ecs', 'list-tasks', [
-      '--cluster',
-      config.cluster,
-      '--service-name',
-      config.service,
-      '--desired-status',
-      'RUNNING',
-    ]);
+    const listing = await ports.call('ecs', 'list-tasks', {
+      cluster: config.cluster,
+      serviceName: config.service,
+      desiredStatus: 'RUNNING',
+    });
 
     const arns = array(listing.taskArns).map((value) => string(value));
 
@@ -87,12 +83,10 @@ export function createTaskAws(config: RuntimeConfig, caseId: CaseId, ports: Runt
       throw new Error('task count exceeds approved envelope');
     }
 
-    const response = await ports.call('ecs', 'describe-tasks', [
-      '--cluster',
-      config.cluster,
-      '--tasks',
-      ...arns,
-    ]);
+    const response = await ports.call('ecs', 'describe-tasks', {
+      cluster: config.cluster,
+      tasks: arns,
+    });
 
     if (array(response.failures ?? []).length) {
       throw new Error('task identity observation failed');
@@ -105,24 +99,24 @@ export function createTaskAws(config: RuntimeConfig, caseId: CaseId, ports: Runt
   }
 
   /** Combines bounded deployment history with two-task steadiness and observed image identity. */
-  async function observeDeployment(originalRevision?: string): Promise<ReleaseObservation> {
+  async function observeWithTasks(originalRevision?: string): Promise<{
+    observation: ReleaseObservation;
+    tasks: ObservedTask[];
+  }> {
     const current = await readService();
     const revision = string(current.taskDefinition);
 
-    const listing = await ports.call('ecs', 'list-service-deployments', [
-      '--cluster',
-      config.cluster,
-      '--service',
-      config.service,
-      '--max-results',
-      '20',
-    ]);
+    const listing = await ports.call('ecs', 'list-service-deployments', {
+      cluster: config.cluster,
+      service: config.service,
+      maxResults: 20,
+    });
 
     if (listing.NextToken || listing.nextToken) {
       throw new Error('native deployment history exceeds trial bounds');
     }
 
-    const nativeState = nativeDeploymentState(
+    const nativeState = history.observe(
       array(listing.serviceDeployments).map((value) => object(value)),
       revision,
       originalRevision,
@@ -135,37 +129,40 @@ export function createTaskAws(config: RuntimeConfig, caseId: CaseId, ports: Runt
     const digest =
       exact.length && new Set(exact.map((task) => task.digest)).size === 1 ? exact[0].digest : '';
 
+    const waitingForTasks =
+      (nativeState === 'COMPLETED' || nativeState === 'REVERTED') && !tasksSteady;
+
     return {
-      taskDefinitionArn: revision,
-      digest,
-      state:
-        (nativeState === 'COMPLETED' || nativeState === 'REVERTED') && !tasksSteady
-          ? 'ACTIVE'
-          : nativeState,
+      observation: {
+        taskDefinitionArn: revision,
+        digest,
+        state: waitingForTasks ? 'PENDING' : nativeState,
+      },
+      tasks: running,
     };
   }
 
   /** Reads the case's watcher row with DynamoDB strong consistency. */
   async function readWatchItem(): Promise<Record<string, unknown>> {
-    const response = await ports.call('dynamodb', 'get-item', [
-      '--table-name',
-      config.stateTableName,
-      '--key',
-      key,
-      '--consistent-read',
-    ]);
+    const response = await ports.call('dynamodb', 'get-item', {
+      TableName: config.stateTableName,
+      Key: key,
+      ConsistentRead: true,
+    });
 
     return object(response.Item, 'watcher observation');
   }
 
   /** Combines the published readiness/health flags with current alarm observations. */
   async function readWatchReadiness(): Promise<WatchReadiness> {
+    const alarmStates = await readAlarms();
+    // Read the strongly consistent heartbeat last so alarm discovery latency cannot age it.
     const item = await readWatchItem();
 
     return {
       ready: object(item.ready).BOOL === true && object(item.verdict).S === 'OK',
       heartbeatAt: Number(string(object(item.heartbeatAt).N)),
-      alarmStates: await readAlarms(),
+      alarmStates,
     };
   }
 
@@ -179,7 +176,7 @@ export function createTaskAws(config: RuntimeConfig, caseId: CaseId, ports: Runt
       ports.now() < heartbeatAt ||
       ports.now() - heartbeatAt > SANDBOX_LIMITS.watchHeartbeatMaxAgeSeconds * 1000
     ) {
-      throw new Error('watch verdict stale');
+      throw new TrialCheckError('watch verdict stale');
     }
 
     const result = string(object(item.candidateVerdict).S);
@@ -191,17 +188,16 @@ export function createTaskAws(config: RuntimeConfig, caseId: CaseId, ports: Runt
     return result;
   }
 
-  /** Publishes the probe metric before updating watcher state and heartbeat in DynamoDB. */
+  /** Persists the observation time even when metric publication delays the DynamoDB write. */
   async function publishWatchState(
     ready: boolean,
     result: Verdict,
     health: 'OK' | 'FAIL',
+    heartbeatAt = ports.now(),
   ): Promise<void> {
-    await ports.call('cloudwatch', 'put-metric-data', [
-      '--namespace',
-      SANDBOX_PROBE_METRIC.namespace,
-      '--metric-data',
-      JSON.stringify([
+    await ports.call('cloudwatch', 'put-metric-data', {
+      Namespace: SANDBOX_PROBE_METRIC.namespace,
+      MetricData: [
         {
           MetricName: SANDBOX_PROBE_METRIC.metricName,
           Dimensions: [{ Name: 'ExperimentId', Value: config.experimentId }],
@@ -209,31 +205,30 @@ export function createTaskAws(config: RuntimeConfig, caseId: CaseId, ports: Runt
           Unit: 'Count',
           StorageResolution: 1,
         },
-      ]),
-    ]);
+      ],
+    });
 
-    await ports.call('dynamodb', 'update-item', [
-      '--table-name',
-      config.stateTableName,
-      '--key',
-      key,
-      '--update-expression',
-      'SET ready = :ready, heartbeatAt = :heartbeat, verdict = :verdict, candidateVerdict = :candidate',
-      '--expression-attribute-values',
-      JSON.stringify({
+    await ports.call('dynamodb', 'update-item', {
+      TableName: config.stateTableName,
+      Key: key,
+      UpdateExpression:
+        'SET ready = :ready, heartbeatAt = :heartbeat, verdict = :verdict, candidateVerdict = :candidate',
+      ExpressionAttributeValues: {
         ':ready': { BOOL: ready },
-        ':heartbeat': { N: String(ports.now()) },
+        ':heartbeat': { N: String(heartbeatAt) },
         ':verdict': { S: health },
         ':candidate': { S: result },
-      }),
-    ]);
+      },
+    });
   }
 
   return {
     service: readService,
     alarms: readAlarms,
     tasks: readRunningTasks,
-    observe: observeDeployment,
+    observeWithTasks,
+    observe: async (originalRevision?: string) =>
+      (await observeWithTasks(originalRevision)).observation,
     watch: readWatchReadiness,
     verdict: readCandidateVerdict,
     publish: publishWatchState,
