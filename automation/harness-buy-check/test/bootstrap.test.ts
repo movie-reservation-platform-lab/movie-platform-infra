@@ -16,7 +16,9 @@ const config = parseRuntimeConfig({
   probeAlarmName: 'probe',
 });
 
-function baseline(options: { revision?: string; alarmState?: string } = {}) {
+function baseline(
+  options: { revision?: string; alarmState?: string; missingAlarm?: boolean } = {},
+) {
   let currentRevision = options.revision ?? config.recipeTaskDefinitionArn;
   let enabled = false;
   const operations: string[] = [];
@@ -77,6 +79,12 @@ function baseline(options: { revision?: string; alarmState?: string } = {}) {
       }
 
       if (operation === 'describe-alarms') {
+        expect(args).toEqual(['--alarm-names', 'probe', '--alarm-types', 'MetricAlarm']);
+
+        if (options.missingAlarm) {
+          return { MetricAlarms: [] };
+        }
+
         return {
           MetricAlarms: [{ AlarmName: 'probe', StateValue: options.alarmState ?? 'OK' }],
         };
@@ -141,6 +149,14 @@ test('bootstrap exception still observes and blocks pending actual alarms', asyn
 
   await expect(runTask('release', 'good', config, fixture.ports)).rejects.toThrow();
   expect(fixture.operations).toContain('cloudwatch.describe-alarms');
+  expect(fixture.operations).not.toContain('ecs.register-task-definition');
+  expect(fixture.updates).toEqual([]);
+});
+
+test('an absent named metric alarm blocks registration and service update', async () => {
+  const fixture = baseline({ missingAlarm: true });
+
+  await expect(runTask('release', 'good', config, fixture.ports)).rejects.toThrow();
   expect(fixture.operations).not.toContain('ecs.register-task-definition');
   expect(fixture.updates).toEqual([]);
 });
