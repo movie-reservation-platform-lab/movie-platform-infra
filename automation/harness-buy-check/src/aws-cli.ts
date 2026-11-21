@@ -45,7 +45,9 @@ export function awsCli(region: string, profile?: string): AwsCall {
         },
       );
 
-      return object(JSON.parse(result.stdout));
+      const output = result.stdout.trim();
+
+      return output.length === 0 ? {} : object(JSON.parse(output));
     } catch {
       throw new Error(`AWS ${service} ${operation} failed; inspect protected task logs`);
     }
