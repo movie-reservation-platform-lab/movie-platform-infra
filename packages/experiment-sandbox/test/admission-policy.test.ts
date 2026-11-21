@@ -184,3 +184,36 @@ test('assertAdmission joins every blocker into one error', () => {
     'ready dedicated sandbox account and target file required; finished sandbox cannot be readmitted',
   );
 });
+
+test('the higher allowance is restricted to the approved dated lease and keeps the reserve', () => {
+  const now = new Date('2026-11-21T12:00:00Z');
+  const base = approvedRecord(now);
+
+  const record = {
+    ...base,
+    id: 'exp-harness-r5',
+    cost: { ...base.cost, allowanceUsd: 11.25 as const, operatingUsd: 9.25 },
+  };
+
+  expect(admissionBlockers(record, now)).toEqual([]);
+
+  expect(admissionBlockers({ ...record, id: 'exp-harness-r6' }, now).join()).toMatch(
+    /cost\.allowanceUsd/,
+  );
+
+  const tomorrow = new Date(now.getTime() + 24 * HOUR_MS);
+  const later = approvedRecord(tomorrow);
+
+  expect(
+    admissionBlockers({ ...later, id: record.id, cost: record.cost }, tomorrow).join(),
+  ).toMatch(/cost\.allowanceUsd/);
+
+  for (const cost of [
+    { ...record.cost, operatingUsd: 9.26 },
+    { ...record.cost, contingencyUsd: 1.99 },
+  ]) {
+    expect(admissionBlockers({ ...record, cost }, now)).toEqual([
+      'complete forecast must fit $9.25 operating plus $2 contingency within $11.25',
+    ]);
+  }
+});

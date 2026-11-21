@@ -45,3 +45,10 @@ export const SANDBOX_LIMITS = Object.freeze({
 } as const);
 
 export type SandboxLimits = typeof SANDBOX_LIMITS;
+
+/** Cumulative allowance approved for the fifth Harness lease starting on this UTC date. */
+export const HARNESS_FIFTH_LEASE = Object.freeze({
+  id: 'exp-harness-r5',
+  startDate: '2026-11-21',
+  allowanceUsd: 11.25,
+} as const);

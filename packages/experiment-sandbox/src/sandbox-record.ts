@@ -16,7 +16,7 @@ import {
   nonNegativeNumberSchema,
   textMatching,
 } from './field-schemas';
-import { HOUR_MS, SANDBOX_LIMITS } from './sandbox-limits';
+import { HARNESS_FIFTH_LEASE, HOUR_MS, SANDBOX_LIMITS } from './sandbox-limits';
 
 const STACK_NAME = /^[A-Za-z][A-Za-z0-9-]{0,127}$/;
 
@@ -122,7 +122,7 @@ export const costForecastSchema = z
   .strictObject({
     operatingUsd: nonNegativeNumberSchema,
     contingencyUsd: nonNegativeNumberSchema,
-    allowanceUsd: z.literal(SANDBOX_LIMITS.allowanceUsd),
+    allowanceUsd: z.literal([SANDBOX_LIMITS.allowanceUsd, HARNESS_FIFTH_LEASE.allowanceUsd]),
     forecastAt: isoTimestampSchema.optional(),
     evidence: boundedTextSchema.optional(),
     complete: z.boolean(),
@@ -307,6 +307,16 @@ export const sandboxRecordSchema = z
     lease: sandboxLeaseSchema,
     inventory: sandboxInventorySchema,
   })
+  .refine(
+    (record) =>
+      record.cost.allowanceUsd === SANDBOX_LIMITS.allowanceUsd ||
+      (record.id === HARNESS_FIFTH_LEASE.id &&
+        record.lease.startsAt.slice(0, 10) === HARNESS_FIFTH_LEASE.startDate),
+    {
+      path: ['cost', 'allowanceUsd'],
+      message: 'allowance requires the approved fifth Harness lease',
+    },
+  )
   .readonly();
 
 export type SandboxAccountState = (typeof SANDBOX_ACCOUNT_STATES)[number];
