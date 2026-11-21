@@ -1,11 +1,11 @@
 /** Shared task execution contracts; no AWS calls or workflow decisions live here. */
-import type { AwsCall } from './aws-cli';
+import type { TaskCall } from './task-call';
 import type { ProbePath } from './probe';
 
 /** External capabilities injected into a trial task; tests supply fake implementations. */
 export interface RuntimePorts {
-  /** Executes one AWS operation with an argument array. */
-  call: AwsCall;
+  /** Executes one AWS operation with its native SDK input. */
+  call: TaskCall;
   /** Current time in milliseconds on the same clock used by watcher heartbeats. */
   now(): number;
   /** Waits the requested number of milliseconds. */

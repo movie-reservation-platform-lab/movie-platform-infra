@@ -89,7 +89,7 @@ test('missing probe verdict times out, cannot pass completed release', async () 
 
 test('eventual service observation of original revision immediately after update waits for rollout', async () => {
   const f = setup([
-    { state: 'REVERTED', taskDefinitionArn: 'old:1', digest: 'old' },
+    { state: 'PENDING', taskDefinitionArn: 'old:1', digest: 'old' },
     { state: 'ACTIVE', taskDefinitionArn: 'new:2', digest: 'new' },
     { state: 'COMPLETED', taskDefinitionArn: 'new:2', digest: 'new' },
   ]);
@@ -147,5 +147,45 @@ test('completed deployment with a different image cannot pass', async () => {
   expect(await releaseCandidate(f.port, 'new', f.original)).toMatchObject({
     outcome: 'FAIL',
     reason: 'running candidate identity mismatch',
+  });
+});
+
+test('latched candidate failure continues observing ECS when the watcher stops', async () => {
+  const fixture = setup([
+    { state: 'ACTIVE', taskDefinitionArn: 'new:2', digest: 'new' },
+    { state: 'ACTIVE', taskDefinitionArn: 'old:1', digest: 'old' },
+    { state: 'REVERTED', taskDefinitionArn: 'old:1', digest: 'old' },
+  ]);
+
+  let verdictReads = 0;
+
+  fixture.port.verdict = async () => {
+    if (++verdictReads > 1) {
+      throw new Error('watch verdict stale');
+    }
+
+    return 'FAIL';
+  };
+
+  await expect(releaseCandidate(fixture.port, 'new', fixture.original)).resolves.toMatchObject({
+    outcome: 'FAIL',
+    reverted: true,
+  });
+
+  expect(verdictReads).toBe(1);
+});
+
+test('a FAIL seen only on the original revision cannot prove candidate-specific reversion', async () => {
+  const fixture = setup(
+    [
+      { state: 'ACTIVE', taskDefinitionArn: 'old:1', digest: 'old' },
+      { state: 'REVERTED', taskDefinitionArn: 'old:1', digest: 'old' },
+    ],
+    'FAIL',
+  );
+
+  await expect(releaseCandidate(fixture.port, 'new', fixture.original)).resolves.toMatchObject({
+    outcome: 'FAIL',
+    reverted: false,
   });
 });

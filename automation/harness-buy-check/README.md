@@ -109,14 +109,10 @@ docker build --build-arg TRIAL_TOOLS_IMAGE="$PINNED_TRIAL_TOOLS_IMAGE" --build-a
 docker run --rm --entrypoint node harness-trial-delegate /opt/trial/automation/harness-buy-check/dist/main.js evaluate
 ```
 
-The tools image was also built locally with resolved digest-pinned Node 22 and
-AWS CLI v2 bases, and `evaluate`, `doctor` and `aws --version` passed as its
-runtime user with networking disabled. This is local packaging evidence; the
-Harness delegate-base build and startup are still NOT_RUN. No image was built,
-pulled or published by the unit tests, and no trial image has been published. The sandbox requires
-separate immutable tools/delegate image inputs. Publishing them and checking
-supported delegate capacity remain live preparation prerequisites, alongside
-the published good/bad service images.
+Protected tasks reuse in-process AWS SDK clients for ECS, CloudWatch and DynamoDB.
+The workspace build bundles the clients into the compiled runtime. The delegate
+uses the AWS CLI to invoke the launcher. These calls use the existing role for
+each task. Image evaluation and the paired watcher/release tests run offline.
 
 The gate performs the deterministic selected-case precheck without deployment
 credentials. Watch publishes high-resolution `ProbeFailure` metrics in
@@ -148,13 +144,18 @@ recommendation envelope must contain valid nonempty recommendation items.
 Each response has a 64 KiB body limit and a two-second deadline covering its body.
 Healthy startup refreshes preserve established readiness while the next alarm
 observation is pending; a failed probe or alarm observation revokes it.
+ECS discovery and heartbeat publication each run on a five-second schedule.
+HTTP probing runs independently every second. Each loop waits for its previous
+operation to finish. Discovery must confirm the same task ARN, revision, digest
+and private IP on either side of a candidate sample. The heartbeat carries the
+older of the last discovery and probe times.
 Every observed candidate task
 needs at least 60 distinct sample times spanning 60 seconds. Coverage must arrive
 within five minutes; old-revision responses cannot satisfy it. Monitoring
 continues through the bake: a later failed sample remains failed after recovery.
-The release
-result additionally checks native `ListServiceDeployments` status, completed
-revision and observed digest; it does not depend on legacy `rolloutState`.
+Before updating ECS, release records the existing service deployment ARNs. It
+then follows the new ARN through native `ListServiceDeployments` status and
+waits for both running tasks to converge on the expected revision and digest.
 A bad verdict
 must occur while active, and the original revision/digest must be observed after
 ECS reverts. Late failures, missing coverage and completed deployments requiring

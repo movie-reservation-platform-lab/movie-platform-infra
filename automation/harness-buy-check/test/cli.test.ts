@@ -1,3 +1,4 @@
+import { assertWatchReady } from '../src/watch';
 import { cli, CliIo, safeError } from '../src/cli';
 
 function output() {
@@ -65,4 +66,18 @@ test('task command cannot execute with ambient human credentials and output reda
   );
 
   expect(safeError(new Error('TOKEN=super-secret'))).not.toContain('super-secret');
+});
+
+test('a rejected watcher heartbeat has a specific safe diagnostic', () => {
+  const report = { ready: true, heartbeatAt: 0, alarmStates: { probe: 'OK' } };
+
+  try {
+    assertWatchReady(report, 33_000);
+  } catch (error) {
+    expect(safeError(error)).toContain('watcher is missing or stale');
+
+    return;
+  }
+
+  throw new Error('expected stale heartbeat rejection');
 });

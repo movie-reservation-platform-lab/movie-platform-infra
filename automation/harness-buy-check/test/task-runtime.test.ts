@@ -33,13 +33,18 @@ test('deployment observation requests one bounded page and refuses truncated his
     now: Date.now,
     sleep: async () => {},
     probe: async () => true,
-    call: async (_service, operation, args) => {
+    call: async (...[_service, operation, input]) => {
       if (operation === 'describe-services') {
         return { services: [{ taskDefinition: 'recipe:1' }] };
       }
 
       expect(operation).toBe('list-service-deployments');
-      expect(args).toEqual(['--cluster', 'cluster', '--service', 'service', '--max-results', '20']);
+
+      expect(input).toEqual({
+        cluster: 'cluster',
+        service: 'service',
+        maxResults: 20,
+      });
 
       return { nextToken: 'second-page' };
     },
@@ -59,7 +64,7 @@ test('release refuses missing observed alarms before any mutation', async () => 
     now: () => 0,
     sleep: async () => {},
     probe: async () => true,
-    call: async (service, operation) => {
+    call: async (...[service, operation]) => {
       operations.push(`${service}.${operation}`);
 
       if (operation === 'describe-services') {
@@ -67,7 +72,9 @@ test('release refuses missing observed alarms before any mutation', async () => 
           services: [
             {
               taskDefinition: 'old:1',
-              deploymentConfiguration: { alarms: { enable: true, alarmNames: [] } },
+              deploymentConfiguration: {
+                alarms: { enable: true, alarmNames: [] },
+              },
             },
           ],
         };
@@ -75,7 +82,13 @@ test('release refuses missing observed alarms before any mutation', async () => 
 
       if (operation === 'list-service-deployments') {
         return {
-          serviceDeployments: [{ status: 'SUCCESSFUL', createdAt: '2026-10-24T10:00:00Z' }],
+          serviceDeployments: [
+            {
+              serviceDeploymentArn: 'baseline-deployment',
+              status: 'SUCCESSFUL',
+              createdAt: '2026-10-24T10:00:00Z',
+            },
+          ],
         };
       }
 
@@ -90,8 +103,17 @@ test('release refuses missing observed alarms before any mutation', async () => 
               lastStatus: 'RUNNING',
               taskArn: `task${i}`,
               taskDefinitionArn: 'old:1',
-              containers: [{ name: 'recommendation', imageDigest: 'sha256:' + 'a'.repeat(64) }],
-              attachments: [{ details: [{ name: 'privateIPv4Address', value: `10.0.0.${i}` }] }],
+              containers: [
+                {
+                  name: 'recommendation',
+                  imageDigest: 'sha256:' + 'a'.repeat(64),
+                },
+              ],
+              attachments: [
+                {
+                  details: [{ name: 'privateIPv4Address', value: `10.0.0.${i}` }],
+                },
+              ],
             })),
             { lastStatus: 'PENDING', taskArn: 'not-started', containers: [] },
           ],
@@ -113,10 +135,13 @@ test('release refuses missing observed alarms before any mutation', async () => 
     },
   };
 
-  await expect(runTask('release', 'good', config, ports)).rejects.toThrow();
+  await expect(runTask('release', 'good', config, ports)).rejects.toThrow(
+    'missing enabled deployment alarms outside untouched bootstrap',
+  );
+
   expect(operations).not.toContain('ecs.update-service');
   expect(operations).not.toContain('ecs.register-task-definition');
-  expect(operations).toContain('dynamodb.get-item');
+  expect(operations).not.toContain('dynamodb.get-item');
 });
 
 test('runtime refuses unobserved artifact identity instead of echoing approved good input', async () => {
@@ -126,7 +151,7 @@ test('runtime refuses unobserved artifact identity instead of echoing approved g
     now: () => 0,
     sleep: async () => {},
     probe: async () => true,
-    call: async (service, operation) => {
+    call: async (...[service, operation]) => {
       operations.push(`${service}.${operation}`);
 
       if (operation === 'describe-services') {
@@ -135,7 +160,13 @@ test('runtime refuses unobserved artifact identity instead of echoing approved g
 
       if (operation === 'list-service-deployments') {
         return {
-          serviceDeployments: [{ status: 'SUCCESSFUL', createdAt: '2026-10-24T10:00:00Z' }],
+          serviceDeployments: [
+            {
+              serviceDeploymentArn: 'baseline-deployment',
+              status: 'SUCCESSFUL',
+              createdAt: '2026-10-24T10:00:00Z',
+            },
+          ],
         };
       }
 
@@ -149,8 +180,17 @@ test('runtime refuses unobserved artifact identity instead of echoing approved g
             lastStatus: 'RUNNING',
             taskArn: `task${i}`,
             taskDefinitionArn: 'old:1',
-            containers: [{ name: 'recommendation', imageDigest: 'sha256:' + 'c'.repeat(64) }],
-            attachments: [{ details: [{ name: 'privateIPv4Address', value: `10.0.0.${i}` }] }],
+            containers: [
+              {
+                name: 'recommendation',
+                imageDigest: 'sha256:' + 'c'.repeat(64),
+              },
+            ],
+            attachments: [
+              {
+                details: [{ name: 'privateIPv4Address', value: `10.0.0.${i}` }],
+              },
+            ],
           })),
         };
       }
@@ -166,19 +206,33 @@ test('runtime refuses unobserved artifact identity instead of echoing approved g
 test.each(['good', 'bad'] as const)(
   'watcher publishes terminal evidence for %s',
   async (caseId) => {
-    let now = 0;
+    jest.useFakeTimers({ now: 0 });
+    const now = Date.now;
+    const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+    const candidateStarts = 60_000;
+    const deploymentEnds = 190_000;
+    const writes: number[] = [];
+    const probeTimes: number[] = [];
     const publications: string[] = [];
     const updates: Record<string, unknown>[] = [];
 
     const ports: RuntimePorts = {
-      now: () => now,
-      sleep: async (ms) => {
-        now += ms;
+      now,
+      sleep: pause,
+      probe: async (ip, path) => {
+        if (ip === '10.0.0.1' && path === '/recommendations') {
+          probeTimes.push(now());
+        }
+
+        return now() < candidateStarts || caseId === 'good' || path === '/ready';
       },
-      probe: async (_ip, path) => now === 0 || caseId === 'good' || path === '/ready',
-      call: async (_service, operation, args) => {
-        const terminal = now >= 62_000;
-        const revision = now === 0 || (terminal && caseId === 'bad') ? 'old:1' : 'candidate:2';
+      call: async (...[_service, operation, input]) => {
+        // Sequential CLI reads took seconds apiece on the live Fargate task.
+        await pause(2500);
+
+        const baseline = now() < candidateStarts;
+        const terminal = now() >= deploymentEnds;
+        const revision = baseline || (terminal && caseId === 'bad') ? 'old:1' : 'candidate:2';
 
         switch (operation) {
           case 'describe-services':
@@ -186,7 +240,9 @@ test.each(['good', 'bad'] as const)(
               services: [
                 {
                   taskDefinition: revision,
-                  deploymentConfiguration: { alarms: { enable: true, alarmNames: ['probe'] } },
+                  deploymentConfiguration: {
+                    alarms: { enable: true, alarmNames: ['probe'] },
+                  },
                 },
               ],
             };
@@ -194,8 +250,9 @@ test.each(['good', 'bad'] as const)(
             return {
               serviceDeployments: [
                 {
+                  serviceDeploymentArn: baseline ? 'baseline-deployment' : 'candidate-deployment',
                   status:
-                    now === 0 || (terminal && caseId === 'good')
+                    baseline || (terminal && caseId === 'good')
                       ? 'SUCCESSFUL'
                       : terminal
                         ? 'ROLLBACK_SUCCESSFUL'
@@ -210,7 +267,7 @@ test.each(['good', 'bad'] as const)(
             return {
               tasks: [1, 2].map((task) => ({
                 lastStatus: 'RUNNING',
-                taskArn: `task${task}`,
+                taskArn: `${revision}/task${task}`,
                 taskDefinitionArn: revision,
                 containers: [
                   {
@@ -221,7 +278,9 @@ test.each(['good', 'bad'] as const)(
                   },
                 ],
                 attachments: [
-                  { details: [{ name: 'privateIPv4Address', value: `10.0.0.${task}` }] },
+                  {
+                    details: [{ name: 'privateIPv4Address', value: `10.0.0.${task}` }],
+                  },
                 ],
               })),
             };
@@ -233,7 +292,8 @@ test.each(['good', 'bad'] as const)(
             return {};
           case 'update-item':
             publications.push('state');
-            updates.push(JSON.parse(args[args.indexOf('--expression-attribute-values') + 1]));
+            writes.push(now());
+            updates.push(input.ExpressionAttributeValues!);
 
             return {};
           default:
@@ -242,13 +302,29 @@ test.each(['good', 'bad'] as const)(
       },
     };
 
-    expect(await runTask('watch', caseId, config, ports)).toEqual({
+    const result = runTask('watch', caseId, config, ports);
+
+    const completed = expect(result).resolves.toEqual({
       exitCode: caseId === 'good' ? 0 : 1,
       reason:
         caseId === 'good'
           ? 'candidate probes and completed revision observed'
           : 'ECS returned to original revision',
     });
+
+    try {
+      await jest.advanceTimersByTimeAsync(230_000);
+      await completed;
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+
+    const candidateProbes = probeTimes.filter((at) => at >= candidateStarts && at < deploymentEnds);
+
+    expect(candidateProbes.length).toBeGreaterThanOrEqual(60);
+    expect(candidateProbes.at(-1)! - candidateProbes[0]).toBeGreaterThanOrEqual(60_000);
+    expect(writes.slice(1).every((at, index) => at - writes[index] < 30_000)).toBe(true);
 
     expect(
       publications.every((event, index) => event === (index % 2 === 0 ? 'metric' : 'state')),
@@ -269,7 +345,7 @@ test('watcher observation failure publishes unready failure before propagating',
     now: () => 0,
     sleep: async () => {},
     probe: async () => true,
-    call: async (_service, operation) => {
+    call: async (...[_service, operation]) => {
       if (operation === 'describe-services') {
         throw observedFailure;
       }

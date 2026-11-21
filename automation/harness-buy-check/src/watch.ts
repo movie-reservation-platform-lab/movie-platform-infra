@@ -1,3 +1,5 @@
+import { TrialCheckError } from './trial-check-error';
+
 /**
  * Decides candidate probe coverage and watcher readiness from supplied observations.
  * These decisions perform no I/O; callers collect task identities, samples and alarms.
@@ -17,6 +19,13 @@
  * @throws Error when now is non-finite or precedes the observation start
  */
 export function candidateVerdict(input: CoverageInput): Verdict {
+  const evidence = candidateProbeEvidence(input);
+
+  return evidence === 'INSUFFICIENT_COVERAGE' ? 'FAIL' : evidence;
+}
+
+/** Separates failure to establish coverage from observed bad traffic with complete coverage. */
+export function candidateProbeEvidence(input: CoverageInput): Verdict | 'INSUFFICIENT_COVERAGE' {
   if (input.now < input.startedAt || !Number.isFinite(input.now)) {
     throw new Error('invalid observation clock');
   }
@@ -40,7 +49,7 @@ export function candidateVerdict(input: CoverageInput): Verdict {
     return failed ? 'FAIL' : 'PASS';
   }
 
-  return input.now - input.startedAt >= COVERAGE_WINDOW_MS ? 'FAIL' : 'PENDING';
+  return input.now - input.startedAt >= COVERAGE_WINDOW_MS ? 'INSUFFICIENT_COVERAGE' : 'PENDING';
 }
 
 /**
@@ -58,7 +67,7 @@ export function assertWatchReady(watch: WatchReadiness, now: number): void {
     now < watch.heartbeatAt ||
     now - watch.heartbeatAt > 30000
   ) {
-    throw new Error('watcher is missing or stale');
+    throw new TrialCheckError('watcher is missing or stale');
   }
 
   assertAllAlarmsOk(watch.alarmStates);
@@ -72,7 +81,7 @@ export function assertWatchReady(watch: WatchReadiness, now: number): void {
  */
 export function assertAllAlarmsOk(states: Readonly<Record<string, string>>): void {
   if (!Object.keys(states).length || Object.values(states).some((state) => state !== 'OK')) {
-    throw new Error('every watched alarm must be OK');
+    throw new TrialCheckError('every watched alarm must be OK');
   }
 }
 

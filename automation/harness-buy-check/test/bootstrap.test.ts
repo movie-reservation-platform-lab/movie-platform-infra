@@ -17,18 +17,22 @@ const config = parseRuntimeConfig({
 });
 
 function baseline(
-  options: { revision?: string; alarmState?: string; missingAlarm?: boolean } = {},
+  options: {
+    revision?: string;
+    alarmState?: string;
+    missingAlarm?: boolean;
+  } = {},
 ) {
   let currentRevision = options.revision ?? config.recipeTaskDefinitionArn;
   let enabled = false;
   const operations: string[] = [];
-  const updates: Record<string, unknown>[] = [];
+  const updates: unknown[] = [];
 
   const ports: RuntimePorts = {
     now: () => 0,
     sleep: async () => {},
     probe: async () => true,
-    call: async (service, operation, args) => {
+    call: async (...[service, operation, input]) => {
       operations.push(`${service}.${operation}`);
 
       if (operation === 'describe-services') {
@@ -38,7 +42,11 @@ function baseline(
               taskDefinition: currentRevision,
               deploymentConfiguration: {
                 strategy: 'CANARY',
-                alarms: { enable: enabled, rollback: true, alarmNames: ['probe'] },
+                alarms: {
+                  enable: enabled,
+                  rollback: true,
+                  alarmNames: ['probe'],
+                },
               },
             },
           ],
@@ -47,7 +55,13 @@ function baseline(
 
       if (operation === 'list-service-deployments') {
         return {
-          serviceDeployments: [{ status: 'SUCCESSFUL', createdAt: '2026-10-24T10:00:00Z' }],
+          serviceDeployments: [
+            {
+              serviceDeploymentArn: currentRevision,
+              status: 'SUCCESSFUL',
+              createdAt: '2026-10-24T10:00:00Z',
+            },
+          ],
         };
       }
 
@@ -61,8 +75,17 @@ function baseline(
             lastStatus: 'RUNNING',
             taskArn: `task${i}`,
             taskDefinitionArn: currentRevision,
-            containers: [{ name: 'recommendation', imageDigest: 'sha256:' + 'a'.repeat(64) }],
-            attachments: [{ details: [{ name: 'privateIPv4Address', value: `10.0.0.${i}` }] }],
+            containers: [
+              {
+                name: 'recommendation',
+                imageDigest: 'sha256:' + 'a'.repeat(64),
+              },
+            ],
+            attachments: [
+              {
+                details: [{ name: 'privateIPv4Address', value: `10.0.0.${i}` }],
+              },
+            ],
           })),
         };
       }
@@ -79,7 +102,10 @@ function baseline(
       }
 
       if (operation === 'describe-alarms') {
-        expect(args).toEqual(['--alarm-names', 'probe', '--alarm-types', 'MetricAlarm']);
+        expect(input).toEqual({
+          AlarmNames: ['probe'],
+          AlarmTypes: ['MetricAlarm'],
+        });
 
         if (options.missingAlarm) {
           return { MetricAlarms: [] };
@@ -107,7 +133,7 @@ function baseline(
       }
 
       if (operation === 'update-service') {
-        updates.push(JSON.parse(args[args.indexOf('--deployment-configuration') + 1]));
+        updates.push(input.deploymentConfiguration);
         currentRevision = 'candidate:2';
         enabled = true;
 
@@ -125,10 +151,17 @@ test('untouched bootstrap with actual OK alarms and fresh healthy watch arms fir
   const fixture = baseline();
   const result = await runTask('release', 'good', config, fixture.ports);
 
-  expect(result).toMatchObject({ exitCode: 0, reverted: false, revision: 'candidate:2' });
+  expect(result).toMatchObject({
+    exitCode: 0,
+    reverted: false,
+    revision: 'candidate:2',
+  });
 
   expect(fixture.updates).toEqual([
-    { strategy: 'CANARY', alarms: { enable: true, rollback: true, alarmNames: ['probe'] } },
+    {
+      strategy: 'CANARY',
+      alarms: { enable: true, rollback: true, alarmNames: ['probe'] },
+    },
   ]);
 
   expect(
