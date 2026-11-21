@@ -118,7 +118,7 @@ export function createTaskAws(config: RuntimeConfig, caseId: CaseId, ports: Runt
       config.cluster,
       '--service',
       config.service,
-      '--max-items',
+      '--max-results',
       '20',
     ]);
 
